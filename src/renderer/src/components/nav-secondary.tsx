@@ -9,27 +9,36 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from '@renderer/components/ui/sidebar'
+import { NavItem } from '@renderer/types/nav'
+import { HelpCircleIcon, Settings01Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+
+const navItems: NavItem[] = [
+  {
+    name: 'Settings',
+    url: '#',
+    icon: <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
+  },
+  {
+    name: 'Get Help',
+    url: '#',
+    icon: <HugeiconsIcon icon={HelpCircleIcon} strokeWidth={2} />
+  }
+]
 
 export function NavSecondary({
-  items,
   ...props
-}: {
-  items: {
-    title: string
-    url: string
-    icon: React.ReactNode
-  }[]
-} & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+}: {} & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   return (
     <SidebarGroup {...props}>
       <SidebarGroupContent>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
+          {navItems.map((item) => (
+            <SidebarMenuItem key={item.name}>
               <SidebarMenuButton asChild>
                 <a href={item.url}>
                   {item.icon}
-                  <span>{item.title}</span>
+                  <span>{item.name}</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>

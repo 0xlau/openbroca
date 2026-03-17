@@ -7,17 +7,28 @@ import {
   SidebarMenuItem
 } from '@renderer/components/ui/sidebar'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignCircleIcon, Mail01Icon } from '@hugeicons/core-free-icons'
+import {
+  Mail01Icon,
+  Blockchain01Icon,
+  DashboardSquare01Icon,
+  Mic01Icon
+} from '@hugeicons/core-free-icons'
+import { NavItem } from '@renderer/types/nav'
 
-export function NavMain({
-  items
-}: {
-  items: {
-    title: string
-    url: string
-    icon?: React.ReactNode
-  }[]
-}) {
+const navItems: NavItem[] = [
+  {
+    name: 'Dashboard',
+    url: '#',
+    icon: <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />
+  },
+  {
+    name: 'Models',
+    url: '#',
+    icon: <HugeiconsIcon icon={Blockchain01Icon} strokeWidth={2} />
+  }
+]
+
+export function NavMain() {
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
@@ -27,8 +38,8 @@ export function NavMain({
               tooltip="Quick Create"
               className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
             >
-              <HugeiconsIcon icon={PlusSignCircleIcon} strokeWidth={2} />
-              <span>Quick Create</span>
+              <HugeiconsIcon icon={Mic01Icon} strokeWidth={2} />
+              <span>Choose Microphone</span>
             </SidebarMenuButton>
             <Button
               size="icon"
@@ -41,11 +52,11 @@ export function NavMain({
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title}>
+          {navItems.map((item) => (
+            <SidebarMenuItem key={item.name}>
+              <SidebarMenuButton tooltip={item.name}>
                 {item.icon}
-                <span>{item.title}</span>
+                <span>{item.name}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
