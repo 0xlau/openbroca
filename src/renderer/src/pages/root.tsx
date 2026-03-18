@@ -14,7 +14,7 @@ export const Root: React.FC = () => {
       }
     >
       <AppSidebar variant="inset" />
-      <SidebarInset>
+      <SidebarInset className="overflow-hidden">
         <Outlet />
       </SidebarInset>
     </SidebarProvider>
