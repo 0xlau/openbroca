@@ -33,11 +33,9 @@ export function NavFooter({ ...props }: {} & React.ComponentPropsWithoutRef<type
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.name}>
-              <SidebarMenuButton asChild>
-                <a href={item.url}>
-                  {item.icon}
-                  <span>{item.name}</span>
-                </a>
+              <SidebarMenuButton>
+                {item.icon}
+                <span>{item.name}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}

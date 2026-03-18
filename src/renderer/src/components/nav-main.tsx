@@ -1,4 +1,5 @@
 import { Button } from '@renderer/components/ui/button'
+import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -13,7 +14,7 @@ import { NavItem } from '@renderer/types/nav'
 const navItems: NavItem[] = [
   {
     name: 'Dashboard',
-    url: '#',
+    url: '/',
     icon: <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />
   }
 ]
@@ -43,14 +44,7 @@ export function NavMain() {
         </SidebarMenu>
         <SidebarMenu>
           {navItems.map((item) => (
-            <SidebarMenuItem key={item.name}>
-              <SidebarMenuButton asChild>
-                <a href={item.url}>
-                  {item.icon}
-                  <span>{item.name}</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <SidebarNavLink key={item.name} item={item} />
           ))}
         </SidebarMenu>
       </SidebarGroupContent>

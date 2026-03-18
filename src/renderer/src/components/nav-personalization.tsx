@@ -2,29 +2,24 @@
 
 import { Book02Icon, Plant01Icon, Relieved02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem
-} from '@renderer/components/ui/sidebar'
+import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from '@renderer/components/ui/sidebar'
 import { NavItem } from '@renderer/types/nav'
 
 const navItems: NavItem[] = [
   {
     name: 'Dictionary',
-    url: '#',
+    url: '/dictionary',
     icon: <HugeiconsIcon icon={Book02Icon} strokeWidth={2} />
   },
   {
     name: 'Skills',
-    url: '#',
+    url: '/skills',
     icon: <HugeiconsIcon icon={Plant01Icon} strokeWidth={2} />
   },
   {
     name: 'About Me',
-    url: '#',
+    url: '/about-me',
     icon: <HugeiconsIcon icon={Relieved02Icon} strokeWidth={2} />
   }
 ]
@@ -35,14 +30,7 @@ export function NavPersonalization() {
       <SidebarGroupLabel>Personalization</SidebarGroupLabel>
       <SidebarMenu>
         {navItems.map((item) => (
-          <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild>
-              <a href={item.url}>
-                {item.icon}
-                <span>{item.name}</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <SidebarNavLink key={item.name} item={item} />
         ))}
       </SidebarMenu>
     </SidebarGroup>
