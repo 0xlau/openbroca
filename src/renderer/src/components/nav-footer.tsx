@@ -26,9 +26,7 @@ const navItems: NavItem[] = [
   }
 ]
 
-export function NavSecondary({
-  ...props
-}: {} & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+export function NavFooter({ ...props }: {} & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   return (
     <SidebarGroup {...props}>
       <SidebarGroupContent>

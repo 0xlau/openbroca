@@ -7,12 +7,7 @@ import {
   SidebarMenuItem
 } from '@renderer/components/ui/sidebar'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  Mail01Icon,
-  Blockchain01Icon,
-  DashboardSquare01Icon,
-  Mic01Icon
-} from '@hugeicons/core-free-icons'
+import { Mail01Icon, DashboardSquare01Icon, Mic01Icon } from '@hugeicons/core-free-icons'
 import { NavItem } from '@renderer/types/nav'
 
 const navItems: NavItem[] = [
@@ -20,11 +15,6 @@ const navItems: NavItem[] = [
     name: 'Dashboard',
     url: '#',
     icon: <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />
-  },
-  {
-    name: 'Models',
-    url: '#',
-    icon: <HugeiconsIcon icon={Blockchain01Icon} strokeWidth={2} />
   }
 ]
 
@@ -54,9 +44,11 @@ export function NavMain() {
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.name}>
-              <SidebarMenuButton tooltip={item.name}>
-                {item.icon}
-                <span>{item.name}</span>
+              <SidebarMenuButton asChild>
+                <a href={item.url}>
+                  {item.icon}
+                  <span>{item.name}</span>
+                </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
