@@ -1,8 +1,10 @@
-import { AppSidebar } from './components/app-sidebar'
-import { SiteHeader } from './components/site-header'
-import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
+import { Outlet } from 'react-router'
+import { AppSidebar } from '../components/app-sidebar'
+import { SiteHeader } from '../components/site-header'
+import { SidebarInset, SidebarProvider } from '../components/ui/sidebar'
+import React from 'react'
 
-function App(): React.JSX.Element {
+export const Root: React.FC = () => {
   return (
     <SidebarProvider
       style={
@@ -16,11 +18,11 @@ function App(): React.JSX.Element {
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">asd</div>
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <Outlet />
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>
   )
 }
-
-export default App
