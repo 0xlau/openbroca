@@ -175,7 +175,7 @@ export const Providers: React.FC = () => {
       <div>
         <TypographyH3 className="text-left">Providers</TypographyH3>
         <TypographyMuted className="not-first:mt-2">
-          Manage API credentials for speech and language model providers.
+          Manage API credentials for ASR and LLM Providers.
         </TypographyMuted>
       </div>
       <ProviderContainer />
