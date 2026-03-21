@@ -1,6 +1,6 @@
 import React from 'react'
 import {
-  TypographyH3,
+  TypographyH1,
   TypographyLarge,
   TypographyMuted,
   TypographySmall
@@ -13,6 +13,7 @@ import {
   type ChartConfig
 } from '@renderer/components/ui/chart'
 import { Bar, BarChart, XAxis, YAxis } from 'recharts'
+import { Kbd, KbdGroup } from '@renderer/components/ui/kbd'
 
 const tokenUsageData = [
   { day: 'Mon', tokens: 4200 },
@@ -116,11 +117,18 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
-        <TypographyH3 className="text-left">
-          Speak naturally, write perfectly – in any app
-        </TypographyH3>
-        <TypographyMuted className="not-first:mt-2 text-sm">
-          Press Fn to start and stop dictation. Or hold to say something short.
+        <TypographyH1
+          className="text-left font-extrabold tracking-normal text-5xl py-3"
+          style={{ fontFamily: "'Instrument Serif', serif" }}
+        >
+          Wake your Broca, let thoughts speak
+        </TypographyH1>
+        <TypographyMuted>
+          Press{' '}
+          <KbdGroup>
+            <Kbd>Fn</Kbd>
+          </KbdGroup>{' '}
+          to start and stop dictation. Or hold to say something short.
         </TypographyMuted>
       </div>
 
