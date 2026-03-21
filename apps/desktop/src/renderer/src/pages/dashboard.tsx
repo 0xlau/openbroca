@@ -1,19 +1,18 @@
 import React from 'react'
 import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  Kbd,
+  KbdGroup,
+  Separator,
   TypographyH1,
   TypographyLarge,
   TypographyMuted,
   TypographySmall
-} from '@renderer/components/ui/typography'
-import { Separator } from '@renderer/components/ui/separator'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig
-} from '@renderer/components/ui/chart'
+} from '@openbroca/ui'
 import { Bar, BarChart, XAxis, YAxis } from 'recharts'
-import { Kbd, KbdGroup } from '@renderer/components/ui/kbd'
 
 const tokenUsageData = [
   { day: 'Mon', tokens: 4200 },

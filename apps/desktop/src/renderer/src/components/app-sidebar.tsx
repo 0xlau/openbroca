@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem
-} from '@renderer/components/ui/sidebar'
+} from '@openbroca/ui'
 import Logo from '@renderer/assets/logo.svg?react'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

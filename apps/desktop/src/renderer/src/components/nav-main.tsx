@@ -1,12 +1,12 @@
-import { Button } from '@renderer/components/ui/button'
-import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import {
+  Button,
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem
-} from '@renderer/components/ui/sidebar'
+} from '@openbroca/ui'
+import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Mail01Icon, DashboardSquare01Icon, Mic01Icon } from '@hugeicons/core-free-icons'
 import { NavItem } from '@renderer/types/nav'

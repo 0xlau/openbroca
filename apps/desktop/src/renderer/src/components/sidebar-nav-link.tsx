@@ -1,4 +1,4 @@
-import { SidebarMenuButton, SidebarMenuItem } from '@renderer/components/ui/sidebar'
+import { SidebarMenuButton, SidebarMenuItem } from '@openbroca/ui'
 import { NavItem } from '@renderer/types/nav'
 import { NavLink, useMatch, useResolvedPath } from 'react-router'
 

@@ -3,7 +3,7 @@
 import { Blockchain01Icon, BrainIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from '@renderer/components/ui/sidebar'
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from '@openbroca/ui'
 import { NavItem } from '@renderer/types/nav'
 
 const navItems: NavItem[] = [

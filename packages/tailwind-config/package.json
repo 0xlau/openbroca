@@ -1,0 +1,8 @@
+{
+  "name": "@openbroca/tailwind-config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./base.css": "./src/base.css"
+  }
+}

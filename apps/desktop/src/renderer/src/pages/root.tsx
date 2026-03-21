@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router'
 import { AppSidebar } from '../components/app-sidebar'
-import { SidebarInset, SidebarProvider } from '../components/ui/sidebar'
+import { SidebarInset, SidebarProvider } from '@openbroca/ui'
 import React from 'react'
 
 export const Root: React.FC = () => {

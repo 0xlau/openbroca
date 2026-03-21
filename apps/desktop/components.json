@@ -14,7 +14,7 @@
   "aliases": {
     "components": "@renderer/components",
     "utils": "@renderer/lib/utils",
-    "ui": "@renderer/components/ui",
+    "ui": "@openbroca/ui",
     "lib": "@renderer/lib",
     "hooks": "@renderer/hooks"
   },

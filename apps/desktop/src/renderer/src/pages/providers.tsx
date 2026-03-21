@@ -1,12 +1,12 @@
 import React from 'react'
-import { Button } from '@renderer/components/ui/button'
-import { Separator } from '@renderer/components/ui/separator'
 import {
+  Button,
+  Separator,
   TypographyH3,
   TypographyLarge,
   TypographyMuted,
   TypographySmall
-} from '@renderer/components/ui/typography'
+} from '@openbroca/ui'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import openaiLogo from '@renderer/assets/ai/openai.svg'
