@@ -104,7 +104,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 function HistoryRow({ item, isLast }: { item: (typeof historyData)[number]; isLast: boolean }) {
   return (
     <>
-      <div className="flex items-start gap-4 px-4 py-3">
+      <div className="flex items-center gap-4 px-4 py-3">
         <TypographyMuted className="w-36 shrink-0 pt-0.5">{item.datetime}</TypographyMuted>
         <TypographySmall className="flex-1 font-normal">{item.text}</TypographySmall>
       </div>
