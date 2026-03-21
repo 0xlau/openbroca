@@ -1,0 +1,22 @@
+{
+  "name": "@openbroca/eslint-config",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./electron": {
+      "types": "./electron.d.ts",
+      "default": "./electron.js"
+    }
+  },
+  "dependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^3.0.0",
+    "@electron-toolkit/eslint-config-ts": "^3.1.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24"
+  },
+  "peerDependencies": {
+    "eslint": ">=9.0.0"
+  }
+}
