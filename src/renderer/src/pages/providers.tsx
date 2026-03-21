@@ -124,7 +124,9 @@ function ProviderRow({ provider, isLast }: { provider: Provider; isLast: boolean
           <div className="flex items-center gap-2">
             <TypographySmall>{provider.name}</TypographySmall>
           </div>
-          <TypographyMuted className="mt-1 truncate">{provider.description}</TypographyMuted>
+          <TypographyMuted className="mt-1 truncate text-xs">
+            {provider.description}
+          </TypographyMuted>
         </div>
         <Button
           variant={provider.configured ? 'ghost' : 'secondary'}

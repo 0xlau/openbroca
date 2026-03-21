@@ -66,7 +66,7 @@ function TypographySmall({ className, ...props }: React.ComponentProps<'small'>)
 }
 
 function TypographyMuted({ className, ...props }: React.ComponentProps<'p'>) {
-  return <p className={cn('text-xs text-muted-foreground', className)} {...props} />
+  return <p className={cn('text-sm text-muted-foreground', className)} {...props} />
 }
 
 function TypographyList({ className, ...props }: React.ComponentProps<'ul'>) {
