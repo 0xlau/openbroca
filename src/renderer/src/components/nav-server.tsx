@@ -1,6 +1,6 @@
 'use client'
 
-import { Blockchain01Icon, Globe02Icon } from '@hugeicons/core-free-icons'
+import { Blockchain01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from '@renderer/components/ui/sidebar'
@@ -10,7 +10,7 @@ const navItems: NavItem[] = [
   {
     name: 'Providers',
     url: '/providers',
-    icon: <HugeiconsIcon icon={Globe02Icon} strokeWidth={2} />
+    icon: <HugeiconsIcon icon={Blockchain01Icon} strokeWidth={2} />
   },
   {
     name: 'Models',

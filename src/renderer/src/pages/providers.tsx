@@ -8,7 +8,15 @@ import {
   TypographySmall
 } from '@renderer/components/ui/typography'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Logout01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon } from '@hugeicons/core-free-icons'
+import openaiLogo from '@renderer/assets/ai/openai.svg'
+import anthropicLogo from '@renderer/assets/ai/anthropic.svg'
+import geminiLogo from '@renderer/assets/ai/gemini.svg'
+import ollamaLogo from '@renderer/assets/ai/ollama.svg'
+import azureaiLogo from '@renderer/assets/ai/azureai.svg'
+import mistralLogo from '@renderer/assets/ai/mistral.svg'
+import deepgramLogo from '@renderer/assets/ai/deepgram.svg'
+import googleLogo from '@renderer/assets/ai/google.svg'
 
 interface Provider {
   id: string
@@ -16,6 +24,7 @@ interface Provider {
   description: string
   configured: boolean
   logo: string
+  icon?: string
 }
 
 const ASR_PROVIDERS: Provider[] = [
@@ -24,28 +33,32 @@ const ASR_PROVIDERS: Provider[] = [
     name: 'OpenAI Whisper',
     description: 'High-accuracy speech recognition powered by OpenAI',
     configured: true,
-    logo: 'OW'
+    logo: 'OW',
+    icon: openaiLogo
   },
   {
     id: 'azure-speech',
     name: 'Azure Speech',
     description: 'Microsoft Azure Cognitive Services Speech-to-Text',
     configured: false,
-    logo: 'AZ'
+    logo: 'AZ',
+    icon: azureaiLogo
   },
   {
     id: 'deepgram',
     name: 'Deepgram',
     description: 'Real-time and batch transcription API',
     configured: false,
-    logo: 'DG'
+    logo: 'DG',
+    icon: deepgramLogo
   },
   {
     id: 'google-speech',
     name: 'Google Speech',
     description: 'Google Cloud Speech-to-Text API',
     configured: false,
-    logo: 'GS'
+    logo: 'GS',
+    icon: googleLogo
   }
 ]
 
@@ -55,35 +68,40 @@ const LLM_PROVIDERS: Provider[] = [
     name: 'OpenAI',
     description: 'GPT-4o and o-series models via OpenAI API',
     configured: true,
-    logo: 'OA'
+    logo: 'OA',
+    icon: openaiLogo
   },
   {
     id: 'anthropic',
     name: 'Anthropic',
     description: 'Claude 3.5 / 4 series models via Anthropic API',
     configured: true,
-    logo: 'AN'
+    logo: 'AN',
+    icon: anthropicLogo
   },
   {
     id: 'google-gemini',
     name: 'Google Gemini',
     description: 'Gemini Pro and Flash models via Google AI Studio',
     configured: false,
-    logo: 'GG'
+    logo: 'GG',
+    icon: geminiLogo
   },
   {
     id: 'mistral',
     name: 'Mistral AI',
     description: 'Mistral and Mixtral models via La Plateforme',
     configured: false,
-    logo: 'MS'
+    logo: 'MS',
+    icon: mistralLogo
   },
   {
     id: 'ollama',
     name: 'Ollama',
     description: 'Run open-source models locally on your machine',
     configured: false,
-    logo: 'OL'
+    logo: 'OL',
+    icon: ollamaLogo
   }
 ]
 
@@ -91,9 +109,17 @@ function ProviderRow({ provider, isLast }: { provider: Provider; isLast: boolean
   return (
     <>
       <div className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold text-muted-foreground ring-1 ring-foreground/10">
-          {provider.logo}
-        </div>
+        {provider.icon ? (
+          <img
+            src={provider.icon}
+            alt={provider.name}
+            className="size-9 shrink-0 object-contain p-1"
+          />
+        ) : (
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-foreground/10">
+            <span className="text-xs font-semibold text-muted-foreground">{provider.logo}</span>
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <TypographySmall>{provider.name}</TypographySmall>
@@ -101,16 +127,12 @@ function ProviderRow({ provider, isLast }: { provider: Provider; isLast: boolean
           <TypographyMuted className="mt-1 truncate">{provider.description}</TypographyMuted>
         </div>
         <Button
-          variant={provider.configured ? 'destructive' : 'secondary'}
+          variant={provider.configured ? 'ghost' : 'secondary'}
           size="sm"
           className="shrink-0 gap-1.5"
         >
-          {provider.configured ? (
-            <HugeiconsIcon icon={Logout01Icon} size={14} />
-          ) : (
-            <HugeiconsIcon icon={PlusSignIcon} size={14} />
-          )}
-          {provider.configured ? 'Logout' : 'Connect'}
+          {provider.configured ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
+          {provider.configured ? 'Disconnect' : 'Connect'}
         </Button>
       </div>
       {!isLast && <Separator />}
