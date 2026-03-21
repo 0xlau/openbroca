@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@openbroca/eslint-config": "workspace:*",
+    "@openbroca/typescript-config": "workspace:*",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",

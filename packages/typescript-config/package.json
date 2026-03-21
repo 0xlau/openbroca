@@ -1,0 +1,10 @@
+{
+  "name": "@openbroca/typescript-config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./base": "./base.json",
+    "./react": "./react.json",
+    "./node": "./node.json"
+  }
+}

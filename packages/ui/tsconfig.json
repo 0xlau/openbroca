@@ -1,0 +1,7 @@
+{
+  "extends": "@openbroca/typescript-config/react",
+  "include": ["src/**/*", "src/**/*.tsx"],
+  "compilerOptions": {
+    "noEmit": true
+  }
+}

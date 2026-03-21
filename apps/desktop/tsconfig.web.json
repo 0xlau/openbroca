@@ -1,5 +1,5 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "extends": "@openbroca/typescript-config/react",
   "include": [
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",

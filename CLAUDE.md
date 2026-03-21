@@ -8,7 +8,12 @@ This is a **Turborepo monorepo** managed with pnpm workspaces.
 
 ```
 apps/
-  desktop/   ← Electron + React + TypeScript app
+  desktop/          ← Electron + React + TypeScript app
+packages/
+  typescript-config ← Shared TypeScript configs (@openbroca/typescript-config)
+  eslint-config     ← Shared ESLint config (@openbroca/eslint-config)
+  tailwind-config   ← Shared Tailwind base CSS (@openbroca/tailwind-config)
+  ui/               ← Shared React component library (@openbroca/ui)
 ```
 
 ## Commands
@@ -42,6 +47,10 @@ All the same scripts work directly with `pnpm dev`, `pnpm build`, etc.
 
 **Adding shadcn components**: run `pnpm dlx shadcn add <component>` from inside `apps/desktop/` — the `components.json` aliases will place them correctly under `@renderer/components/ui/`.
 
+```bash
+pnpm --filter @openbroca/ui typecheck   # Typecheck the shared UI package
+```
+
 No test runner is configured yet.
 
 ## Architecture
@@ -63,6 +72,18 @@ Path alias `@renderer` resolves to `apps/desktop/src/renderer/src/`.
 **Current pages**: Dashboard (index), Providers, Brocas, Dictionary, Skills, AboutMe.
 
 **UI layer** — shadcn/ui components (style: `radix-maia`, base color: `mauve`) live in `components/ui/`. Icons use `@hugeicons/react`. Tailwind CSS v4 is configured entirely via `src/renderer/src/styles/globals.css` — there is no `tailwind.config.js`. CSS variables drive theming (light/dark via `.dark` class, managed by `ThemeProvider`).
+
+### TypeScript config layering
+
+Shared TS configs live in `packages/typescript-config` (`@openbroca/typescript-config`):
+
+| Export | Purpose | Consumers |
+|---|---|---|
+| `base.json` | Strict baseline (no runtime assumptions) | extended by react/node configs |
+| `react.json` | `base` + DOM libs + `react-jsx` | `packages/ui`, `apps/desktop` renderer |
+| `node.json` | `base` + node types | future Node-only packages |
+
+`apps/desktop/tsconfig.web.json` extends `@openbroca/typescript-config/react`. `tsconfig.node.json` keeps `@electron-toolkit/tsconfig` (Electron-specific).
 
 ### IPC pattern
 

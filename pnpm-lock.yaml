@@ -132,6 +132,9 @@ importers:
       '@openbroca/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@openbroca/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
       '@types/node':
         specifier: ^22.19.1
         version: 22.19.15
@@ -210,6 +213,8 @@ importers:
 
   packages/tailwind-config: {}
 
+  packages/typescript-config: {}
+
   packages/ui:
     dependencies:
       '@base-ui/react':
@@ -275,6 +280,19 @@ importers:
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+    devDependencies:
+      '@openbroca/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/react':
+        specifier: ^19.2.7
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 
