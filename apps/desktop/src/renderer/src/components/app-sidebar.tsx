@@ -13,13 +13,19 @@ import {
   SidebarMenuItem
 } from '@openbroca/ui'
 import Logo from '@renderer/assets/logo.svg?react'
+import { usePlatform } from '@renderer/hooks/use-platform'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { isMac } = usePlatform()
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
+      <SidebarHeader
+        style={isMac ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
+        className={isMac ? 'pt-10' : undefined}
+      >
         <SidebarMenu>
-          <SidebarMenuItem>
+          <SidebarMenuItem style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <Logo className="h-10 px-2" />
           </SidebarMenuItem>
         </SidebarMenu>

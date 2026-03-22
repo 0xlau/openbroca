@@ -1,22 +1,30 @@
 import { Outlet } from 'react-router'
 import { AppSidebar } from '../components/app-sidebar'
 import { SidebarInset, SidebarProvider } from '@openbroca/ui'
+import { WindowsTitleBar } from '../components/title-bar'
+import { usePlatform } from '../hooks/use-platform'
 import React from 'react'
 
 export const Root: React.FC = () => {
+  const { isWindows } = usePlatform()
+
   return (
-    <SidebarProvider
-      style={
-        {
-          '--sidebar-width': 'calc(var(--spacing) * 72)',
-          '--header-height': 'calc(var(--spacing) * 12)'
-        } as React.CSSProperties
-      }
-    >
-      <AppSidebar variant="inset" />
-      <SidebarInset className="overflow-hidden">
-        <Outlet />
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="flex h-screen flex-col">
+      {isWindows && <WindowsTitleBar />}
+      <SidebarProvider
+        className="min-h-0 flex-1"
+        style={
+          {
+            '--sidebar-width': 'calc(var(--spacing) * 72)',
+            '--header-height': 'calc(var(--spacing) * 12)'
+          } as React.CSSProperties
+        }
+      >
+        <AppSidebar variant="inset" />
+        <SidebarInset className="overflow-hidden">
+          <Outlet />
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
   )
 }
