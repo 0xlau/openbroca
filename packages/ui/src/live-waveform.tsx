@@ -203,7 +203,11 @@ export const LiveWaveform = ({
         }
         fadeToIdle()
       }
+
+      return undefined
     }
+
+    return undefined
   }, [processing, active, barWidth, barGap, mode])
 
   // Handle microphone setup and teardown

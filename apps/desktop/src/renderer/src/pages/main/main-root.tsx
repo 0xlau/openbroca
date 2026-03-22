@@ -1,11 +1,11 @@
 import { Outlet } from 'react-router'
-import { AppSidebar } from '../components/app-sidebar'
+import { AppSidebar } from '../../components/app-sidebar'
 import { SidebarInset, SidebarProvider } from '@openbroca/ui'
-import { WindowsTitleBar } from '../components/title-bar'
-import { usePlatform } from '../hooks/use-platform'
+import { WindowsTitleBar } from '../../components/title-bar'
+import { usePlatform } from '../../hooks/use-platform'
 import React from 'react'
 
-export const Root: React.FC = () => {
+export const MainRoot: React.FC = () => {
   const { isWindows } = usePlatform()
 
   return (

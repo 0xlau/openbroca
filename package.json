@@ -17,7 +17,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "esbuild"
+      "esbuild",
+      "uiohook-napi"
     ]
   }
 }

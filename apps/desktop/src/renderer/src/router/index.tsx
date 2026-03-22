@@ -1,16 +1,17 @@
-import { AboutMe } from '@renderer/pages/about-me'
-import { Dashboard } from '@renderer/pages/dashboard'
-import { Dictionary } from '@renderer/pages/dictionary'
-import { Brocas } from '@renderer/pages/brocas'
-import { Providers } from '@renderer/pages/providers'
-import { Root } from '@renderer/pages/root'
-import { Skills } from '@renderer/pages/skills'
+import { AboutMe } from '@renderer/pages/main/about-me'
+import { Dashboard } from '@renderer/pages/main/dashboard'
+import { Dictionary } from '@renderer/pages/main/dictionary'
+import { Brocas } from '@renderer/pages/main/brocas'
+import { Providers } from '@renderer/pages/main/providers'
+import { MainRoot } from '@renderer/pages/main/main-root'
+import { Skills } from '@renderer/pages/main/skills'
+import { FloatListening } from '@renderer/pages/float/float-listening'
 import { createHashRouter } from 'react-router'
 
 export const router = createHashRouter([
   {
     path: '/',
-    element: <Root />,
+    element: <MainRoot />,
     children: [
       { index: true, Component: Dashboard },
       { path: 'providers', Component: Providers },
@@ -19,5 +20,9 @@ export const router = createHashRouter([
       { path: 'skills', Component: Skills },
       { path: 'about-me', Component: AboutMe }
     ]
+  },
+  {
+    path: '/float/listening',
+    element: <FloatListening />
   }
 ])
