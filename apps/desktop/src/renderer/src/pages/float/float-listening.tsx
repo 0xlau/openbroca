@@ -16,7 +16,7 @@ export const FloatListening: React.FC = () => {
     <div className="flex gap-2">
       <div className="bg-background w-20 h-9 flex items-center justify-center rounded-full border">
         <LiveWaveform
-          active={true}
+          active={false}
           mode="static"
           barColor="oklch(0.646 0.222 41.116)"
           barWidth={2}
