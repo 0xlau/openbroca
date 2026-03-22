@@ -1,10 +1,15 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Button, LiveWaveform } from '@openbroca/ui'
 import '@renderer/styles/float-listening.css'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 export const FloatListening: React.FC = () => {
+  useEffect(() => {
+    document.body.classList.add('float-listening')
+    return () => document.body.classList.remove('float-listening')
+  }, [])
+
   const showCancel = false
 
   return (

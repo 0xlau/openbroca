@@ -1,5 +1,5 @@
 import { BrowserWindow, screen } from 'electron'
-import { createMainWindow, createFloatingWindow } from './windows'
+import { createMainWindow, createFloatingWindow, getFloatingWindowPosition } from './windows'
 
 class WindowManager {
   private mainWindow: BrowserWindow | null = null
@@ -27,13 +27,10 @@ class WindowManager {
     // Center on the display where the cursor currently is
     const cursor = screen.getCursorScreenPoint()
     const display = screen.getDisplayNearestPoint(cursor)
-    const { bounds } = display
     const winBounds = this.floatingWindow.getBounds()
+    const { x, y } = getFloatingWindowPosition(display.workArea, winBounds)
 
-    this.floatingWindow.setPosition(
-      Math.round(bounds.x + (bounds.width - winBounds.width) / 2),
-      Math.round(bounds.y + (bounds.height - winBounds.height) / 2)
-    )
+    this.floatingWindow.setPosition(x, y)
 
     this.floatingWindow.showInactive()
   }

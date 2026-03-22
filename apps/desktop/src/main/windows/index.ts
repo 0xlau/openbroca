@@ -1,2 +1,2 @@
 export { createMainWindow } from './main-window'
-export { createFloatingWindow } from './floating-window'
+export { createFloatingWindow, getFloatingWindowPosition } from './floating-window'
