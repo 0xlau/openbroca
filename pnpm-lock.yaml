@@ -50,6 +50,12 @@ importers:
       '@hugeicons/react':
         specifier: ^1.1.6
         version: 1.1.6(react@19.2.4)
+      '@openbroca/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@openbroca/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@openbroca/tailwind-config':
         specifier: workspace:*
         version: link:../../packages/tailwind-config

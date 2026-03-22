@@ -1,4 +1,4 @@
-import type { ConfigSchema, Disposable } from '../types'
+import type { ConfigSchema, Disposable } from '../types.ts'
 
 // ─── Transcription ────────────────────────────────────────────────────────────
 

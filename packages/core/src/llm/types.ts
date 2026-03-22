@@ -1,4 +1,4 @@
-import type { ConfigSchema, Disposable, HealthCheckable } from '../types'
+import type { ConfigSchema, Disposable, HealthCheckable } from '../types.ts'
 
 // ─── Models ─────────────────────────────────────────────────────────────────
 

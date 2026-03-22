@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { LLMProviderDescriptor } from '@openbroca/core/llm'
-import { OpenAILLMProvider, type OpenAIConfig } from './provider'
+import { OpenAILLMProvider, type OpenAIConfig } from './provider.ts'
 
 const configSchema = z.object({
   apiKey: z.string().min(1, 'API key is required'),
@@ -22,4 +22,4 @@ export const openaiDescriptor: LLMProviderDescriptor<OpenAIConfig> = {
   create: (config) => new OpenAILLMProvider(config),
 }
 
-export { OpenAILLMProvider, type OpenAIConfig } from './provider'
+export { OpenAILLMProvider, type OpenAIConfig } from './provider.ts'

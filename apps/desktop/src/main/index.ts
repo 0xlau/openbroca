@@ -6,6 +6,7 @@ import { appTrpcRouter } from './trpc/router'
 import { createContext } from './trpc/context'
 import { registerTrpcIpcHandler } from './trpc/ipc-handler'
 import { store } from './store'
+import { llmRegistry, asrRegistry } from './providers'
 
 function createWindow(): void {
   // Create the browser window.
@@ -53,7 +54,9 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerTrpcIpcHandler(appTrpcRouter, (window) => createContext(window, store))
+  registerTrpcIpcHandler(appTrpcRouter, (window) =>
+    createContext(window, store, llmRegistry, asrRegistry)
+  )
 
   createWindow()
 

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ASRProviderDescriptor } from '@openbroca/core/asr'
-import { DeepgramASRProvider, type DeepgramConfig } from './provider'
+import { DeepgramASRProvider, type DeepgramConfig } from './provider.ts'
 
 const configSchema = z.object({
   apiKey: z.string().min(1, 'API key is required'),
@@ -15,4 +15,4 @@ export const deepgramDescriptor: ASRProviderDescriptor<DeepgramConfig> = {
   create: (config) => new DeepgramASRProvider(config),
 }
 
-export { DeepgramASRProvider, type DeepgramConfig } from './provider'
+export { DeepgramASRProvider, type DeepgramConfig } from './provider.ts'

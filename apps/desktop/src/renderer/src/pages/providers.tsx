@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  Badge,
   Button,
   Separator,
   TypographyH3,
@@ -9,140 +10,130 @@ import {
 } from '@openbroca/ui'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
-import openaiLogo from '@renderer/assets/ai/openai.svg'
-import anthropicLogo from '@renderer/assets/ai/anthropic.svg'
-import geminiLogo from '@renderer/assets/ai/gemini.svg'
-import ollamaLogo from '@renderer/assets/ai/ollama.svg'
-import azureaiLogo from '@renderer/assets/ai/azureai.svg'
-import mistralLogo from '@renderer/assets/ai/mistral.svg'
-import deepgramLogo from '@renderer/assets/ai/deepgram.svg'
-import googleLogo from '@renderer/assets/ai/google.svg'
+import { trpc } from '@renderer/trpc'
+import { useStore } from 'zustand'
+import { providerStore } from '@renderer/stores/provider-store'
+import { providerIconMap } from '@renderer/lib/provider-icons'
+import { COMING_SOON_LLM, COMING_SOON_ASR } from '@renderer/lib/coming-soon-providers'
 
-interface Provider {
+interface ProviderViewModel {
   id: string
-  name: string
+  displayName: string
   description: string
+  kind?: 'cloud' | 'local'
   configured: boolean
-  logo: string
+  comingSoon: boolean
   icon?: string
 }
 
-const ASR_PROVIDERS: Provider[] = [
-  {
-    id: 'openai-whisper',
-    name: 'OpenAI Whisper',
-    description: 'High-accuracy speech recognition powered by OpenAI',
-    configured: true,
-    logo: 'OW',
-    icon: openaiLogo
-  },
-  {
-    id: 'azure-speech',
-    name: 'Azure Speech',
-    description: 'Microsoft Azure Cognitive Services Speech-to-Text',
-    configured: false,
-    logo: 'AZ',
-    icon: azureaiLogo
-  },
-  {
-    id: 'deepgram',
-    name: 'Deepgram',
-    description: 'Real-time and batch transcription API',
-    configured: false,
-    logo: 'DG',
-    icon: deepgramLogo
-  },
-  {
-    id: 'google-speech',
-    name: 'Google Speech',
-    description: 'Google Cloud Speech-to-Text API',
-    configured: false,
-    logo: 'GS',
-    icon: googleLogo
-  }
-]
+function useProviderViewModel(): {
+  llmProviders: ProviderViewModel[]
+  asrProviders: ProviderViewModel[]
+  isLoading: boolean
+} {
+  const { data: llmData } = trpc.providers.listLLM.useQuery()
+  const { data: asrData } = trpc.providers.listASR.useQuery()
+  const { data: settings, isHydrated } = useStore(providerStore)
 
-const LLM_PROVIDERS: Provider[] = [
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    description: 'GPT-4o and o-series models via OpenAI API',
-    configured: true,
-    logo: 'OA',
-    icon: openaiLogo
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    description: 'Claude 3.5 / 4 series models via Anthropic API',
-    configured: true,
-    logo: 'AN',
-    icon: anthropicLogo
-  },
-  {
-    id: 'google-gemini',
-    name: 'Google Gemini',
-    description: 'Gemini Pro and Flash models via Google AI Studio',
-    configured: false,
-    logo: 'GG',
-    icon: geminiLogo
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral AI',
-    description: 'Mistral and Mixtral models via La Plateforme',
-    configured: false,
-    logo: 'MS',
-    icon: mistralLogo
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama',
-    description: 'Run open-source models locally on your machine',
-    configured: false,
-    logo: 'OL',
-    icon: ollamaLogo
-  }
-]
+  const isLoading = !isHydrated || llmData === undefined || asrData === undefined
 
-function ProviderRow({ provider, isLast }: { provider: Provider; isLast: boolean }) {
+  const registeredLLMIds = new Set((llmData ?? []).map((p) => p.id))
+  const registeredASRIds = new Set((asrData ?? []).map((p) => p.id))
+
+  const llmProviders: ProviderViewModel[] = [
+    ...(llmData ?? []).map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      description: p.description,
+      configured: !!settings[p.id]?.enabled,
+      comingSoon: false,
+      icon: providerIconMap[p.id]
+    })),
+    ...COMING_SOON_LLM.filter((p) => !registeredLLMIds.has(p.id)).map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      description: p.description,
+      configured: false,
+      comingSoon: true,
+      icon: providerIconMap[p.id]
+    }))
+  ]
+
+  const asrProviders: ProviderViewModel[] = [
+    ...(asrData ?? []).map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      description: p.description,
+      kind: p.kind as 'cloud' | 'local',
+      configured: !!settings[p.id]?.enabled,
+      comingSoon: false,
+      icon: providerIconMap[p.id]
+    })),
+    ...COMING_SOON_ASR.filter((p) => !registeredASRIds.has(p.id)).map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      description: p.description,
+      kind: p.kind,
+      configured: false,
+      comingSoon: true,
+      icon: providerIconMap[p.id]
+    }))
+  ]
+
+  return { llmProviders, asrProviders, isLoading }
+}
+
+function ProviderRow({ provider, isLast }: { provider: ProviderViewModel; isLast: boolean }) {
   return (
     <>
       <div className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
         {provider.icon ? (
           <img
             src={provider.icon}
-            alt={provider.name}
+            alt={provider.displayName}
             className="size-9 shrink-0 object-contain p-1"
           />
         ) : (
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-foreground/10">
-            <span className="text-xs font-semibold text-muted-foreground">{provider.logo}</span>
+            <span className="text-xs font-semibold text-muted-foreground">
+              {provider.displayName.slice(0, 2).toUpperCase()}
+            </span>
           </div>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <TypographySmall>{provider.name}</TypographySmall>
+            <TypographySmall>{provider.displayName}</TypographySmall>
+            {provider.kind === 'local' && (
+              <Badge variant="secondary" className="text-xs">
+                Local
+              </Badge>
+            )}
           </div>
           <TypographyMuted className="mt-1 truncate text-xs">
             {provider.description}
           </TypographyMuted>
         </div>
-        <Button
-          variant={provider.configured ? 'ghost' : 'secondary'}
-          size="sm"
-          className="shrink-0 gap-1.5"
-        >
-          {provider.configured ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
-          {provider.configured ? 'Disconnect' : 'Connect'}
-        </Button>
+        {provider.comingSoon ? (
+          <Badge variant="ghost" className="text-muted-foreground">
+            Coming Soon
+          </Badge>
+        ) : (
+          <Button
+            variant={provider.configured ? 'ghost' : 'secondary'}
+            size="sm"
+            className="shrink-0 gap-1.5"
+          >
+            {provider.configured ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
+            {provider.configured ? 'Disconnect' : 'Connect'}
+          </Button>
+        )}
       </div>
       {!isLast && <Separator />}
     </>
   )
 }
 
-function ProviderSection({ title, providers }: { title: string; providers: Provider[] }) {
+function ProviderSection({ title, providers }: { title: string; providers: ProviderViewModel[] }) {
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2.5 px-1">
@@ -162,11 +153,13 @@ function ProviderSection({ title, providers }: { title: string; providers: Provi
 }
 
 function ProviderContainer() {
+  const { llmProviders, asrProviders } = useProviderViewModel()
+
   return (
     <div className="space-y-8">
-      <ProviderSection title="ASR Providers" providers={ASR_PROVIDERS} />
+      <ProviderSection title="ASR Providers" providers={asrProviders} />
       <Separator />
-      <ProviderSection title="LLM Providers" providers={LLM_PROVIDERS} />
+      <ProviderSection title="LLM Providers" providers={llmProviders} />
     </div>
   )
 }

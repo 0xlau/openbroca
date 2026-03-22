@@ -1,10 +1,15 @@
 export class ProviderError extends Error {
+  readonly providerId: string
+  override readonly cause?: unknown
+
   constructor(
-    public readonly providerId: string,
+    providerId: string,
     message: string,
-    public readonly cause?: unknown
+    cause?: unknown
   ) {
     super(`[${providerId}] ${message}`)
+    this.providerId = providerId
+    this.cause = cause
     this.name = 'ProviderError'
   }
 }

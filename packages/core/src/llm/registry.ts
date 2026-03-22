@@ -1,11 +1,11 @@
-import { ProviderError } from '../errors'
+import { ProviderError } from '../errors.ts'
 import {
   composeMiddleware,
   type LLMCapabilities,
   type LLMMiddleware,
   type LLMProvider,
   type LLMProviderDescriptor,
-} from './types'
+} from './types.ts'
 
 const DEFAULT_CAPABILITIES: LLMCapabilities = {
   streaming: false,

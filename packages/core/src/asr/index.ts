@@ -1,4 +1,4 @@
-export { ASRProviderRegistry, type AnyASRProvider, type ASRRegistryHooks } from './registry'
+export { ASRProviderRegistry, type AnyASRProvider, type ASRRegistryHooks } from './registry.ts'
 export {
   type ASRProvider,
   type ASRProviderDescriptor,
@@ -8,4 +8,4 @@ export {
   type LocalModelInfo,
   type TranscriptionOptions,
   type TranscriptionSegment,
-} from './types'
+} from './types.ts'

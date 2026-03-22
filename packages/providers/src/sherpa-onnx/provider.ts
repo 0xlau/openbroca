@@ -127,8 +127,8 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
 
     // Configure the online (streaming) recognizer
     const recognizerConfig = buildRecognizerConfig(modelPath, downloaded.id, options?.language)
-    const recognizer: SherpaOnlineRecognizer = new sherpa.OnlineRecognizer(recognizerConfig)
-    const stream: SherpaOnlineStream = recognizer.createStream()
+    const recognizer = new sherpa.OnlineRecognizer(recognizerConfig)
+    const stream = recognizer.createStream()
 
     try {
       for await (const chunk of audio) {
@@ -221,7 +221,11 @@ function buildRecognizerConfig(
 }
 
 class RedirectSignal {
-  constructor(public readonly url: string) {}
+  readonly url: string
+
+  constructor(url: string) {
+    this.url = url
+  }
 }
 
 async function* downloadWithProgress(
@@ -319,4 +323,3 @@ async function* downloadWithProgress(
     yield* downloadWithProgress(providerId, modelId, redirectUrl, destDir, signal, maxRedirects - 1)
   }
 }
-

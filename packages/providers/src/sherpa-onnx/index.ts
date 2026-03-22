@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ASRProviderDescriptor } from '@openbroca/core/asr'
-import { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider'
+import { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider.ts'
 
 const configSchema = z.object({
   modelDir: z.string().min(1, 'Model directory path is required'),
@@ -8,11 +8,11 @@ const configSchema = z.object({
 
 export const sherpaOnnxDescriptor: ASRProviderDescriptor<SherpaOnnxConfig> = {
   id: 'sherpa-onnx',
-  displayName: 'Sherpa-ONNX',
+  displayName: '@k2-fsa/sherpa-onnx',
   description: 'On-device speech recognition powered by sherpa-onnx — no internet required',
   kind: 'local',
   configSchema,
   create: (config) => new SherpaOnnxASRProvider(config),
 }
 
-export { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider'
+export { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider.ts'

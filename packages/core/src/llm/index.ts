@@ -1,4 +1,4 @@
-export { LLMProviderRegistry, type LLMRegistryHooks } from './registry'
+export { LLMProviderRegistry, type LLMRegistryHooks } from './registry.ts'
 export {
   composeMiddleware,
   type ChatMessage,
@@ -12,4 +12,4 @@ export {
   type LLMProvider,
   type LLMProviderDescriptor,
   type TokenUsage,
-} from './types'
+} from './types.ts'

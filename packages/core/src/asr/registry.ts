@@ -1,9 +1,9 @@
-import { ProviderError } from '../errors'
+import { ProviderError } from '../errors.ts'
 import type {
   ASRProviderDescriptor,
   CloudASRProvider,
   LocalASRProvider,
-} from './types'
+} from './types.ts'
 
 export type AnyASRProvider = CloudASRProvider | LocalASRProvider
 
