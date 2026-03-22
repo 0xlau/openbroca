@@ -13,8 +13,6 @@ import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import { trpc } from '@renderer/trpc'
 import { useStore } from 'zustand'
 import { providerStore } from '@renderer/stores/provider-store'
-import { COMING_SOON_LLM, COMING_SOON_ASR } from '@renderer/lib/coming-soon-providers'
-import { providerIcons } from '@openbroca/providers/icons'
 
 function svgToDataUri(svg: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
@@ -26,7 +24,6 @@ interface ProviderViewModel {
   description: string
   kind?: 'cloud' | 'local'
   configured: boolean
-  comingSoon: boolean
   icon?: string
 }
 
@@ -41,48 +38,22 @@ function useProviderViewModel(): {
 
   const isLoading = !isHydrated || llmData === undefined || asrData === undefined
 
-  const registeredLLMIds = new Set((llmData ?? []).map((p) => p.id))
-  const registeredASRIds = new Set((asrData ?? []).map((p) => p.id))
+  const llmProviders: ProviderViewModel[] = (llmData ?? []).map((p) => ({
+    id: p.id,
+    displayName: p.displayName,
+    description: p.description,
+    configured: !!settings[p.id]?.enabled,
+    icon: p.icon ?? undefined
+  }))
 
-  const llmProviders: ProviderViewModel[] = [
-    ...(llmData ?? []).map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      description: p.description,
-      configured: !!settings[p.id]?.enabled,
-      comingSoon: false,
-      icon: p.icon ?? undefined
-    })),
-    ...COMING_SOON_LLM.filter((p) => !registeredLLMIds.has(p.id)).map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      description: p.description,
-      configured: false,
-      comingSoon: true,
-      icon: providerIcons[p.id]
-    }))
-  ]
-
-  const asrProviders: ProviderViewModel[] = [
-    ...(asrData ?? []).map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      description: p.description,
-      kind: p.kind as 'cloud' | 'local',
-      configured: !!settings[p.id]?.enabled,
-      comingSoon: false,
-      icon: p.icon ?? undefined
-    })),
-    ...COMING_SOON_ASR.filter((p) => !registeredASRIds.has(p.id)).map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      description: p.description,
-      kind: p.kind,
-      configured: false,
-      comingSoon: true,
-      icon: providerIcons[p.id]
-    }))
-  ]
+  const asrProviders: ProviderViewModel[] = (asrData ?? []).map((p) => ({
+    id: p.id,
+    displayName: p.displayName,
+    description: p.description,
+    kind: p.kind as 'cloud' | 'local',
+    configured: !!settings[p.id]?.enabled,
+    icon: p.icon ?? undefined
+  }))
 
   return { llmProviders, asrProviders, isLoading }
 }
@@ -117,20 +88,14 @@ function ProviderRow({ provider, isLast }: { provider: ProviderViewModel; isLast
             {provider.description}
           </TypographyMuted>
         </div>
-        {provider.comingSoon ? (
-          <Badge variant="ghost" className="text-muted-foreground">
-            Coming Soon
-          </Badge>
-        ) : (
-          <Button
-            variant={provider.configured ? 'ghost' : 'secondary'}
-            size="sm"
-            className="shrink-0 gap-1.5"
-          >
-            {provider.configured ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
-            {provider.configured ? 'Disconnect' : 'Connect'}
-          </Button>
-        )}
+        <Button
+          variant={provider.configured ? 'ghost' : 'secondary'}
+          size="sm"
+          className="shrink-0 gap-1.5"
+        >
+          {provider.configured ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
+          {provider.configured ? 'Disconnect' : 'Connect'}
+        </Button>
       </div>
       {!isLast && <Separator />}
     </>
