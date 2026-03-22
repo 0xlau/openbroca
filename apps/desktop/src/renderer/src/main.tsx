@@ -6,13 +6,16 @@ import { ThemeProvider } from './components/theme-provider'
 import { TooltipProvider } from '@openbroca/ui'
 import { RouterProvider } from 'react-router/dom'
 import { router } from './router'
+import { TRPCProvider } from './trpc'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
-      <TooltipProvider>
-        <RouterProvider router={router} />
-      </TooltipProvider>
+      <TRPCProvider>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </TRPCProvider>
     </ThemeProvider>
   </StrictMode>
 )

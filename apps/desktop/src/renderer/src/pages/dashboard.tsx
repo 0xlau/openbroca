@@ -1,4 +1,5 @@
 import React from 'react'
+import { trpc } from '@renderer/trpc'
 import {
   type ChartConfig,
   ChartContainer,
@@ -113,6 +114,8 @@ function HistoryRow({ item, isLast }: { item: (typeof historyData)[number]; isLa
 }
 
 export const Dashboard: React.FC = () => {
+  const { data: appVersion } = trpc.app.getAppVersion.useQuery()
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -128,6 +131,7 @@ export const Dashboard: React.FC = () => {
             <Kbd>Fn</Kbd>
           </KbdGroup>{' '}
           to start and stop dictation. Or hold to say something short.
+          {appVersion && ` · v${appVersion}`}
         </TypographyMuted>
       </div>
 
