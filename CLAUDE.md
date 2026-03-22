@@ -95,9 +95,54 @@ Shared TS configs live in `packages/typescript-config` (`@openbroca/typescript-c
 
 `apps/desktop/tsconfig.web.json` extends `@openbroca/typescript-config/react`. `tsconfig.node.json` keeps `@electron-toolkit/tsconfig` (Electron-specific).
 
-### IPC pattern
+### tRPC over IPC
 
-Custom renderer→main APIs should be added to the `api` object in `apps/desktop/src/preload/index.ts` (exposed via `contextBridge`) and typed in `apps/desktop/src/preload/index.d.ts`. Main-side handlers go in `apps/desktop/src/main/index.ts` using `ipcMain`.
+All renderer↔main communication uses **tRPC over a custom Electron IPC transport** (not HTTP). The data flow is:
+
+```
+Renderer (trpc hooks / trpcClient)
+  → ipcLink (src/renderer/src/trpc/client.ts)
+    → window.trpc (preload contextBridge)
+      → ipcMain.handle (src/main/trpc/ipc-handler.ts)
+        → tRPC router (src/main/trpc/router.ts)
+```
+
+**Adding a new procedure:**
+1. Create a router in `src/main/trpc/routers/<name>.ts` using `publicProcedure` from `../trpc`
+2. Register it in `src/main/trpc/router.ts`
+3. The renderer gets full type inference automatically via `AppRouter`
+
+**In-renderer usage:**
+- React components: `trpc.<router>.<procedure>.useQuery/useMutation()` (via `@trpc/react-query`)
+- Outside React (e.g. zustand stores): `trpcClient.<router>.<procedure>.query/mutate/subscribe()` from `src/renderer/src/trpc/client.ts`
+
+**Subscriptions** use async generators on the server side (`async function*`). The IPC handler converts them to streamed `ipcRenderer.on` messages.
+
+**Mutation support:** The `trpc:request` IPC channel now forwards `type` (`'query'` | `'mutation'`) from the renderer. Always define write operations as `.mutation()`, not `.query()`.
+
+### Persistent state (electron-store + zustand)
+
+**electron-store** (`src/main/store/`) runs in the main process and is the source of truth for persisted data. It's injected into the tRPC context and exposed via the generic `store` tRPC router (`get`, `set`, `delete`, `watch`).
+
+**zustand** stores (`src/renderer/src/stores/`) live in the renderer. Use `createPersistedStore<T>({ key, defaults })` to create a store that auto-hydrates from electron-store on init and stays in sync via a `store.watch` subscription.
+
+```ts
+// Define a domain store
+export const myStore = createPersistedStore<{ value: string }>({
+  key: 'my-domain',
+  defaults: { value: '' }
+})
+
+// Use in a component
+const { data, isHydrated, update } = useStore(myStore)
+await update({ value: 'new' })  // writes through to electron-store
+```
+
+The `store.watch` subscription is async-generator based and powered by `electron-store`'s `onDidChange`. It fires on any external write to the same key (other windows, main-process code).
+
+### IPC pattern (low-level)
+
+For cases that don't fit tRPC, raw IPC can be added to the `api` object in `apps/desktop/src/preload/index.ts` (exposed via `contextBridge`) and typed in `apps/desktop/src/preload/index.d.ts`. Main-side handlers go in `apps/desktop/src/main/index.ts` using `ipcMain`. Prefer tRPC for new APIs.
 
 ### Provider architecture (`packages/core` + `packages/providers`)
 

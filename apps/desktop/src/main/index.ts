@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { appTrpcRouter } from './trpc/router'
 import { createContext } from './trpc/context'
 import { registerTrpcIpcHandler } from './trpc/ipc-handler'
+import { store } from './store'
 
 function createWindow(): void {
   // Create the browser window.
@@ -52,7 +53,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerTrpcIpcHandler(appTrpcRouter, createContext)
+  registerTrpcIpcHandler(appTrpcRouter, (window) => createContext(window, store))
 
   createWindow()
 

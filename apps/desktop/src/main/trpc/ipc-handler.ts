@@ -21,33 +21,36 @@ export function registerTrpcIpcHandler<TRouter extends AnyRouter>(
   trpcRouter: TRouter,
   createContext: (window: BrowserWindow) => inferRouterContext<TRouter>
 ): void {
-  ipcMain.handle('trpc:request', async (event, payload: { path: string; input: unknown }) => {
-    const { path, input } = payload
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!window) throw new Error('No BrowserWindow found for this webContents')
+  ipcMain.handle(
+    'trpc:request',
+    async (event, payload: { path: string; input: unknown; type?: 'query' | 'mutation' }) => {
+      const { path, input } = payload
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window) throw new Error('No BrowserWindow found for this webContents')
 
-    const ctx = createContext(window)
-    const deserialized =
-      input !== undefined
-        ? superjson.deserialize(input as Parameters<typeof superjson.deserialize>[0])
-        : undefined
+      const ctx = createContext(window)
+      const deserialized =
+        input !== undefined
+          ? superjson.deserialize(input as Parameters<typeof superjson.deserialize>[0])
+          : undefined
 
-    const controller = new AbortController()
-    try {
-      const result = await callTRPCProcedure({
-        router: trpcRouter,
-        path,
-        getRawInput: async () => deserialized,
-        ctx,
-        type: 'query',
-        signal: controller.signal,
-        batchIndex: 0
-      })
-      return { ok: true, data: superjson.serialize(result) }
-    } catch (err) {
-      return { ok: false, error: superjson.serialize(err) }
+      const controller = new AbortController()
+      try {
+        const result = await callTRPCProcedure({
+          router: trpcRouter,
+          path,
+          getRawInput: async () => deserialized,
+          ctx,
+          type: payload.type ?? 'query',
+          signal: controller.signal,
+          batchIndex: 0
+        })
+        return { ok: true, data: superjson.serialize(result) }
+      } catch (err) {
+        return { ok: false, error: superjson.serialize(err) }
+      }
     }
-  })
+  )
 
   ipcMain.handle(
     'trpc:subscription:start',
@@ -67,7 +70,6 @@ export function registerTrpcIpcHandler<TRouter extends AnyRouter>(
       activeSubscriptions.set(subscriptionId, { controller })
 
       event.sender.once('destroyed', () => cleanupSubscriptionsForWebContents(event.sender))
-
       ;(async () => {
         try {
           let result = await callTRPCProcedure({

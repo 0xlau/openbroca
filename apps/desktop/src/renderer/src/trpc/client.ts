@@ -1,5 +1,5 @@
 import { observable } from '@trpc/server/observable'
-import { TRPCClientError, type TRPCLink } from '@trpc/client'
+import { createTRPCClient, TRPCClientError, type TRPCLink } from '@trpc/client'
 import superjson from 'superjson'
 import type { AppRouter } from '../../../main/trpc/router'
 
@@ -51,7 +51,7 @@ export function ipcLink(): TRPCLink<AppRouter> {
 
         // query / mutation
         window.trpc
-          .request({ path, input: serializedInput })
+          .request({ path, input: serializedInput, type })
           .then((raw) => {
             const res = raw as
               | { ok: true; data: ReturnType<typeof superjson.serialize> }
@@ -69,3 +69,7 @@ export function ipcLink(): TRPCLink<AppRouter> {
         return () => {}
       })
 }
+
+export const trpcClient = createTRPCClient<AppRouter>({
+  links: [ipcLink()]
+})
