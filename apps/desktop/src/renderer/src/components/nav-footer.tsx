@@ -10,15 +10,10 @@ import {
   SidebarMenuItem
 } from '@openbroca/ui'
 import { NavItem } from '@renderer/types/nav'
-import { HelpCircleIcon, Settings01Icon } from '@hugeicons/core-free-icons'
+import { HelpCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 const navItems: NavItem[] = [
-  {
-    name: 'Settings',
-    url: '#',
-    icon: <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
-  },
   {
     name: 'Get Help',
     url: '#',
