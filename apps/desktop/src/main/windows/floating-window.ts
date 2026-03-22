@@ -4,8 +4,8 @@ import { is } from '@electron-toolkit/utils'
 
 export function createFloatingWindow(): BrowserWindow {
   const floatingWindow = new BrowserWindow({
-    width: 320,
-    height: 320,
+    width: 180,
+    height: 36,
     frame: false,
     transparent: true,
     resizable: false,
