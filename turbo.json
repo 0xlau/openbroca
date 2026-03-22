@@ -9,6 +9,7 @@
       "outputs": ["out/**", "dist/**"]
     },
     "typecheck": {},
+    "test": {},
     "lint": {},
     "format": {
       "cache": false

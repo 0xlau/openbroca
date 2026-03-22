@@ -1,0 +1,27 @@
+{
+  "name": "@openbroca/providers",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./openai": "./src/openai/index.ts",
+    "./deepgram": "./src/deepgram/index.ts",
+    "./sherpa-onnx": "./src/sherpa-onnx/index.ts"
+  },
+  "dependencies": {
+    "@openbroca/core": "workspace:*",
+    "@deepgram/sdk": "^3.12.0",
+    "openai": "^4.103.0",
+    "sherpa-onnx-node": "^1.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@openbroca/typescript-config": "workspace:*",
+    "@types/node": "^22.19.1",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}
