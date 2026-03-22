@@ -6,7 +6,8 @@
   "exports": {
     "./openai": "./src/openai/index.ts",
     "./deepgram": "./src/deepgram/index.ts",
-    "./sherpa-onnx": "./src/sherpa-onnx/index.ts"
+    "./sherpa-onnx": "./src/sherpa-onnx/index.ts",
+    "./icons": "./src/icons/index.ts"
   },
   "dependencies": {
     "@openbroca/core": "workspace:*",

@@ -6,6 +6,7 @@ export const providersRouter = router({
       id: d.id,
       displayName: d.displayName,
       description: d.description,
+      icon: d.icon ?? null,
       capabilities: d.capabilities ?? null
     }))
   }),
@@ -15,6 +16,7 @@ export const providersRouter = router({
       id: d.id,
       displayName: d.displayName,
       description: d.description,
+      icon: d.icon ?? null,
       kind: d.kind
     }))
   })

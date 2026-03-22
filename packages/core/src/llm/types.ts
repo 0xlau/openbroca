@@ -112,6 +112,8 @@ export interface LLMProviderDescriptor<TConfig = unknown> {
   id: string
   displayName: string
   description: string
+  /** SVG content string for the provider's logo, inlined at build time via ?raw import. */
+  icon?: string
   /** Any schema with a `.parse(unknown): TConfig` method — Zod, Valibot, ArkType all qualify. */
   configSchema: ConfigSchema<TConfig>
   /** Declare what this provider supports. Unspecified keys default to false in the registry. */

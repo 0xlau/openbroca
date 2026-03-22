@@ -1,6 +1,7 @@
 {
   "extends": "@openbroca/typescript-config/node",
   "include": ["src/**/*"],
+  "exclude": ["src/icons/**/*"],
   "compilerOptions": {
     "noEmit": true
   }

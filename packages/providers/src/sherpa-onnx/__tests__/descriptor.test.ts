@@ -4,7 +4,7 @@ import { sherpaOnnxDescriptor } from '../index'
 describe('sherpaOnnxDescriptor', () => {
   it('has correct metadata', () => {
     expect(sherpaOnnxDescriptor.id).toBe('sherpa-onnx')
-    expect(sherpaOnnxDescriptor.displayName).toBe('Sherpa-ONNX')
+    expect(sherpaOnnxDescriptor.displayName).toBe('@k2-fsa/sherpa-onnx')
     expect(sherpaOnnxDescriptor.kind).toBe('local')
   })
 

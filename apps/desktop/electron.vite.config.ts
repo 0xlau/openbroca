@@ -1,11 +1,38 @@
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import svgr from 'vite-plugin-svgr'
 
+// Inlines SVG file content as a raw string when bundling the main process.
+// Needed because @openbroca/* workspace packages are bundled (not externalized),
+// and Node.js/esbuild cannot natively handle .svg file extensions.
+const svgRawPlugin: Plugin = {
+  name: 'svg-raw-loader',
+  enforce: 'pre',
+  load(id: string) {
+    const cleanId = id.split('?')[0]
+    if (cleanId.endsWith('.svg')) {
+      return `export default ${JSON.stringify(readFileSync(cleanId, 'utf-8'))}`
+    }
+    return null
+  }
+}
+
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      // electron-vite externalizes all dependencies by default.
+      // Workspace packages must be bundled so Vite plugins (e.g. svgRawPlugin)
+      // can process their imports before Node.js sees them.
+      externalizeDeps: {
+        exclude: ['@openbroca/core', '@openbroca/providers']
+      }
+    },
+    plugins: [svgRawPlugin]
+  },
   preload: {},
   renderer: {
     resolve: {

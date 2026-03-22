@@ -96,6 +96,8 @@ export interface ASRProviderDescriptor<TConfig = unknown> {
   id: string
   displayName: string
   description: string
+  /** SVG content string for the provider's logo, inlined at build time via ?raw import. */
+  icon?: string
   /** 'cloud' = API-based, 'local' = runs on-device (adds model management) */
   kind: 'cloud' | 'local'
   /** Any schema with a `.parse(unknown): TConfig` method. */

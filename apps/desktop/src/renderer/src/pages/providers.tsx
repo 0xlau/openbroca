@@ -13,8 +13,12 @@ import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import { trpc } from '@renderer/trpc'
 import { useStore } from 'zustand'
 import { providerStore } from '@renderer/stores/provider-store'
-import { providerIconMap } from '@renderer/lib/provider-icons'
 import { COMING_SOON_LLM, COMING_SOON_ASR } from '@renderer/lib/coming-soon-providers'
+import { providerIcons } from '@openbroca/providers/icons'
+
+function svgToDataUri(svg: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
 
 interface ProviderViewModel {
   id: string
@@ -47,7 +51,7 @@ function useProviderViewModel(): {
       description: p.description,
       configured: !!settings[p.id]?.enabled,
       comingSoon: false,
-      icon: providerIconMap[p.id]
+      icon: p.icon ?? undefined
     })),
     ...COMING_SOON_LLM.filter((p) => !registeredLLMIds.has(p.id)).map((p) => ({
       id: p.id,
@@ -55,7 +59,7 @@ function useProviderViewModel(): {
       description: p.description,
       configured: false,
       comingSoon: true,
-      icon: providerIconMap[p.id]
+      icon: providerIcons[p.id]
     }))
   ]
 
@@ -67,7 +71,7 @@ function useProviderViewModel(): {
       kind: p.kind as 'cloud' | 'local',
       configured: !!settings[p.id]?.enabled,
       comingSoon: false,
-      icon: providerIconMap[p.id]
+      icon: p.icon ?? undefined
     })),
     ...COMING_SOON_ASR.filter((p) => !registeredASRIds.has(p.id)).map((p) => ({
       id: p.id,
@@ -76,7 +80,7 @@ function useProviderViewModel(): {
       kind: p.kind,
       configured: false,
       comingSoon: true,
-      icon: providerIconMap[p.id]
+      icon: providerIcons[p.id]
     }))
   ]
 
@@ -89,7 +93,7 @@ function ProviderRow({ provider, isLast }: { provider: ProviderViewModel; isLast
       <div className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
         {provider.icon ? (
           <img
-            src={provider.icon}
+            src={svgToDataUri(provider.icon)}
             alt={provider.displayName}
             className="size-9 shrink-0 object-contain p-1"
           />
