@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
 ]
 
 export function NavMain() {
-  const { microphones, refresh } = useMicrophones()
+  const { microphones, refresh, isLoading } = useMicrophones()
   const { data, update } = useStore(microphoneStore)
 
   const selectedMic = microphones.find((m) => m.deviceId === data.selectedDeviceId)
@@ -72,7 +72,11 @@ export function NavMain() {
               variant="outline"
               onClick={refresh}
             >
-              <HugeiconsIcon icon={Refresh01Icon} strokeWidth={2} />
+              <HugeiconsIcon
+                icon={Refresh01Icon}
+                strokeWidth={2}
+                className={isLoading ? 'animate-spin' : undefined}
+              />
               <span className="sr-only">Refresh</span>
             </Button>
           </SidebarMenuItem>
