@@ -1,26 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { trpc } from '@renderer/trpc'
 
 export function useMicrophones() {
-  const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  const refresh = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      setMicrophones(devices.filter((d) => d.kind === 'audioinput'))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    navigator.mediaDevices.addEventListener('devicechange', refresh)
-    return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', refresh)
-    }
-  }, [refresh])
-
-  return { microphones, refresh, isLoading }
+  const query = trpc.audio.listDevices.useQuery()
+  return {
+    microphones: query.data ?? [],
+    refresh: () => query.refetch(),
+    isLoading: query.isLoading || query.isRefetching
+  }
 }

@@ -7,13 +7,18 @@ import { store } from './store'
 import { llmRegistry, asrRegistry } from './providers'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
+import { RtAudioCaptureSource } from '@openbroca/audio-capture'
+import { ListeningSessionManager } from './listening-session'
 
-const DEFAULT_ACCELERATOR = 'CommandOrControl+Shift+Space'
+const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 
 function getAccelerator(): string {
   const shortcuts = store.get('shortcuts') as { floatingWindowAccelerator?: string } | undefined
   return shortcuts?.floatingWindowAccelerator ?? DEFAULT_ACCELERATOR
 }
+
+const captureSource = new RtAudioCaptureSource()
+const listeningSession = new ListeningSessionManager(captureSource)
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
@@ -23,7 +28,7 @@ app.whenReady().then(() => {
   })
 
   registerTrpcIpcHandler(appTrpcRouter, (window) =>
-    createContext(window, store, llmRegistry, asrRegistry)
+    createContext(window, store, llmRegistry, asrRegistry, captureSource)
   )
 
   ipcMain.handle('window:minimize', () => windowManager.getMain()?.minimize())
@@ -38,8 +43,15 @@ app.whenReady().then(() => {
   // Register global shortcut for floating window
   shortcutManager.start(
     getAccelerator(),
-    () => windowManager.showFloating(),
-    () => windowManager.hideFloating()
+    () => {
+      windowManager.showFloating()
+      const mic = store.get('microphone') as { selectedDeviceId?: number | null } | undefined
+      listeningSession.start({ deviceId: mic?.selectedDeviceId ?? undefined })
+    },
+    () => {
+      windowManager.hideFloating()
+      listeningSession.stop()
+    }
   )
 
   // Re-register when accelerator config changes
@@ -55,6 +67,7 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
+  listeningSession.stop()
   shortcutManager.stop()
   windowManager.destroyAll()
 })

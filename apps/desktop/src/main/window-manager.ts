@@ -31,7 +31,6 @@ class WindowManager {
     const { x, y } = getFloatingWindowPosition(display.workArea, winBounds)
 
     this.floatingWindow.setPosition(x, y)
-
     this.floatingWindow.showInactive()
   }
 

@@ -32,8 +32,8 @@ export function NavMain() {
   const { microphones, refresh, isLoading } = useMicrophones()
   const { data, update } = useStore(microphoneStore)
 
-  const selectedMic = microphones.find((m) => m.deviceId === data.selectedDeviceId)
-  const label = selectedMic?.label || 'Choose Microphone'
+  const selectedMic = microphones.find((m) => m.id === data.selectedDeviceId)
+  const label = selectedMic?.name ?? 'Choose Microphone'
 
   return (
     <SidebarGroup>
@@ -52,12 +52,29 @@ export function NavMain() {
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="start" className="w-64">
                 <DropdownMenuRadioGroup
-                  value={data.selectedDeviceId ?? ''}
-                  onValueChange={(deviceId) => update({ selectedDeviceId: deviceId || null })}
+                  value={data.selectedDeviceId != null ? String(data.selectedDeviceId) : ''}
+                  onValueChange={async (value) => {
+                    const portAudioId = value ? Number(value) : null
+                    const device = microphones.find((m) => m.id === portAudioId)
+                    let browserDeviceId: string | null = null
+                    if (device) {
+                      const browserDevices = await navigator.mediaDevices.enumerateDevices()
+                      const match = browserDevices.find(
+                        (d) =>
+                          d.kind === 'audioinput' &&
+                          (d.label.includes(device.name) || device.name.includes(d.label))
+                      )
+                      browserDeviceId = match?.deviceId ?? null
+                    }
+                    update({
+                      selectedDeviceId: portAudioId,
+                      selectedBrowserDeviceId: browserDeviceId
+                    })
+                  }}
                 >
                   {microphones.map((mic) => (
-                    <DropdownMenuRadioItem key={mic.deviceId} value={mic.deviceId}>
-                      {mic.label || `Microphone (${mic.deviceId.slice(0, 8)})`}
+                    <DropdownMenuRadioItem key={mic.id} value={String(mic.id)}>
+                      {mic.name}
                     </DropdownMenuRadioItem>
                   ))}
                   {microphones.length === 0 && (
