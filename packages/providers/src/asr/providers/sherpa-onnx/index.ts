@@ -1,6 +1,6 @@
-/// <reference path="../assets.d.ts" />
+/// <reference path="../../../shared/assets.d.ts" />
 import { z } from 'zod'
-import type { ASRProviderDescriptor } from '@openbroca/core/asr'
+import type { ASRProviderDescriptor } from '../../contracts.ts'
 import { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider.ts'
 import icon from './icon.svg?raw'
 

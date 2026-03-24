@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deepgramDescriptor } from '../index'
+import { deepgramDescriptor } from '../index.ts'
 
 describe('deepgramDescriptor', () => {
   it('has correct metadata', () => {

@@ -1,30 +1,24 @@
 import * as fs from 'node:fs'
 import * as https from 'node:https'
 import * as path from 'node:path'
-import { ConfigurationError, TranscriptionError } from '@openbroca/core'
+import { ConfigurationError, TranscriptionError } from '../../../shared/errors.ts'
 import type {
   DownloadProgress,
   LocalASRProvider,
   LocalModelInfo,
   TranscriptionOptions,
   TranscriptionSegment,
-} from '@openbroca/core/asr'
+} from '../../contracts.ts'
 
 export interface SherpaOnnxConfig {
-  /** Directory where model files are stored */
   modelDir: string
 }
 
-/**
- * Well-known sherpa-onnx models available for download.
- * Each entry maps to a self-contained model directory on the sherpa-onnx GitHub releases.
- */
 const MODEL_MANIFEST: Array<{
   id: string
   name: string
   sizeBytes: number
   downloadUrl: string
-  /** Subdirectory inside modelDir where this model will be extracted */
   subDir: string
 }> = [
   {
@@ -61,40 +55,39 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
 
   async listModels(): Promise<LocalModelInfo[]> {
     const modelDir = this.assertModelDir()
-    return MODEL_MANIFEST.map((m) => ({
-      id: m.id,
-      name: m.name,
-      sizeBytes: m.sizeBytes,
-      isDownloaded: fs.existsSync(path.join(modelDir, m.subDir)),
-      downloadUrl: m.downloadUrl,
+    return MODEL_MANIFEST.map((model) => ({
+      id: model.id,
+      name: model.name,
+      sizeBytes: model.sizeBytes,
+      isDownloaded: fs.existsSync(path.join(modelDir, model.subDir)),
+      downloadUrl: model.downloadUrl,
     }))
   }
 
   async *downloadModel(modelId: string, signal?: AbortSignal): AsyncIterable<DownloadProgress> {
     const modelDir = this.assertModelDir()
-    const entry = MODEL_MANIFEST.find((m) => m.id === modelId)
+    const entry = MODEL_MANIFEST.find((model) => model.id === modelId)
     if (!entry) {
       throw new TranscriptionError(this.id, `Unknown model: ${modelId}`)
     }
 
-    const destDir = path.join(modelDir, entry.subDir)
-    if (fs.existsSync(destDir)) return
+    const destinationDir = path.join(modelDir, entry.subDir)
+    if (fs.existsSync(destinationDir)) return
 
-    // Ensure model directory exists
     fs.mkdirSync(modelDir, { recursive: true })
-
     yield* downloadWithProgress(this.id, modelId, entry.downloadUrl, modelDir, signal)
   }
 
   async deleteModel(modelId: string): Promise<void> {
     const modelDir = this.assertModelDir()
-    const entry = MODEL_MANIFEST.find((m) => m.id === modelId)
+    const entry = MODEL_MANIFEST.find((model) => model.id === modelId)
     if (!entry) {
       throw new TranscriptionError(this.id, `Unknown model: ${modelId}`)
     }
-    const destDir = path.join(modelDir, entry.subDir)
-    if (fs.existsSync(destDir)) {
-      fs.rmSync(destDir, { recursive: true, force: true })
+
+    const destinationDir = path.join(modelDir, entry.subDir)
+    if (fs.existsSync(destinationDir)) {
+      fs.rmSync(destinationDir, { recursive: true, force: true })
     }
   }
 
@@ -106,8 +99,6 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
       throw new ConfigurationError(this.id, 'Provider is not configured')
     }
 
-    // Lazily import the native module — it may not be available on all platforms
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sherpa = await import('sherpa-onnx-node').catch(() => {
       throw new TranscriptionError(
         this.id,
@@ -116,17 +107,13 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
     })
 
     const modelDir = this.assertModelDir()
-
-    // Find a downloaded model to use — prefer zipformer for English, paraformer for Chinese
-    const downloaded = MODEL_MANIFEST.find((m) => fs.existsSync(path.join(modelDir, m.subDir)))
-    if (!downloaded) {
+    const downloadedModel = MODEL_MANIFEST.find((model) => fs.existsSync(path.join(modelDir, model.subDir)))
+    if (!downloadedModel) {
       throw new TranscriptionError(this.id, 'No models downloaded. Call downloadModel() first.')
     }
 
-    const modelPath = path.join(modelDir, downloaded.subDir)
-
-    // Configure the online (streaming) recognizer
-    const recognizerConfig = buildRecognizerConfig(modelPath, downloaded.id, options?.language)
+    const modelPath = path.join(modelDir, downloadedModel.subDir)
+    const recognizerConfig = buildRecognizerConfig(modelPath, downloadedModel.id, options?.language)
     const recognizer = new sherpa.OnlineRecognizer(recognizerConfig)
     const stream = recognizer.createStream()
 
@@ -134,7 +121,6 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
       for await (const chunk of audio) {
         if (options?.signal?.aborted) break
 
-        // sherpa-onnx expects Float32Array samples at 16kHz
         const samples = int16ToFloat32(chunk)
         stream.acceptWaveform({ sampleRate: 16000, samples })
 
@@ -159,17 +145,16 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
     if (!this.modelDir) {
       throw new ConfigurationError(this.id, 'modelDir is not configured')
     }
+
     return this.modelDir
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function int16ToFloat32(buffer: Uint8Array): Float32Array {
   const int16 = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 2)
   const float32 = new Float32Array(int16.length)
-  for (let i = 0; i < int16.length; i++) {
-    float32[i] = int16[i] / 32768.0
+  for (let index = 0; index < int16.length; index++) {
+    float32[index] = int16[index] / 32768.0
   }
   return float32
 }
@@ -204,7 +189,6 @@ function buildRecognizerConfig(
     }
   }
 
-  // Default: zipformer transducer
   return {
     ...base,
     modelConfig: {
@@ -232,7 +216,7 @@ async function* downloadWithProgress(
   providerId: string,
   modelId: string,
   url: string,
-  destDir: string,
+  destinationDir: string,
   signal?: AbortSignal,
   maxRedirects = 5
 ): AsyncIterable<DownloadProgress> {
@@ -240,9 +224,7 @@ async function* downloadWithProgress(
     throw new TranscriptionError(providerId, 'Too many redirects')
   }
 
-  const tmpPath = path.join(destDir, `${modelId}.tmp.tar.bz2`)
-
-  // Channel: callbacks pushed by https events, consumed by the generator
+  const tempPath = path.join(destinationDir, `${modelId}.tmp.tar.bz2`)
   const queue: Array<DownloadProgress | Error | RedirectSignal | null> = []
   let notify: (() => void) | null = null
 
@@ -255,30 +237,29 @@ async function* downloadWithProgress(
   let totalBytes = 0
   const chunks: Buffer[] = []
 
-  const request = https.get(url, (res) => {
-    if (res.statusCode === 301 || res.statusCode === 302) {
-      const location = res.headers.location
+  const request = https.get(url, (response) => {
+    if (response.statusCode === 301 || response.statusCode === 302) {
+      const location = response.headers.location
       push(location ? null : new TranscriptionError(providerId, 'Redirect with no Location header'))
       if (location) {
-        // Signal redirect via a sentinel — handled below after loop
         push(new RedirectSignal(location))
       }
       return
     }
 
-    if (res.statusCode !== 200) {
-      push(new TranscriptionError(providerId, `Download failed with HTTP ${res.statusCode ?? 'unknown'}`))
+    if (response.statusCode !== 200) {
+      push(new TranscriptionError(providerId, `Download failed with HTTP ${response.statusCode ?? 'unknown'}`))
       return
     }
 
-    totalBytes = parseInt(res.headers['content-length'] ?? '0', 10)
+    totalBytes = parseInt(response.headers['content-length'] ?? '0', 10)
 
     signal?.addEventListener('abort', () => {
       request.destroy()
       push(new TranscriptionError(providerId, 'Download aborted'))
     })
 
-    res.on('data', (chunk: Buffer) => {
+    response.on('data', (chunk: Buffer) => {
       downloadedBytes += chunk.length
       chunks.push(chunk)
       push({
@@ -289,13 +270,13 @@ async function* downloadWithProgress(
       })
     })
 
-    res.on('end', () => {
+    response.on('end', () => {
       const data = Buffer.concat(chunks)
-      fs.writeFileSync(tmpPath, data)
-      push(null) // null = done
+      fs.writeFileSync(tempPath, data)
+      push(null)
     })
 
-    res.on('error', (err) => {
+    response.on('error', (err) => {
       push(new TranscriptionError(providerId, err.message, err))
     })
   })
@@ -304,22 +285,26 @@ async function* downloadWithProgress(
     push(new TranscriptionError(providerId, err.message, err))
   })
 
-  // Drain the channel
   let redirectUrl: string | null = null
   while (true) {
     if (queue.length > 0) {
       const item = queue.shift()!
       if (item === null) break
-      if (item instanceof RedirectSignal) { redirectUrl = item.url; break }
+      if (item instanceof RedirectSignal) {
+        redirectUrl = item.url
+        break
+      }
       if (item instanceof Error) throw item
       yield item
     } else {
-      await new Promise<void>((r) => { notify = r })
+      await new Promise<void>((doneWaiting) => {
+        notify = doneWaiting
+      })
       notify = null
     }
   }
 
   if (redirectUrl) {
-    yield* downloadWithProgress(providerId, modelId, redirectUrl, destDir, signal, maxRedirects - 1)
+    yield* downloadWithProgress(providerId, modelId, redirectUrl, destinationDir, signal, maxRedirects - 1)
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sherpaOnnxDescriptor } from '../index'
+import { sherpaOnnxDescriptor } from '../index.ts'
 
 describe('sherpaOnnxDescriptor', () => {
   it('has correct metadata', () => {

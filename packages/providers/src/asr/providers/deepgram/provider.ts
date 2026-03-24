@@ -1,10 +1,10 @@
-import { ConfigurationError, TranscriptionError } from '@openbroca/core'
+import { createClient } from '@deepgram/sdk'
+import { ConfigurationError, TranscriptionError } from '../../../shared/errors.ts'
 import type {
   ASRProvider,
   TranscriptionOptions,
   TranscriptionSegment,
-} from '@openbroca/core/asr'
-import { createClient } from '@deepgram/sdk'
+} from '../../contracts.ts'
 
 export interface DeepgramConfig {
   apiKey: string
@@ -33,8 +33,6 @@ export class DeepgramASRProvider implements ASRProvider {
     }
 
     const client = createClient(this.apiKey)
-
-    // Bridge Deepgram's event-based output to an AsyncIterable using a shared queue
     const segments: TranscriptionSegment[] = []
     let done = false
     let error: Error | null = null
@@ -42,9 +40,9 @@ export class DeepgramASRProvider implements ASRProvider {
 
     const notify = () => {
       if (resolve) {
-        const r = resolve
+        const current = resolve
         resolve = null
-        r()
+        current()
       }
     }
 
@@ -58,7 +56,7 @@ export class DeepgramASRProvider implements ASRProvider {
     })
 
     connection.on('open', () => {
-      // Connection ready, audio will be sent in the loop below
+      // Connection ready, audio will be sent below.
     })
 
     connection.on('Results', (data: {
@@ -69,6 +67,7 @@ export class DeepgramASRProvider implements ASRProvider {
     }) => {
       const transcript = data.channel.alternatives[0]?.transcript ?? ''
       if (!transcript) return
+
       segments.push({
         text: transcript,
         isFinal: data.is_final,
@@ -89,7 +88,6 @@ export class DeepgramASRProvider implements ASRProvider {
       notify()
     })
 
-    // Send audio chunks to Deepgram in the background
     const sendAudio = async () => {
       try {
         for await (const chunk of audio) {
@@ -102,16 +100,16 @@ export class DeepgramASRProvider implements ASRProvider {
     }
     void sendAudio()
 
-    // Yield segments as they arrive
     while (!done || segments.length > 0) {
       if (segments.length > 0) {
         yield segments.shift()!
         continue
       }
+
       if (error) throw error
-      // Wait for the next event
-      await new Promise<void>((r) => {
-        resolve = r
+
+      await new Promise<void>((doneWaiting) => {
+        resolve = doneWaiting
       })
     }
 
