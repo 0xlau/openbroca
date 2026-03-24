@@ -10,8 +10,7 @@ This is a **Turborepo monorepo** managed with pnpm workspaces.
 apps/
   desktop/          ← Electron + React + TypeScript app
 packages/
-  core/             ← Provider interfaces & registries (@openbroca/core)
-  providers/        ← Provider implementations (@openbroca/providers)
+  providers/        ← Provider platform: shared contracts, registries, and implementations (@openbroca/providers)
   typescript-config ← Shared TypeScript configs (@openbroca/typescript-config)
   eslint-config     ← Shared ESLint config (@openbroca/eslint-config)
   tailwind-config   ← Shared Tailwind base CSS (@openbroca/tailwind-config)
@@ -51,13 +50,11 @@ All the same scripts work directly with `pnpm dev`, `pnpm build`, etc.
 
 ```bash
 pnpm --filter @openbroca/ui typecheck        # Typecheck the shared UI package
-pnpm --filter @openbroca/core typecheck      # Typecheck the core interfaces package
-pnpm --filter @openbroca/providers typecheck # Typecheck the provider implementations
+pnpm --filter @openbroca/providers typecheck # Typecheck the provider platform package
 ```
 
 ```bash
 pnpm test                                    # Run all tests (via Turborepo)
-pnpm --filter @openbroca/core test           # Core tests only
 pnpm --filter @openbroca/providers test      # Provider tests only
 ```
 
@@ -144,18 +141,24 @@ The `store.watch` subscription is async-generator based and powered by `electron
 
 For cases that don't fit tRPC, raw IPC can be added to the `api` object in `apps/desktop/src/preload/index.ts` (exposed via `contextBridge`) and typed in `apps/desktop/src/preload/index.d.ts`. Main-side handlers go in `apps/desktop/src/main/index.ts` using `ipcMain`. Prefer tRPC for new APIs.
 
-### Provider architecture (`packages/core` + `packages/providers`)
+### Provider architecture (`packages/providers`)
 
 All packages export **raw TypeScript source** — no build step, consumed directly by Vite.
 
-**`@openbroca/core`** defines the interfaces. Three subpath exports:
-- `@openbroca/core` — `ProviderError`, `ConfigurationError`, `ConfigSchema<T>`, `Disposable`, `HealthCheckable`
-- `@openbroca/core/llm` — `LLMProvider`, `LLMProviderDescriptor<TConfig>`, `LLMProviderRegistry`, `LLMMiddleware`, `CompletionFn`, `composeMiddleware`
-- `@openbroca/core/asr` — `ASRProvider`, `CloudASRProvider`, `LocalASRProvider`, `ASRProviderDescriptor`, `ASRProviderRegistry`
+**`@openbroca/providers`** now contains the full provider platform:
+- `@openbroca/providers` — `ProviderError`, `ConfigurationError`, `TranscriptionError`, `ConfigSchema<T>`, `Disposable`, `HealthCheckable`
+- `@openbroca/providers/llm` — `LLMProvider`, `LLMProviderDescriptor<TConfig>`, `LLMProviderRegistry`, `LLMMiddleware`, `CompletionFn`, `composeMiddleware`
+- `@openbroca/providers/asr` — `ASRProvider`, `CloudASRProvider`, `LocalASRProvider`, `ASRProviderDescriptor`, `ASRProviderRegistry`
+- `@openbroca/providers/llm/openai` — OpenAI LLM descriptor and implementation
+- `@openbroca/providers/asr/deepgram` — Deepgram ASR descriptor and implementation
+- `@openbroca/providers/asr/sherpa-onnx` — Sherpa-ONNX ASR descriptor and implementation
 
-**`@openbroca/providers`** implements three providers via subpath exports: `./openai` (LLM), `./deepgram` (cloud ASR), `./sherpa-onnx` (local ASR). Each export has a `*Descriptor` object that is the sole registration artifact.
+Package layout inside `packages/providers/src/` is domain-based:
+- `shared/` — shared errors, minimal schema/types, icon aggregation
+- `llm/` — LLM contracts, middleware, registry, and LLM providers
+- `asr/` — ASR contracts, registry, and ASR providers
 
-**Adding a new provider** — implement the relevant interface from `@openbroca/core/{llm,asr}`, export a descriptor with a Zod (or any `.parse()`-compatible) config schema and a factory, add the subpath to `packages/providers/package.json` exports, and call `registry.register(descriptor)` at app bootstrap.
+**Adding a new provider** — implement the relevant interface from `@openbroca/providers/{llm,asr}`, export a descriptor with a Zod (or any `.parse()`-compatible) config schema and a factory, add the subpath to `packages/providers/package.json` exports, and call `registry.register(descriptor)` at app bootstrap.
 
 **Middleware** (LLM only) — `registry.use(middleware)` adds a global interceptor wrapping every provider's `complete()`. Middleware signature: `(next: CompletionFn) => CompletionFn`. Use `async function*` to yield chunks and wrap with try/finally for cleanup.
 

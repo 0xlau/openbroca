@@ -53,9 +53,6 @@ importers:
       '@openbroca/audio-capture':
         specifier: workspace:*
         version: link:../../packages/audio-capture
-      '@openbroca/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@openbroca/providers':
         specifier: workspace:*
         version: link:../../packages/providers
@@ -242,15 +239,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/core:
-    devDependencies:
-      '@openbroca/typescript-config':
-        specifier: workspace:*
-        version: link:../typescript-config
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/eslint-config:
     dependencies:
       '@electron-toolkit/eslint-config-prettier':
@@ -277,9 +265,6 @@ importers:
       '@deepgram/sdk':
         specifier: ^3.12.0
         version: 3.13.0(encoding@0.1.13)
-      '@openbroca/core':
-        specifier: workspace:*
-        version: link:../core
       openai:
         specifier: ^4.103.0
         version: 4.104.0(encoding@0.1.13)(ws@8.20.0)(zod@4.3.6)

@@ -1,7 +1,0 @@
-{
-  "extends": "@openbroca/typescript-config/base",
-  "include": ["src/**/*"],
-  "compilerOptions": {
-    "noEmit": true
-  }
-}

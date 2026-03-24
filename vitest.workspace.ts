@@ -1,1 +1,1 @@
-export default ['packages/core', 'packages/providers']
+export default ['packages/providers']

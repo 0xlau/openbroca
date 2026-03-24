@@ -28,7 +28,7 @@ export default defineConfig({
       // Workspace packages must be bundled so Vite plugins (e.g. svgRawPlugin)
       // can process their imports before Node.js sees them.
       externalizeDeps: {
-        exclude: ['@openbroca/core', '@openbroca/providers', '@openbroca/audio-capture']
+        exclude: ['@openbroca/providers', '@openbroca/audio-capture']
       },
       rollupOptions: {
         // audify is a native addon (.node file) — must stay external even though
