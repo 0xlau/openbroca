@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { openaiDescriptor } from '../index'
+import { openaiDescriptor } from '../index.ts'
 
 describe('openaiDescriptor', () => {
   it('has correct metadata', () => {

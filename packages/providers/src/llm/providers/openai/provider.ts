@@ -1,11 +1,11 @@
-import { ConfigurationError } from '@openbroca/core'
+import OpenAI from 'openai'
+import { ConfigurationError } from '../../../shared/errors.ts'
 import type {
   CompletionChunk,
   CompletionRequest,
   LLMModel,
   LLMProvider,
-} from '@openbroca/core/llm'
-import OpenAI from 'openai'
+} from '../../contracts.ts'
 
 export interface OpenAIConfig {
   apiKey: string
@@ -35,9 +35,9 @@ export class OpenAILLMProvider implements LLMProvider {
     const client = this.assertClient()
     const response = await client.models.list({ signal } as Parameters<typeof client.models.list>[0])
     return response.data
-      .filter((m) => m.id.startsWith('gpt-') || m.id.startsWith('o1') || m.id.startsWith('o3') || m.id.startsWith('o4'))
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((m) => ({ id: m.id, name: m.id }))
+      .filter((model) => model.id.startsWith('gpt-') || model.id.startsWith('o1') || model.id.startsWith('o3') || model.id.startsWith('o4'))
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((model) => ({ id: model.id, name: model.id }))
   }
 
   async *complete(request: CompletionRequest): AsyncIterable<CompletionChunk> {
@@ -77,6 +77,7 @@ export class OpenAILLMProvider implements LLMProvider {
     if (!this.client) {
       throw new ConfigurationError(this.id, 'Provider is not configured')
     }
+
     return this.client
   }
 }

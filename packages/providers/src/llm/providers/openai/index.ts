@@ -1,6 +1,6 @@
-/// <reference path="../assets.d.ts" />
+/// <reference path="../../../shared/assets.d.ts" />
 import { z } from 'zod'
-import type { LLMProviderDescriptor } from '@openbroca/core/llm'
+import type { LLMProviderDescriptor } from '../../contracts.ts'
 import { OpenAILLMProvider, type OpenAIConfig } from './provider.ts'
 import icon from './icon.svg?raw'
 
