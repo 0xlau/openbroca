@@ -4,17 +4,18 @@
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
+    "src/renderer/**/*.test.ts",
+    "src/renderer/**/*.test.tsx",
     "src/preload/*.d.ts",
-    "src/main/trpc/router.ts"
+    "src/main/trpc/router.ts",
+    "src/shared/**/*"
   ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@renderer/*": [
-        "src/renderer/src/*"
-      ],
+      "@renderer/*": ["src/renderer/src/*"]
     }
   }
 }

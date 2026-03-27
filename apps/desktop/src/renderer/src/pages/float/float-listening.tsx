@@ -4,6 +4,7 @@ import '@renderer/styles/float-listening.css'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { microphoneStore } from '@renderer/stores/microphone-store'
+import { listeningSessionStore } from '@renderer/stores/listening-session-store'
 import { useStore } from 'zustand'
 
 export const FloatListening: React.FC = () => {
@@ -13,6 +14,7 @@ export const FloatListening: React.FC = () => {
   }, [])
 
   const { data } = useStore(microphoneStore)
+  const { state } = useStore(listeningSessionStore)
 
   const showCancel = false
 
@@ -20,7 +22,7 @@ export const FloatListening: React.FC = () => {
     <div className="flex gap-2">
       <div className="bg-background w-20 h-9 flex items-center justify-center rounded-full border">
         <LiveWaveform
-          active={false}
+          active={state.status === 'listening'}
           deviceId={data.selectedBrowserDeviceId ?? undefined}
           mode="static"
           barColor="oklch(0.646 0.222 41.116)"

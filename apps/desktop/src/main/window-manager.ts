@@ -32,6 +32,9 @@ class WindowManager {
   showFloating(): void {
     if (!this.floatingWindow || this.floatingWindow.isDestroyed()) {
       this.floatingWindow = this.createFloatingWindow()
+      this.floatingWindow.on?.('closed', () => {
+        this.floatingWindow = null
+      })
     }
 
     if (this.floatingWindow.isVisible()) return

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { ListeningSessionState } from '../shared/listening-session-state'
 
 // Custom APIs for renderer
 const api = {
@@ -7,6 +8,20 @@ const api = {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close')
+  },
+  listeningSession: {
+    getState: () =>
+      ipcRenderer.invoke('listening-session:get-state') as Promise<ListeningSessionState>,
+    onStateChange: (callback: (state: ListeningSessionState) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: ListeningSessionState) =>
+        callback(state)
+
+      ipcRenderer.on('listening-session:state-changed', handler)
+
+      return () => {
+        ipcRenderer.removeListener('listening-session:state-changed', handler)
+      }
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { ListeningSessionState } from '../shared/listening-session-state'
 
 declare global {
   interface Window {
@@ -8,6 +9,10 @@ declare global {
         minimize: () => Promise<void>
         maximize: () => Promise<void>
         close: () => Promise<void>
+      }
+      listeningSession: {
+        getState: () => Promise<ListeningSessionState>
+        onStateChange: (callback: (state: ListeningSessionState) => void) => () => void
       }
     }
     trpc: {

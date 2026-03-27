@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { appTrpcRouter } from './trpc/router'
 import { createContext } from './trpc/context'
@@ -37,6 +37,15 @@ app.whenReady().then(() => {
     win?.isMaximized() ? win.unmaximize() : win?.maximize()
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
+  ipcMain.handle('listening-session:get-state', () => listeningSession.getState())
+
+  listeningSession.subscribe((state) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('listening-session:state-changed', state)
+      }
+    }
+  })
 
   windowManager.setFloatingHiddenHandler(() => {
     listeningSession.stop()
