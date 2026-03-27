@@ -15,8 +15,8 @@ function buildWavHeader(dataByteLength: number, format: AudioFormat): Buffer {
   header.writeUInt32LE(36 + dataByteLength, 4)
   header.write('WAVE', 8)
   header.write('fmt ', 12)
-  header.writeUInt32LE(16, 16)           // PCM chunk size
-  header.writeUInt16LE(1, 20)            // PCM format
+  header.writeUInt32LE(16, 16) // PCM chunk size
+  header.writeUInt16LE(1, 20) // PCM format
   header.writeUInt16LE(format.channels, 22)
   header.writeUInt32LE(format.sampleRate, 24)
   header.writeUInt32LE(byteRate, 28)

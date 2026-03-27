@@ -1,4 +1,5 @@
 import { RtAudio } from 'audify'
+import { normalizeAudioDeviceName } from './device-name.js'
 import type { AudioCaptureSource, AudioDevice, AudioFormat, CaptureOptions } from './types.js'
 
 // Use numeric literals — const enum values from audify are not safe to import with esbuild
@@ -23,7 +24,7 @@ export class RtAudioCaptureSource implements AudioCaptureSource {
       .filter((d) => d.inputChannels > 0)
       .map((d) => ({
         id: d.id,
-        name: d.name,
+        name: normalizeAudioDeviceName(d.name),
         maxInputChannels: d.inputChannels,
         defaultSampleRate: d.preferredSampleRate,
         isDefault: d.id === defaultInputId

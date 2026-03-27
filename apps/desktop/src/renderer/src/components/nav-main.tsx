@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
 ]
 
 export function NavMain() {
-  const { microphones, refresh, isLoading } = useMicrophones()
+  const { microphones, refresh, isLoading, resolveBrowserDeviceId } = useMicrophones()
   const { data, update } = useStore(microphoneStore)
 
   const selectedMic = microphones.find((m) => m.id === data.selectedDeviceId)
@@ -53,22 +53,12 @@ export function NavMain() {
               <DropdownMenuContent side="right" align="start" className="w-64">
                 <DropdownMenuRadioGroup
                   value={data.selectedDeviceId != null ? String(data.selectedDeviceId) : ''}
-                  onValueChange={async (value) => {
+                  onValueChange={(value) => {
                     const portAudioId = value ? Number(value) : null
                     const device = microphones.find((m) => m.id === portAudioId)
-                    let browserDeviceId: string | null = null
-                    if (device) {
-                      const browserDevices = await navigator.mediaDevices.enumerateDevices()
-                      const match = browserDevices.find(
-                        (d) =>
-                          d.kind === 'audioinput' &&
-                          (d.label.includes(device.name) || device.name.includes(d.label))
-                      )
-                      browserDeviceId = match?.deviceId ?? null
-                    }
                     update({
                       selectedDeviceId: portAudioId,
-                      selectedBrowserDeviceId: browserDeviceId
+                      selectedBrowserDeviceId: device ? resolveBrowserDeviceId(device) : null
                     })
                   }}
                 >
