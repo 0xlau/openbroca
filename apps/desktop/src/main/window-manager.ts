@@ -1,9 +1,21 @@
 import { BrowserWindow, screen } from 'electron'
 import { createMainWindow, createFloatingWindow, getFloatingWindowPosition } from './windows'
 
+interface WindowManagerOptions {
+  createFloatingWindow?: () => BrowserWindow
+  onFloatingHidden?: () => void
+}
+
 class WindowManager {
   private mainWindow: BrowserWindow | null = null
   private floatingWindow: BrowserWindow | null = null
+  private readonly createFloatingWindow: () => BrowserWindow
+  private onFloatingHidden: (() => void) | null
+
+  constructor(options: WindowManagerOptions = {}) {
+    this.createFloatingWindow = options.createFloatingWindow ?? createFloatingWindow
+    this.onFloatingHidden = options.onFloatingHidden ?? null
+  }
 
   createMain(): BrowserWindow {
     this.mainWindow = createMainWindow()
@@ -19,7 +31,7 @@ class WindowManager {
 
   showFloating(): void {
     if (!this.floatingWindow || this.floatingWindow.isDestroyed()) {
-      this.floatingWindow = createFloatingWindow()
+      this.floatingWindow = this.createFloatingWindow()
     }
 
     if (this.floatingWindow.isVisible()) return
@@ -37,7 +49,12 @@ class WindowManager {
   hideFloating(): void {
     if (this.floatingWindow && !this.floatingWindow.isDestroyed()) {
       this.floatingWindow.hide()
+      this.onFloatingHidden?.()
     }
+  }
+
+  setFloatingHiddenHandler(handler: (() => void) | null): void {
+    this.onFloatingHidden = handler
   }
 
   isFloatingVisible(): boolean {
@@ -59,5 +76,7 @@ class WindowManager {
     }
   }
 }
+
+export { WindowManager }
 
 export const windowManager = new WindowManager()

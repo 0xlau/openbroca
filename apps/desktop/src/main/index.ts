@@ -38,6 +38,10 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
 
+  windowManager.setFloatingHiddenHandler(() => {
+    listeningSession.stop()
+  })
+
   windowManager.createMain()
 
   // Register global shortcut for floating window
@@ -50,7 +54,6 @@ app.whenReady().then(() => {
     },
     () => {
       windowManager.hideFloating()
-      listeningSession.stop()
     }
   )
 
