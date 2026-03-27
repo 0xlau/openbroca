@@ -8,3 +8,4 @@ out
 .agents
 skills-lock.json
 .turbo
+.worktrees
