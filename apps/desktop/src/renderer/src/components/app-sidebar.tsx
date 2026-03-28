@@ -2,7 +2,7 @@ import * as React from 'react'
 
 import { NavPersonalization } from '@renderer/components/nav-personalization'
 import { NavMain } from '@renderer/components/nav-main'
-import { NavServer } from '@renderer/components/nav-server'
+import { NavSettings } from '@renderer/components/nav-server'
 import { NavFooter } from '@renderer/components/nav-footer'
 import {
   Sidebar,
@@ -33,7 +33,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain />
         <NavPersonalization />
-        <NavServer />
+        <NavSettings />
       </SidebarContent>
       <SidebarFooter>
         <NavFooter className="m-0 p-0" />
