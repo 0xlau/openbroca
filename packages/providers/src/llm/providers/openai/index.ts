@@ -18,6 +18,7 @@ export const openaiDescriptor: LLMProviderDescriptor<OpenAIConfig> = {
   configSchema,
   capabilities: {
     streaming: true,
+    nonStreaming: true,
     functionCalling: true,
     vision: true,
     jsonMode: true,

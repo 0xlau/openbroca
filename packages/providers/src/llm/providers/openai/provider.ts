@@ -1,6 +1,5 @@
 import OpenAI from 'openai'
 import { ConfigurationError } from '../../../shared/errors.ts'
-import { generateFromCompletion } from '../../contracts.ts'
 import type {
   CompletionChunk,
   CompletionRequest,
@@ -47,7 +46,25 @@ export class OpenAILLMProvider implements LLMProvider {
   }
 
   async generate(request: CompletionRequest): Promise<CompletionResult> {
-    return generateFromCompletion((nextRequest) => this.complete(nextRequest))(request)
+    const client = this.assertClient()
+    const response = await client.chat.completions.create({
+      model: request.model,
+      messages: request.messages,
+      temperature: request.temperature,
+      max_tokens: request.maxTokens,
+      stream: false,
+    }, { signal: request.signal })
+
+    const choice = response.choices[0]
+    return {
+      content: choice?.message.content ?? '',
+      finishReason: choice?.finish_reason === 'length' ? 'length' : 'stop',
+      usage: response.usage ? {
+        promptTokens: response.usage.prompt_tokens,
+        completionTokens: response.usage.completion_tokens,
+        totalTokens: response.usage.total_tokens,
+      } : undefined,
+    }
   }
 
   async *complete(request: CompletionRequest): AsyncIterable<CompletionChunk> {

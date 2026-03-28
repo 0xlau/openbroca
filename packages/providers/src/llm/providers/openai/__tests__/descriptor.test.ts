@@ -11,6 +11,7 @@ describe('openaiDescriptor', () => {
   it('declares expected capabilities', () => {
     const caps = openaiDescriptor.capabilities ?? {}
     expect(caps.streaming).toBe(true)
+    expect(caps.nonStreaming).toBe(true)
     expect(caps.functionCalling).toBe(true)
     expect(caps.vision).toBe(true)
     expect(caps.jsonMode).toBe(true)
