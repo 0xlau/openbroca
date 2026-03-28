@@ -1,6 +1,17 @@
+import { writeFileSync } from 'node:fs'
 import { describe, expect, test, vi } from 'vitest'
 import type { AudioCaptureSource } from '@openbroca/audio-capture'
 import { ListeningSessionManager } from '../listening-session'
+
+vi.mock('node:fs', () => ({
+  writeFileSync: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/tmp')
+  }
+}))
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -23,6 +34,7 @@ class FakeCaptureSource implements AudioCaptureSource {
   readonly captureCalls: Array<{ signal?: AbortSignal }> = []
   private readonly firstRead = createDeferred<void>()
   private readonly release = createDeferred<void>()
+  private readonly queuedChunks: Uint8Array[] = []
   private runtimeError: Error | null = null
 
   capture = vi.fn((options = {}) => {
@@ -38,10 +50,13 @@ class FakeCaptureSource implements AudioCaptureSource {
             throw this.runtimeError
           }
 
+          const nextChunk = this.queuedChunks.shift()
+          if (nextChunk) {
+            return { done: false, value: nextChunk }
+          }
+
           if (options.signal?.aborted) {
-            const error = new Error('aborted')
-            error.name = 'AbortError'
-            throw error
+            return { done: true, value: undefined }
           }
 
           return { done: true, value: undefined }
@@ -61,6 +76,10 @@ class FakeCaptureSource implements AudioCaptureSource {
   failWith(error: Error): void {
     this.runtimeError = error
     this.release.resolve()
+  }
+
+  pushChunk(chunk: Uint8Array): void {
+    this.queuedChunks.push(chunk)
   }
 }
 
@@ -201,5 +220,37 @@ describe('ListeningSessionManager', () => {
 
     expect(states).toContain('stopping')
     expect(states).not.toContain('error')
+  })
+
+  test('stop saves captured audio and logs the recording path', async () => {
+    const captureSource = new FakeCaptureSource()
+    const manager = new ListeningSessionManager(captureSource)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expect(manager.getState()).toEqual({ status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expect(manager.getState()).toEqual({ status: 'idle' })
+    })
+
+    expect(writeFileSync).toHaveBeenCalledTimes(1)
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/openbroca-.*\.wav$/),
+      expect.any(Buffer)
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^\[listening-session\] saved recording: \/tmp\/openbroca-.*\.wav$/)
+    )
+
+    logSpy.mockRestore()
   })
 })

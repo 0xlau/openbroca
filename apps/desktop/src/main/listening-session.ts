@@ -117,11 +117,6 @@ class ListeningSessionManager {
         chunks.push(chunk)
       }
 
-      if (opts.signal.aborted || this.state.status === 'stopping') {
-        this.setState({ status: 'idle' })
-        return
-      }
-
       if (chunks.length > 0) {
         const pcm = Buffer.concat(
           chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength))
