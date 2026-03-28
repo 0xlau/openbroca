@@ -8,6 +8,7 @@ export const store = new Store<StoreSchema>({
   name: 'openbroca',
   defaults: {
     aboutMe: {},
+    dictionary: {},
     providers: {},
     settings: {}
   }
