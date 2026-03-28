@@ -197,7 +197,7 @@ function DictionaryRow({
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <Empty className="rounded-xl border border-dashed border-foreground/15 bg-muted/20">
+    <Empty className="min-h-90 flex-1 rounded-xl border border-dashed border-foreground/15 bg-muted/20">
       <EmptyHeader>
         <EmptyTitle>Your dictionary is empty</EmptyTitle>
         <EmptyDescription>
@@ -277,7 +277,7 @@ export const Dictionary: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex min-h-full flex-1 flex-col gap-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           <TypographyH3 className="text-left">Dictionary</TypographyH3>
@@ -294,7 +294,7 @@ export const Dictionary: React.FC = () => {
       {!isHydrated ? (
         <TypographyMuted>Loading dictionary...</TypographyMuted>
       ) : (
-        <section className="space-y-3">
+        <section className="flex flex-1 flex-col space-y-3">
           {entries.length === 0 ? (
             <EmptyState onAdd={startCreate} />
           ) : (
