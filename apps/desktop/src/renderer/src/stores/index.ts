@@ -1,5 +1,7 @@
 export { createPersistedStore } from './create-persisted-store'
 export type { PersistedStoreState } from './create-persisted-store'
+export { aboutMeStore } from './about-me-store'
+export type { AboutMeSettings } from './about-me-store'
 export { providerStore } from './provider-store'
 export type { ProviderSettings } from './provider-store'
 export { settingsStore } from './settings-store'

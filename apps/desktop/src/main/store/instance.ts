@@ -7,6 +7,7 @@ const Store: typeof ElectronStore =
 export const store = new Store<StoreSchema>({
   name: 'openbroca',
   defaults: {
+    aboutMe: {},
     providers: {},
     settings: {}
   }
