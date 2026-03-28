@@ -25,6 +25,10 @@ function makeFakeProvider(id = 'fake'): LLMProvider {
     displayName: 'Fake',
     isConfigured: () => true,
     listModels: async (): Promise<LLMModel[]> => [{ id: 'model-1', name: 'Model 1' }],
+    generate: async (): Promise<{ content: string; finishReason: 'stop' }> => ({
+      content: 'hello',
+      finishReason: 'stop',
+    }),
     async *complete(_req: CompletionRequest): AsyncIterable<CompletionChunk> {
       yield { delta: 'hello' }
     },
@@ -138,6 +142,7 @@ describe('LLMProviderRegistry', () => {
       registry.register(makeDescriptor('fake', { capabilities: { streaming: true } }))
       const caps = registry.getCapabilities('fake')
       expect(caps.streaming).toBe(true)
+      expect(caps.nonStreaming).toBe(true)
       expect(caps.functionCalling).toBe(false)
       expect(caps.vision).toBe(false)
       expect(caps.jsonMode).toBe(false)
@@ -155,15 +160,16 @@ describe('LLMProviderRegistry', () => {
       registry.register(makeDescriptor())
 
       const seen: string[] = []
-      registry.use((next) =>
-        async function* (req) {
-          seen.push('enter')
-          for await (const chunk of next(req)) {
-            yield { ...chunk, delta: chunk.delta + '!' }
-          }
-          seen.push('exit')
-        }
-      )
+      registry.use({
+        wrapComplete: (next) =>
+          async function* (req) {
+            seen.push('enter')
+            for await (const chunk of next(req)) {
+              yield { ...chunk, delta: chunk.delta + '!' }
+            }
+            seen.push('exit')
+          },
+      })
 
       const provider = registry.resolve('fake', { apiKey: 'k' })
       const chunks: CompletionChunk[] = []
@@ -175,15 +181,97 @@ describe('LLMProviderRegistry', () => {
       expect(seen).toEqual(['enter', 'exit'])
     })
 
+    it('legacy middleware still wraps the resolved provider complete()', async () => {
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor())
+
+      registry.use((next) =>
+        async function* (req) {
+          for await (const chunk of next(req)) {
+            yield { ...chunk, delta: `${chunk.delta}?` }
+          }
+        }
+      )
+
+      const provider = registry.resolve('fake', { apiKey: 'k' })
+      const chunks: CompletionChunk[] = []
+      for await (const chunk of provider.complete({ model: 'm', messages: [] })) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks).toEqual([{ delta: 'hello?' }])
+    })
+
+    it('middleware wraps the resolved provider generate()', async () => {
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor())
+
+      registry.use({
+        wrapGenerate: (next) => async (req) => {
+          const result = await next(req)
+          return {
+            ...result,
+            content: `${result.content}:${req.model}`,
+          }
+        },
+      })
+
+      const provider = registry.resolve('fake', { apiKey: 'k' })
+      await expect(provider.generate({ model: 'm', messages: [] })).resolves.toEqual({
+        content: 'hello:m',
+        finishReason: 'stop',
+      })
+    })
+
+    it('generate fallback sees wrapped complete middleware', async () => {
+      const providerWithFallbackGenerate: LLMProvider = {
+        ...makeFakeProvider(),
+        async generate(request) {
+          let content = ''
+          for await (const chunk of this.complete(request)) {
+            content += chunk.delta
+          }
+          return { content, finishReason: 'stop' }
+        },
+      }
+
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor('fake', { create: () => providerWithFallbackGenerate }))
+      registry.use({
+        wrapComplete: (next) =>
+          async function* (req) {
+            for await (const chunk of next(req)) {
+              yield { ...chunk, delta: chunk.delta.toUpperCase() }
+            }
+          },
+      })
+
+      const resolved = registry.resolve('fake', { apiKey: 'k' })
+      await expect(resolved.generate({ model: 'm', messages: [] })).resolves.toEqual({
+        content: 'HELLO',
+        finishReason: 'stop',
+      })
+    })
+
     it('original provider is not mutated by middleware wrapping', () => {
       const original = makeFakeProvider()
+      const originalGenerate = original.generate
+      const originalComplete = original.complete
       const registry = new LLMProviderRegistry()
       registry.register(makeDescriptor('fake', { create: () => original }))
-      registry.use((next) => async function* (req) { yield* next(req) })
+      registry.use({
+        wrapComplete: (next) =>
+          async function* (req) {
+            yield* next(req)
+          },
+      })
 
       const wrapped = registry.resolve('fake', { apiKey: 'k' })
       expect(wrapped).not.toBe(original)
-      expect(original.complete).toBe(original.complete)
+      expect(wrapped.complete).not.toBe(originalComplete)
+      expect(wrapped.generate).not.toBe(originalGenerate)
+      expect(original.complete).toBe(originalComplete)
+      expect(original.generate).toBe(originalGenerate)
     })
   })
 

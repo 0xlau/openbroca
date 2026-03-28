@@ -1,8 +1,10 @@
 import OpenAI from 'openai'
 import { ConfigurationError } from '../../../shared/errors.ts'
+import { generateFromCompletion } from '../../contracts.ts'
 import type {
   CompletionChunk,
   CompletionRequest,
+  CompletionResult,
   LLMModel,
   LLMProvider,
 } from '../../contracts.ts'
@@ -11,6 +13,10 @@ export interface OpenAIConfig {
   apiKey: string
   baseUrl?: string
   organization?: string
+}
+
+function normalizeFinishReason(reason: string | null | undefined): CompletionChunk['finishReason'] {
+  return reason === 'length' ? 'length' : reason === 'stop' ? 'stop' : null
 }
 
 export class OpenAILLMProvider implements LLMProvider {
@@ -40,6 +46,10 @@ export class OpenAILLMProvider implements LLMProvider {
       .map((model) => ({ id: model.id, name: model.id }))
   }
 
+  async generate(request: CompletionRequest): Promise<CompletionResult> {
+    return generateFromCompletion((nextRequest) => this.complete(nextRequest))(request)
+  }
+
   async *complete(request: CompletionRequest): AsyncIterable<CompletionChunk> {
     const client = this.assertClient()
 
@@ -56,7 +66,7 @@ export class OpenAILLMProvider implements LLMProvider {
       if (!choice) continue
 
       const delta = choice.delta.content ?? ''
-      const finishReason = choice.finish_reason as CompletionChunk['finishReason'] ?? null
+      const finishReason = normalizeFinishReason(choice.finish_reason)
 
       if (delta || finishReason) {
         yield { delta, finishReason }

@@ -1,6 +1,7 @@
 import { ProviderError } from '../shared/errors.ts'
 import {
-  composeMiddleware,
+  composeCompleteMiddleware,
+  composeGenerateMiddleware,
   type LLMCapabilities,
   type LLMMiddleware,
   type LLMProvider,
@@ -9,6 +10,7 @@ import {
 
 const DEFAULT_CAPABILITIES: LLMCapabilities = {
   streaming: false,
+  nonStreaming: true,
   functionCalling: false,
   vision: false,
   jsonMode: false,
@@ -86,10 +88,22 @@ export class LLMProviderRegistry {
   }
 
   private wrapWithMiddleware(provider: LLMProvider): LLMProvider {
-    const wrappedComplete = composeMiddleware(this.middlewares, (request) => provider.complete(request))
+    const middlewares = this.middlewares
+
     return new Proxy(provider, {
       get(target, prop, receiver) {
-        if (prop === 'complete') return wrappedComplete
+        if (prop === 'generate') {
+          return composeGenerateMiddleware(middlewares, (request) =>
+            Reflect.get(target, 'generate', receiver).call(receiver, request)
+          )
+        }
+
+        if (prop === 'complete') {
+          return composeCompleteMiddleware(middlewares, (request) =>
+            Reflect.get(target, 'complete', receiver).call(receiver, request)
+          )
+        }
+
         return Reflect.get(target, prop, receiver)
       },
     })

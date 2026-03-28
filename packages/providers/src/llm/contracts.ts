@@ -36,16 +36,72 @@ export interface CompletionResult {
   usage?: TokenUsage
 }
 
-export type CompletionFn = (request: CompletionRequest) => AsyncIterable<CompletionChunk>
+export type CompletionStreamFn = (request: CompletionRequest) => AsyncIterable<CompletionChunk>
+export type CompletionGenerateFn = (request: CompletionRequest) => Promise<CompletionResult>
+export type CompletionFn = CompletionStreamFn
 
-export type LLMMiddleware = (next: CompletionFn) => CompletionFn
+export type LegacyLLMMiddleware = (next: CompletionStreamFn) => CompletionStreamFn
+
+export interface LLMMiddlewareHooks {
+  wrapGenerate?: (next: CompletionGenerateFn) => CompletionGenerateFn
+  wrapComplete?: (next: CompletionStreamFn) => CompletionStreamFn
+}
+
+export type LLMMiddleware = LegacyLLMMiddleware | LLMMiddlewareHooks
+
+const isLegacyMiddleware = (middleware: LLMMiddleware): middleware is LegacyLLMMiddleware =>
+  typeof middleware === 'function'
+
+const isCompleteMiddleware = (middleware: LLMMiddleware): middleware is { wrapComplete: NonNullable<LLMMiddlewareHooks['wrapComplete']> } =>
+  typeof middleware === 'object' && middleware !== null && typeof middleware.wrapComplete === 'function'
+
+const isGenerateMiddleware = (middleware: LLMMiddleware): middleware is { wrapGenerate: NonNullable<LLMMiddlewareHooks['wrapGenerate']> } =>
+  typeof middleware === 'object' && middleware !== null && typeof middleware.wrapGenerate === 'function'
+
+export function composeCompleteMiddleware(middlewares: LLMMiddleware[], handler: CompletionStreamFn): CompletionStreamFn {
+  return middlewares.reduceRight((next, middleware) => {
+    if (isLegacyMiddleware(middleware)) {
+      return middleware(next)
+    }
+    if (isCompleteMiddleware(middleware)) {
+      return middleware.wrapComplete(next)
+    }
+    return next
+  }, handler)
+}
+
+export function composeGenerateMiddleware(middlewares: LLMMiddleware[], handler: CompletionGenerateFn): CompletionGenerateFn {
+  return middlewares.reduceRight((next, middleware) => {
+    if (isGenerateMiddleware(middleware)) {
+      return middleware.wrapGenerate(next)
+    }
+    return next
+  }, handler)
+}
 
 export function composeMiddleware(middlewares: LLMMiddleware[], handler: CompletionFn): CompletionFn {
-  return middlewares.reduceRight((next, middleware) => middleware(next), handler)
+  return composeCompleteMiddleware(middlewares, handler)
+}
+
+export function generateFromCompletion(complete: CompletionStreamFn): CompletionGenerateFn {
+  return async (request) => {
+    let content = ''
+    let finishReason: CompletionChunk['finishReason'] = null
+
+    for await (const chunk of complete(request)) {
+      content += chunk.delta
+      if (chunk.finishReason) {
+        finishReason = chunk.finishReason
+      }
+    }
+
+    return { content, finishReason: finishReason ?? 'stop' }
+  }
 }
 
 export interface LLMCapabilities {
   streaming: boolean
+  nonStreaming: boolean
   functionCalling: boolean
   vision: boolean
   jsonMode: boolean
@@ -56,6 +112,7 @@ export interface LLMProvider extends Partial<Disposable>, Partial<HealthCheckabl
   readonly displayName: string
   isConfigured(): boolean
   listModels(signal?: AbortSignal): Promise<LLMModel[]>
+  generate(request: CompletionRequest): Promise<CompletionResult>
   complete(request: CompletionRequest): AsyncIterable<CompletionChunk>
 }
 
