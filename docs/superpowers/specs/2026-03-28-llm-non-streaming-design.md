@@ -59,6 +59,8 @@ interface LLMProvider {
 }
 ```
 
+In the concrete codebase, this contract update should preserve the current inheritance shape around optional lifecycle and health-check methods rather than replacing it with a simplified standalone interface snippet.
+
 This makes the high-level and low-level completion paths explicit:
 
 - `generate()` means "return the final normalized answer"
@@ -143,6 +145,8 @@ interface LLMMiddleware {
 }
 ```
 
+For this change, the middleware contract should be treated as an internal breaking refactor inside `@openbroca/providers/llm`, not as a long-lived compatibility migration. Existing in-repo middleware usage is limited and can be updated in the same implementation pass.
+
 This design avoids two problems:
 
 - native `generate()` implementations bypassing middleware entirely
@@ -196,6 +200,8 @@ const DEFAULT_CAPABILITIES = {
 - it documents the completion mode explicitly in provider metadata
 - it keeps the capability model symmetric for callers and UI
 - it leaves room for future edge cases if a provider contract changes or becomes partially unavailable
+
+In this design, `nonStreaming: true` means "`generate()` is available to callers," regardless of whether the provider fulfills it through a native non-streaming request or the shared stream-aggregation fallback.
 
 This design does not add a separate capability to distinguish native non-streaming support from stream-derived fallback. That detail can remain internal until there is a concrete need to expose it.
 
