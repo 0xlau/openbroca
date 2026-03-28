@@ -2,7 +2,7 @@ import * as React from 'react'
 
 import { NavPersonalization } from '@renderer/components/nav-personalization'
 import { NavMain } from '@renderer/components/nav-main'
-import { NavSettings } from '@renderer/components/nav-server'
+import { NavSettings } from '@renderer/components/nav-settings'
 import { NavFooter } from '@renderer/components/nav-footer'
 import {
   Sidebar,
