@@ -1,4 +1,5 @@
 import type { ConfigSchema, Disposable } from '../shared/types.ts'
+import type { ProviderConnectionOption } from '../shared/connection.ts'
 
 export interface TranscriptionSegment {
   text: string
@@ -52,5 +53,6 @@ export interface ASRProviderDescriptor<TConfig = unknown> {
   icon?: string
   kind: 'cloud' | 'local'
   configSchema: ConfigSchema<TConfig>
+  connectionOptions?: ProviderConnectionOption[]
   create(config: TConfig): CloudASRProvider | LocalASRProvider
 }

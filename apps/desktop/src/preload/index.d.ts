@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { ProviderAuthState } from '../shared/provider-auth'
 import type { ListeningSessionState } from '../shared/listening-session-state'
 
 declare global {
@@ -9,6 +10,10 @@ declare global {
         minimize: () => Promise<void>
         maximize: () => Promise<void>
         close: () => Promise<void>
+      }
+      providerAuth: {
+        connect: (providerId: string) => Promise<ProviderAuthState>
+        disconnect: (providerId: string) => Promise<ProviderAuthState>
       }
       listeningSession: {
         getState: () => Promise<ListeningSessionState>

@@ -1,4 +1,6 @@
 import type { ConfigSchema, Disposable, HealthCheckable } from '../shared/types.ts'
+import type { ProviderConnectionOption } from '../shared/connection.ts'
+import type { ProviderSecureStorageOption } from '../shared/oauth.ts'
 
 export interface LLMModel {
   id: string
@@ -123,5 +125,7 @@ export interface LLMProviderDescriptor<TConfig = unknown> {
   icon?: string
   configSchema: ConfigSchema<TConfig>
   capabilities?: Partial<LLMCapabilities>
+  connectionOptions?: ProviderConnectionOption[]
+  secureStorage?: ProviderSecureStorageOption
   create(config: TConfig): LLMProvider
 }

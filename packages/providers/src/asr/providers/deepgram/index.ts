@@ -5,7 +5,7 @@ import { DeepgramASRProvider, type DeepgramConfig } from './provider.ts'
 import icon from './icon.svg?raw'
 
 const configSchema = z.object({
-  apiKey: z.string().min(1, 'API key is required'),
+  apiKey: z.string().min(1, 'API key is required')
 })
 
 export const deepgramDescriptor: ASRProviderDescriptor<DeepgramConfig> = {
@@ -15,7 +15,23 @@ export const deepgramDescriptor: ASRProviderDescriptor<DeepgramConfig> = {
   icon,
   kind: 'cloud',
   configSchema,
-  create: (config) => new DeepgramASRProvider(config),
+  connectionOptions: [
+    {
+      type: 'apiKey',
+      label: 'API Key',
+      description: 'Enter a Deepgram API key to enable real-time transcription.',
+      fields: [
+        {
+          key: 'apiKey',
+          label: 'API Key',
+          input: 'password',
+          required: true,
+          description: 'Your Deepgram API key.'
+        }
+      ]
+    }
+  ],
+  create: (config) => new DeepgramASRProvider(config)
 }
 
 export { DeepgramASRProvider, type DeepgramConfig } from './provider.ts'

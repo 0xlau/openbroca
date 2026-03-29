@@ -1,0 +1,159 @@
+import { describe, expect, test, vi } from 'vitest'
+import { OAuthService } from '../auth/oauth-service'
+import type { OAuthSession } from '../auth/openai-codex-oauth'
+import type { SecureStorage } from '../auth/secure-storage'
+
+class MemoryStore {
+  private state: Record<string, unknown> = {
+    providers: {}
+  }
+
+  get<T>(key: string): T | undefined {
+    return this.state[key] as T | undefined
+  }
+
+  set(key: string, value: unknown): void {
+    this.state[key] = value
+  }
+}
+
+describe('OAuthService', () => {
+  test('starts browser oauth, handles callback, and persists token to secure storage', async () => {
+    const session = {
+      tokens: {
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresAt: '2026-03-28T12:00:00.000Z'
+      },
+      account: {
+        email: 'dev@example.com',
+        accountId: 'acct_123'
+      }
+    } satisfies OAuthSession
+
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(async () => session),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    const result = await oauthService.start('openai-codex')
+
+    expect(result.status).toBe('connected')
+    expect(result.account).toEqual(session.account)
+    expect(secureStorage.setSecret).toHaveBeenCalledWith(
+      'provider:openai-codex',
+      expect.stringContaining('"refreshToken"')
+    )
+    expect(store.get('providers')).toEqual({
+      'openai-codex': {
+        enabled: true,
+        connectionType: 'oauth',
+        account: session.account,
+        auth: {
+          status: 'connected',
+          lastConnectedAt: expect.any(String)
+        }
+      }
+    })
+    expect(JSON.stringify(store.get('providers'))).not.toContain('access-token')
+    expect(JSON.stringify(store.get('providers'))).not.toContain('refresh-token')
+  })
+
+  test('disconnect removes the secure token and stored auth metadata', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => '{"accessToken":"access-token"}'),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    store.set('providers', {
+      'openai-codex': {
+        enabled: true,
+        connectionType: 'oauth',
+        account: {
+          email: 'dev@example.com',
+          accountId: 'acct_123'
+        },
+        auth: {
+          status: 'connected',
+          lastConnectedAt: '2026-03-28T12:00:00.000Z'
+        }
+      }
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    const result = await oauthService.disconnect('openai-codex')
+
+    expect(result).toEqual({
+      providerId: 'openai-codex',
+      status: 'not-connected'
+    })
+    expect(secureStorage.deleteSecret).toHaveBeenCalledWith('provider:openai-codex')
+    expect(store.get('providers')).toEqual({})
+  })
+
+  test('getStatus returns not-connected and clears stale store metadata when secret is missing', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    store.set('providers', {
+      'openai-codex': {
+        enabled: true,
+        connectionType: 'oauth',
+        account: {
+          email: 'dev@example.com',
+          accountId: 'acct_123'
+        },
+        auth: {
+          status: 'connected',
+          lastConnectedAt: '2026-03-28T12:00:00.000Z'
+        }
+      }
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    const result = await oauthService.getStatus('openai-codex')
+
+    expect(secureStorage.getSecret).toHaveBeenCalledWith('provider:openai-codex')
+    expect(result).toEqual({
+      providerId: 'openai-codex',
+      status: 'not-connected'
+    })
+    expect(store.get('providers')).toEqual({})
+  })
+})

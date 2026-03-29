@@ -51,6 +51,7 @@
     "electron-updater": "^6.3.9",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
+    "keytar": "^7.9.0",
     "lucide-react": "^0.577.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",

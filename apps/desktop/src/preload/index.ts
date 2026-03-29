@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { ListeningSessionState } from '../shared/listening-session-state'
+import type { ProviderAuthState } from '../shared/provider-auth'
 
 // Custom APIs for renderer
 const api = {
@@ -8,6 +9,12 @@ const api = {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close')
+  },
+  providerAuth: {
+    connect: (providerId: string) =>
+      ipcRenderer.invoke('provider-auth:connect', providerId) as Promise<ProviderAuthState>,
+    disconnect: (providerId: string) =>
+      ipcRenderer.invoke('provider-auth:disconnect', providerId) as Promise<ProviderAuthState>
   },
   listeningSession: {
     getState: () =>

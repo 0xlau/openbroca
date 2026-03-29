@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openaiDescriptor } from '../index.ts'
+import { openaiCodexDescriptor } from '../../openai-codex/index.ts'
 
 describe('openaiDescriptor', () => {
   it('has correct metadata', () => {
@@ -17,6 +18,25 @@ describe('openaiDescriptor', () => {
     expect(caps.jsonMode).toBe(true)
   })
 
+  it('declares API key connection fields', () => {
+    const connectionOptions = (
+      openaiDescriptor as {
+        connectionOptions?: Array<{ type: string; fields?: Array<{ key: string }> }>
+      }
+    ).connectionOptions
+
+    expect(connectionOptions).toEqual([
+      expect.objectContaining({
+        type: 'apiKey',
+        fields: [
+          expect.objectContaining({ key: 'apiKey' }),
+          expect.objectContaining({ key: 'baseUrl' }),
+          expect.objectContaining({ key: 'organization' })
+        ]
+      })
+    ])
+  })
+
   it('config schema accepts valid config', () => {
     const config = openaiDescriptor.configSchema.parse({ apiKey: 'sk-test' })
     expect(config.apiKey).toBe('sk-test')
@@ -26,7 +46,7 @@ describe('openaiDescriptor', () => {
     const config = openaiDescriptor.configSchema.parse({
       apiKey: 'sk-test',
       baseUrl: 'http://localhost:11434/v1',
-      organization: 'org-123',
+      organization: 'org-123'
     })
     expect(config.baseUrl).toBe('http://localhost:11434/v1')
     expect(config.organization).toBe('org-123')
@@ -45,5 +65,16 @@ describe('openaiDescriptor', () => {
     expect(provider.id).toBe('openai')
     expect(provider.displayName).toBe('OpenAI')
     expect(provider.isConfigured()).toBe(true)
+  })
+})
+
+describe('openaiCodexDescriptor', () => {
+  it('declares a browser OAuth connection option for the Codex provider', () => {
+    expect(openaiCodexDescriptor.connectionOptions).toEqual([
+      expect.objectContaining({
+        type: 'oauth',
+        flow: 'systemBrowser'
+      })
+    ])
   })
 })

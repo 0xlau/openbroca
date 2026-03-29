@@ -18,5 +18,16 @@ export {
   type LLMModel,
   type LLMProvider,
   type LLMProviderDescriptor,
-  type TokenUsage,
+  type TokenUsage
 } from './contracts.ts'
+export {
+  type ProviderConnectionField,
+  type ProviderConnectionFieldInput,
+  type ProviderOAuthConnectionOption,
+  type ProviderConnectionOption,
+  type ProviderConnectionType
+} from '../shared/connection.ts'
+export {
+  type ProviderOAuthFlow,
+  type ProviderSecureStorageOption
+} from '../shared/oauth.ts'

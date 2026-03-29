@@ -7,7 +7,8 @@ export const providersRouter = router({
       displayName: d.displayName,
       description: d.description,
       icon: d.icon ?? null,
-      capabilities: d.capabilities ?? null
+      capabilities: d.capabilities ?? null,
+      connectionOptions: d.connectionOptions ?? []
     }))
   }),
 
@@ -17,7 +18,8 @@ export const providersRouter = router({
       displayName: d.displayName,
       description: d.description,
       icon: d.icon ?? null,
-      kind: d.kind
+      kind: d.kind,
+      connectionOptions: d.connectionOptions ?? []
     }))
   })
 })

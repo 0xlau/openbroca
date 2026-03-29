@@ -24,6 +24,10 @@ vi.mock('@electron-toolkit/preload', () => ({
 function getExposedApi() {
   const call = exposeInMainWorld.mock.calls.find(([key]) => key === 'api')
   return call?.[1] as {
+    providerAuth: {
+      connect: (providerId: string) => Promise<unknown>
+      disconnect: (providerId: string) => Promise<void>
+    }
     listeningSession: {
       getState: () => Promise<ListeningSessionState>
       onStateChange: (callback: (state: ListeningSessionState) => void) => () => void
@@ -59,6 +63,31 @@ describe('preload listeningSession bridge', () => {
 
     expect(invoke).toHaveBeenCalledWith('listening-session:get-state')
     expect(result).toEqual(state)
+  })
+
+  test('connects a provider through the main-process auth bridge', async () => {
+    const response = { status: 'connected', providerId: 'openai-codex' }
+    invoke.mockResolvedValueOnce(response)
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    const result = await api.providerAuth.connect('openai-codex')
+
+    expect(invoke).toHaveBeenCalledWith('provider-auth:connect', 'openai-codex')
+    expect(result).toEqual(response)
+  })
+
+  test('disconnects a provider through the main-process auth bridge', async () => {
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    await api.providerAuth.disconnect('openai-codex')
+
+    expect(invoke).toHaveBeenCalledWith('provider-auth:disconnect', 'openai-codex')
   })
 
   test('subscribers receive listening session state updates', async () => {

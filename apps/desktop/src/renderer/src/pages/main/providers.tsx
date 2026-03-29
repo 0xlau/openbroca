@@ -1,135 +1,125 @@
 import React from 'react'
-import {
-  Badge,
-  Button,
-  Separator,
-  TypographyH3,
-  TypographyLarge,
-  TypographyMuted,
-  TypographySmall
-} from '@openbroca/ui'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignIcon } from '@hugeicons/core-free-icons'
+import type { ProviderConnectionType } from '@openbroca/providers'
+import { Separator, TypographyH3, TypographyMuted } from '@openbroca/ui'
 import { trpc } from '@renderer/trpc'
 import { useStore } from 'zustand'
-import { providerStore } from '@renderer/stores/provider-store'
-
-function svgToDataUri(svg: string): string {
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
-}
-
-interface ProviderViewModel {
-  id: string
-  displayName: string
-  description: string
-  kind?: 'cloud' | 'local'
-  configured: boolean
-  icon?: string
-}
+import { providerStore, type ProviderSettings } from '@renderer/stores/provider-store'
+import { ProviderConnectDialog } from '@renderer/components/providers/provider-connect-dialog'
+import { ProviderSection } from '@renderer/components/providers/provider-section'
+import {
+  toProviderViewModel,
+  type ProviderViewModel
+} from '@renderer/components/providers/provider-types'
 
 function useProviderViewModel(): {
   llmProviders: ProviderViewModel[]
   asrProviders: ProviderViewModel[]
   isLoading: boolean
+  settings: ProviderSettings
+  updateSettings: (partial: Partial<ProviderSettings>) => Promise<void>
+  replaceSettings: (next: ProviderSettings) => Promise<void>
 } {
   const { data: llmData } = trpc.providers.listLLM.useQuery()
   const { data: asrData } = trpc.providers.listASR.useQuery()
-  const { data: settings, isHydrated } = useStore(providerStore)
+  const { data: settings, isHydrated, update, replace } = useStore(providerStore)
 
   const isLoading = !isHydrated || llmData === undefined || asrData === undefined
 
-  const llmProviders: ProviderViewModel[] = (llmData ?? []).map((p) => ({
-    id: p.id,
-    displayName: p.displayName,
-    description: p.description,
-    configured: !!settings[p.id]?.enabled,
-    icon: p.icon ?? undefined
-  }))
+  const llmProviders: ProviderViewModel[] = (llmData ?? []).map(toProviderViewModel)
 
-  const asrProviders: ProviderViewModel[] = (asrData ?? []).map((p) => ({
-    id: p.id,
-    displayName: p.displayName,
-    description: p.description,
-    kind: p.kind as 'cloud' | 'local',
-    configured: !!settings[p.id]?.enabled,
-    icon: p.icon ?? undefined
-  }))
+  const asrProviders: ProviderViewModel[] = (asrData ?? []).map(toProviderViewModel)
 
-  return { llmProviders, asrProviders, isLoading }
-}
-
-function ProviderRow({ provider, isLast }: { provider: ProviderViewModel; isLast: boolean }) {
-  return (
-    <>
-      <div className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
-        {provider.icon ? (
-          <img
-            src={svgToDataUri(provider.icon)}
-            alt={provider.displayName}
-            className="size-9 shrink-0 object-contain p-1"
-          />
-        ) : (
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-foreground/10">
-            <span className="text-xs font-semibold text-muted-foreground">
-              {provider.displayName.slice(0, 2).toUpperCase()}
-            </span>
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <TypographySmall>{provider.displayName}</TypographySmall>
-            {provider.kind === 'local' && (
-              <Badge variant="secondary" className="text-xs">
-                Local
-              </Badge>
-            )}
-          </div>
-          <TypographyMuted className="mt-1 truncate text-xs">
-            {provider.description}
-          </TypographyMuted>
-        </div>
-        <Button
-          variant={provider.configured ? 'ghost' : 'secondary'}
-          size="sm"
-          className="shrink-0 gap-1.5"
-        >
-          {provider.configured ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
-          {provider.configured ? 'Disconnect' : 'Connect'}
-        </Button>
-      </div>
-      {!isLast && <Separator />}
-    </>
-  )
-}
-
-function ProviderSection({ title, providers }: { title: string; providers: ProviderViewModel[] }) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2.5 px-1">
-        <TypographyLarge>{title}</TypographyLarge>
-      </div>
-      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-        {providers.map((provider, index) => (
-          <ProviderRow
-            key={provider.id}
-            provider={provider}
-            isLast={index === providers.length - 1}
-          />
-        ))}
-      </div>
-    </section>
-  )
+  return {
+    llmProviders,
+    asrProviders,
+    isLoading,
+    settings,
+    updateSettings: update,
+    replaceSettings: replace
+  }
 }
 
 function ProviderContainer() {
-  const { llmProviders, asrProviders } = useProviderViewModel()
+  const { llmProviders, asrProviders, isLoading, settings, updateSettings, replaceSettings } =
+    useProviderViewModel()
+  const trpcUtils = trpc.useUtils()
+  const [selectedProvider, setSelectedProvider] = React.useState<ProviderViewModel | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false)
+
+  async function handleSave(
+    providerId: string,
+    connectionType: Extract<ProviderConnectionType, 'apiKey' | 'local'>,
+    config?: Record<string, string>
+  ) {
+    await updateSettings({
+      [providerId]: {
+        enabled: true,
+        connectionType,
+        config
+      }
+    })
+  }
+
+  async function handleOAuthConnect(providerId: string) {
+    const status = await window.api.providerAuth.connect(providerId)
+    trpcUtils.providerAuth.status.setData({ providerId }, status)
+  }
+
+  async function handleDisconnect(providerId: string, connectionType: ProviderConnectionType) {
+    if (connectionType === 'oauth') {
+      const status = await window.api.providerAuth.disconnect(providerId)
+      trpcUtils.providerAuth.status.setData({ providerId }, status)
+      return
+    }
+
+    const nextSettings = { ...settings }
+    delete nextSettings[providerId]
+    await replaceSettings(nextSettings)
+  }
+
+  function handleConnect(provider: ProviderViewModel) {
+    setSelectedProvider(provider)
+    setIsDialogOpen(true)
+  }
+
+  if (isLoading) {
+    return <TypographyMuted>Loading providers...</TypographyMuted>
+  }
 
   return (
-    <div className="space-y-8">
-      <ProviderSection title="ASR Providers" providers={asrProviders} />
-      <Separator />
-      <ProviderSection title="LLM Providers" providers={llmProviders} />
-    </div>
+    <>
+      <div className="space-y-8">
+        <ProviderSection
+          title="ASR Providers"
+          providers={asrProviders}
+          settings={settings}
+          onConnect={handleConnect}
+          onDisconnect={handleDisconnect}
+        />
+        <Separator />
+        <ProviderSection
+          title="LLM Providers"
+          providers={llmProviders}
+          settings={settings}
+          onConnect={handleConnect}
+          onDisconnect={handleDisconnect}
+        />
+      </div>
+
+      <ProviderConnectDialog
+        provider={selectedProvider}
+        currentSetting={selectedProvider ? settings[selectedProvider.id] : undefined}
+        open={isDialogOpen}
+        onOAuthConnect={handleOAuthConnect}
+        onOpenChange={(next) => {
+          setIsDialogOpen(next)
+          if (!next) {
+            setSelectedProvider(null)
+          }
+        }}
+        onSave={handleSave}
+      />
+    </>
   )
 }
 

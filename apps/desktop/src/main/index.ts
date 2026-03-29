@@ -9,6 +9,9 @@ import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
 import { RtAudioCaptureSource } from '@openbroca/audio-capture'
 import { ListeningSessionManager } from './listening-session'
+import { OAuthService } from './auth/oauth-service'
+import { openaiCodexOAuth } from './auth/openai-codex-oauth'
+import { secureStorage } from './auth/secure-storage'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 
@@ -19,6 +22,13 @@ function getAccelerator(): string {
 
 const captureSource = new RtAudioCaptureSource()
 const listeningSession = new ListeningSessionManager(captureSource)
+const oauthService = new OAuthService({
+  store,
+  secureStorage,
+  providers: {
+    'openai-codex': openaiCodexOAuth
+  }
+})
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
@@ -28,7 +38,7 @@ app.whenReady().then(() => {
   })
 
   registerTrpcIpcHandler(appTrpcRouter, (window) =>
-    createContext(window, store, llmRegistry, asrRegistry, captureSource)
+    createContext(window, store, llmRegistry, asrRegistry, captureSource, oauthService)
   )
 
   ipcMain.handle('window:minimize', () => windowManager.getMain()?.minimize())
@@ -38,6 +48,10 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
   ipcMain.handle('listening-session:get-state', () => listeningSession.getState())
+  ipcMain.handle('provider-auth:connect', (_event, providerId: string) => oauthService.start(providerId))
+  ipcMain.handle('provider-auth:disconnect', (_event, providerId: string) =>
+    oauthService.disconnect(providerId)
+  )
 
   listeningSession.subscribe((state) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -79,6 +93,7 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
+  void oauthService.dispose()
   listeningSession.stop()
   shortcutManager.stop()
   windowManager.destroyAll()

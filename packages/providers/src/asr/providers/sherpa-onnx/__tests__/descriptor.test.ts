@@ -8,6 +8,21 @@ describe('sherpaOnnxDescriptor', () => {
     expect(sherpaOnnxDescriptor.kind).toBe('local')
   })
 
+  it('declares local connection fields', () => {
+    const connectionOptions = (
+      sherpaOnnxDescriptor as {
+        connectionOptions?: Array<{ type: string; fields?: Array<{ key: string }> }>
+      }
+    ).connectionOptions
+
+    expect(connectionOptions).toEqual([
+      expect.objectContaining({
+        type: 'local',
+        fields: [expect.objectContaining({ key: 'modelDir' })]
+      })
+    ])
+  })
+
   it('config schema accepts valid config', () => {
     const config = sherpaOnnxDescriptor.configSchema.parse({ modelDir: '/tmp/models' })
     expect(config.modelDir).toBe('/tmp/models')

@@ -5,7 +5,7 @@ import { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider.ts'
 import icon from './icon.svg?raw'
 
 const configSchema = z.object({
-  modelDir: z.string().min(1, 'Model directory path is required'),
+  modelDir: z.string().min(1, 'Model directory path is required')
 })
 
 export const sherpaOnnxDescriptor: ASRProviderDescriptor<SherpaOnnxConfig> = {
@@ -15,7 +15,23 @@ export const sherpaOnnxDescriptor: ASRProviderDescriptor<SherpaOnnxConfig> = {
   icon,
   kind: 'local',
   configSchema,
-  create: (config) => new SherpaOnnxASRProvider(config),
+  connectionOptions: [
+    {
+      type: 'local',
+      label: 'Local Model Path',
+      description: 'Point OpenBroca at a sherpa-onnx model directory on this machine.',
+      fields: [
+        {
+          key: 'modelDir',
+          label: 'Model Directory',
+          input: 'directory',
+          required: true,
+          description: 'Absolute path to the local sherpa-onnx model directory.'
+        }
+      ]
+    }
+  ],
+  create: (config) => new SherpaOnnxASRProvider(config)
 }
 
 export { SherpaOnnxASRProvider, type SherpaOnnxConfig } from './provider.ts'

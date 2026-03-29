@@ -8,6 +8,21 @@ describe('deepgramDescriptor', () => {
     expect(deepgramDescriptor.kind).toBe('cloud')
   })
 
+  it('declares API key connection fields', () => {
+    const connectionOptions = (
+      deepgramDescriptor as {
+        connectionOptions?: Array<{ type: string; fields?: Array<{ key: string }> }>
+      }
+    ).connectionOptions
+
+    expect(connectionOptions).toEqual([
+      expect.objectContaining({
+        type: 'apiKey',
+        fields: [expect.objectContaining({ key: 'apiKey' })]
+      })
+    ])
+  })
+
   it('config schema accepts valid config', () => {
     const config = deepgramDescriptor.configSchema.parse({ apiKey: 'dg-test' })
     expect(config.apiKey).toBe('dg-test')

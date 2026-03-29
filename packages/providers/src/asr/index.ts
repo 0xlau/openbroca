@@ -7,5 +7,11 @@ export {
   type LocalASRProvider,
   type LocalModelInfo,
   type TranscriptionOptions,
-  type TranscriptionSegment,
+  type TranscriptionSegment
 } from './contracts.ts'
+export {
+  type ProviderConnectionField,
+  type ProviderConnectionFieldInput,
+  type ProviderConnectionOption,
+  type ProviderConnectionType
+} from '../shared/connection.ts'
