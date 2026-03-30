@@ -31,6 +31,11 @@ const setProviderAuthStatus = vi.fn((input: { providerId: string }, status: Prov
   providerAuthStatus[input.providerId] = status
 })
 
+const TooltipContext = React.createContext<{
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+} | null>(null)
+
 vi.mock('@renderer/stores/provider-store', () => ({
   providerStore
 }))
@@ -72,14 +77,10 @@ vi.mock('@openbroca/ui', () => ({
     children,
     onClick,
     type = 'button',
-    disabled
-  }: {
-    children: React.ReactNode
-    onClick?: () => void
-    type?: 'button' | 'submit'
-    disabled?: boolean
-  }) => (
-    <button type={type} onClick={onClick} disabled={disabled}>
+    disabled,
+    ...props
+  }: React.ComponentProps<'button'>) => (
+    <button type={type} onClick={onClick} disabled={disabled} {...props}>
       {children}
     </button>
   ),
@@ -97,6 +98,29 @@ vi.mock('@openbroca/ui', () => ({
     <label htmlFor={htmlFor}>{children}</label>
   ),
   Separator: () => <hr />,
+  Tooltip: ({ children }: { children: React.ReactNode }) => {
+    const [open, setOpen] = React.useState(false)
+    return <TooltipContext.Provider value={{ open, setOpen }}>{children}</TooltipContext.Provider>
+  },
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({
+    children,
+    asChild
+  }: {
+    children: React.ReactNode
+    asChild?: boolean
+  }) => {
+    void asChild
+    const context = React.useContext(TooltipContext)
+    return React.cloneElement(children as React.ReactElement, {
+      onMouseEnter: () => context?.setOpen(true),
+      onMouseLeave: () => context?.setOpen(false)
+    })
+  },
+  TooltipContent: ({ children }: { children: React.ReactNode }) => {
+    const context = React.useContext(TooltipContext)
+    return context?.open ? <div role="tooltip">{children}</div> : null
+  },
   TypographyH3: ({ children }: { children: React.ReactNode }) => <h3>{children}</h3>,
   TypographyLarge: ({ children }: { children: React.ReactNode }) => <h4>{children}</h4>,
   TypographyMuted: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
@@ -313,5 +337,40 @@ describe('Providers page', () => {
 
     expect(container.firstElementChild?.className).toContain('max-w-5xl')
     expect(container.firstElementChild?.className).toContain('mx-auto')
+  })
+
+  test('shows provider helper text in a tooltip when hovering Connect', async () => {
+    llmProviders = [
+      {
+        id: 'openai-codex',
+        displayName: 'OpenAI Codex',
+        description: 'Connect with OAuth',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'oauth',
+            label: 'OpenAI Account',
+            description: 'Sign in with your ChatGPT account to connect OpenAI Codex.',
+            buttonLabel: 'Continue in browser',
+            flow: 'systemBrowser'
+          }
+        ]
+      }
+    ]
+
+    await renderProviders()
+
+    expect(screen.queryByText('Browser sign-in required')).toBeNull()
+
+    const connectButton = screen.getByRole('button', { name: 'Connect' })
+    fireEvent.mouseEnter(connectButton)
+
+    expect(screen.getByRole('tooltip').textContent).toContain('Browser sign-in required')
+
+    fireEvent.mouseLeave(connectButton)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
   })
 })

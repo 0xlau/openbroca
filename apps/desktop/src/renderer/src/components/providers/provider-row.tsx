@@ -1,4 +1,13 @@
-import { Badge, Button, Separator, TypographyMuted, TypographySmall } from '@openbroca/ui'
+import {
+  Badge,
+  Button,
+  Separator,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TypographyMuted,
+  TypographySmall
+} from '@openbroca/ui'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 import { trpc } from '@renderer/trpc'
@@ -34,6 +43,21 @@ export function ProviderRow({
   )
 
   const state = resolveProviderConnectionState(provider, setting, authStatus)
+  const actionButton = (
+    <Button
+      variant={state.isConnected ? 'ghost' : 'secondary'}
+      size="sm"
+      className="shrink-0 gap-1.5"
+      onClick={() =>
+        state.isConnected && state.disconnectConnectionType
+          ? onDisconnect(provider.id, state.disconnectConnectionType)
+          : onConnect(provider)
+      }
+    >
+      {state.isConnected ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
+      {state.buttonLabel}
+    </Button>
+  )
 
   return (
     <>
@@ -61,23 +85,17 @@ export function ProviderRow({
             ) : null}
           </div>
           <TypographyMuted className="mt-1 truncate text-xs">{state.description}</TypographyMuted>
-          {state.helperText ? (
-            <TypographyMuted className="mt-1 text-xs">{state.helperText}</TypographyMuted>
-          ) : null}
         </div>
-        <Button
-          variant={state.isConnected ? 'ghost' : 'secondary'}
-          size="sm"
-          className="shrink-0 gap-1.5"
-          onClick={() =>
-            state.isConnected && state.disconnectConnectionType
-              ? onDisconnect(provider.id, state.disconnectConnectionType)
-              : onConnect(provider)
-          }
-        >
-          {state.isConnected ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
-          {state.buttonLabel}
-        </Button>
+        {state.helperText && !state.isConnected ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{actionButton}</TooltipTrigger>
+            <TooltipContent sideOffset={0} side="left">
+              {state.helperText}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          actionButton
+        )}
       </div>
       {!isLast ? <Separator /> : null}
     </>
