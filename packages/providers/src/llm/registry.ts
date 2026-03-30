@@ -66,6 +66,16 @@ export class LLMProviderRegistry {
     return this.instances.get(id)
   }
 
+  async evict(id: string): Promise<void> {
+    const provider = this.instances.get(id)
+    if (!provider) {
+      return
+    }
+
+    await provider.dispose?.()
+    this.instances.delete(id)
+  }
+
   listDescriptors(): LLMProviderDescriptor[] {
     return Array.from(this.descriptors.values())
   }

@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { resolveLLMProvider } from '../../providers/runtime'
 import { publicProcedure, router } from '../trpc'
 
 export const providersRouter = router({
@@ -11,6 +13,21 @@ export const providersRouter = router({
       connectionOptions: d.connectionOptions ?? []
     }))
   }),
+
+  listModels: publicProcedure
+    .input(
+      z.object({
+        providerId: z.string()
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const provider = await resolveLLMProvider(input.providerId, {
+        llmRegistry: ctx.llmRegistry,
+        oauthService: ctx.oauthService,
+        store: ctx.store
+      })
+      return provider.listModels()
+    }),
 
   listASR: publicProcedure.query(({ ctx }) => {
     return ctx.asrRegistry.listDescriptors().map((d) => ({

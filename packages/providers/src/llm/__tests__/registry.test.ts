@@ -126,6 +126,31 @@ describe('LLMProviderRegistry', () => {
     })
   })
 
+  describe('evict', () => {
+    it('disposes and removes a cached provider instance', async () => {
+      const dispose = vi.fn().mockResolvedValue(undefined)
+      const provider: LLMProvider = {
+        ...makeFakeProvider(),
+        dispose
+      }
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor('fake', { create: () => provider }))
+      registry.resolve('fake', { apiKey: 'k' })
+
+      await registry.evict('fake')
+
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(registry.get('fake')).toBeUndefined()
+    })
+
+    it('is a no-op for providers that were never resolved', async () => {
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor())
+
+      await expect(registry.evict('fake')).resolves.toBeUndefined()
+    })
+  })
+
   describe('listDescriptors', () => {
     it('returns descriptors without resolving providers', () => {
       const create = vi.fn(() => makeFakeProvider())

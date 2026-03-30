@@ -1,11 +1,13 @@
-import type { OAuthAuthorizer } from './openai-codex-oauth'
+import { ConfigurationError } from '@openbroca/providers'
+import type { OAuthAuthorizer, OAuthTokens } from './openai-codex-oauth'
 import type { SecureStorage } from './secure-storage'
 import {
   createConnectedProviderMetadata,
   toProviderAuthState,
   type ConnectedProviderAuthState,
   type ProviderAuthState,
-  type ProviderConnectionMetadata
+  type ProviderConnectionMetadata,
+  type ProviderConnectionRecord
 } from '../../shared/provider-auth'
 
 interface StoreLike {
@@ -76,15 +78,12 @@ export class OAuthService {
   async getStatus(providerId: string): Promise<ProviderAuthState> {
     this.ensureProviderRegistered(providerId)
 
-    const providers =
-      this.options.store.get<Record<string, ProviderConnectionMetadata>>('providers') ?? {}
+    const providers = this.getProviderRecords()
     const provider = providers[providerId]
-    if (provider?.auth?.status === 'connected') {
-      const secret = await this.options.secureStorage.getSecret(`provider:${providerId}`)
+    if (provider?.connectionType === 'oauth' && provider.auth?.status === 'connected') {
+      const secret = await this.getStoredTokens(providerId)
       if (!secret) {
-        const nextProviders = { ...providers }
-        delete nextProviders[providerId]
-        this.options.store.set('providers', nextProviders)
+        this.clearProviderRecord(providerId, providers)
         return toProviderAuthState(providerId)
       }
 
@@ -109,5 +108,58 @@ export class OAuthService {
     }
 
     return provider
+  }
+
+  async getRuntimeConfig(
+    providerId: string
+  ): Promise<{ accessToken: string; accountId?: string } | null> {
+    this.ensureProviderRegistered(providerId)
+
+    const providers = this.getProviderRecords()
+    const provider = providers[providerId]
+    if (!provider || provider.connectionType !== 'oauth') {
+      return null
+    }
+
+    const tokens = await this.getStoredTokens(providerId)
+    if (!tokens?.accessToken) {
+      this.clearProviderRecord(providerId, providers)
+      return null
+    }
+
+    return {
+      accessToken: tokens.accessToken,
+      accountId: provider.account?.accountId
+    }
+  }
+
+  private getProviderRecords(): Record<string, ProviderConnectionRecord> {
+    return this.options.store.get<Record<string, ProviderConnectionRecord>>('providers') ?? {}
+  }
+
+  private clearProviderRecord(
+    providerId: string,
+    providers: Record<string, ProviderConnectionRecord>
+  ): void {
+    if (!(providerId in providers)) {
+      return
+    }
+
+    const nextProviders = { ...providers }
+    delete nextProviders[providerId]
+    this.options.store.set('providers', nextProviders)
+  }
+
+  private async getStoredTokens(providerId: string): Promise<OAuthTokens | null> {
+    const secret = await this.options.secureStorage.getSecret(`provider:${providerId}`)
+    if (!secret) {
+      return null
+    }
+
+    try {
+      return JSON.parse(secret) as OAuthTokens
+    } catch (error) {
+      throw new ConfigurationError(providerId, `Stored OAuth tokens are invalid: ${String(error)}`)
+    }
   }
 }

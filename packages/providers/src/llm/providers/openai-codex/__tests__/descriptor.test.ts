@@ -16,6 +16,22 @@ describe('openaiCodexDescriptor', () => {
     expect(provider.isConfigured()).toBe(false)
   })
 
+  it('config schema preserves optional runtime oauth fields', () => {
+    const config = openaiCodexDescriptor.configSchema.parse({
+      accessToken: 'token',
+      accountId: 'acct_123',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      originator: 'codex_cli_rs'
+    })
+
+    expect(config).toEqual({
+      accessToken: 'token',
+      accountId: 'acct_123',
+      baseUrl: 'https://chatgpt.com/backend-api/codex',
+      originator: 'codex_cli_rs'
+    })
+  })
+
   it('fails fast when runtime methods are used before oauth is configured', async () => {
     const provider = openaiCodexDescriptor.create({})
 

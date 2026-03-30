@@ -1,3 +1,5 @@
+import type { ProviderConnectionType } from '@openbroca/providers'
+
 export interface ProviderAuthAccount {
   email?: string
   accountId?: string
@@ -15,6 +17,14 @@ export interface ProviderConnectionMetadata {
   auth?: ProviderAuthConnectionMetadata
   [key: string]: unknown
 }
+
+export interface ManualProviderConnectionRecord {
+  enabled: boolean
+  connectionType: Exclude<ProviderConnectionType, 'oauth'>
+  config?: Record<string, string>
+}
+
+export type ProviderConnectionRecord = ManualProviderConnectionRecord | ProviderConnectionMetadata
 
 export interface ConnectedProviderAuthState {
   providerId: string
