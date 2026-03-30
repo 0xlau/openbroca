@@ -14,7 +14,7 @@ export const openaiCodexDescriptor: LLMProviderDescriptor<OpenAICodexConfig> = {
   id: 'openai-codex',
   icon,
   displayName: 'OpenAI Codex',
-  description: 'OpenAI Codex via desktop OAuth (not configured yet).',
+  description: 'OpenAI Codex via desktop OAuth',
   configSchema,
   connectionOptions: [
     {
