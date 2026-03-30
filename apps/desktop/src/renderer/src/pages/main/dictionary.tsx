@@ -277,7 +277,7 @@ export const Dictionary: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col gap-6 p-6">
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           <TypographyH3 className="text-left">Dictionary</TypographyH3>

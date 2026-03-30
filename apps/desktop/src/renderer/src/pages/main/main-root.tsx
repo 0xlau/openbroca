@@ -21,7 +21,7 @@ export const MainRoot: React.FC = () => {
         }
       >
         <AppSidebar variant="inset" />
-        <SidebarInset className="overflow-hidden">
+        <SidebarInset className="min-w-0 overflow-y-auto">
           <Outlet />
         </SidebarInset>
       </SidebarProvider>

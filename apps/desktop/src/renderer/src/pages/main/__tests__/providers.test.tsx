@@ -296,7 +296,7 @@ describe('Providers page', () => {
 
     await renderProviders()
 
-    expect(screen.getByText('Connected')).toBeTruthy()
+    expect(screen.getByText('OAuth')).toBeTruthy()
     expect(screen.getByText('openai-codex')).toBeTruthy()
     expect(screen.queryByText(/accessToken/i)).toBeNull()
     expect(screen.queryByText(/refreshToken/i)).toBeNull()
@@ -306,5 +306,12 @@ describe('Providers page', () => {
     await waitFor(() => {
       expect(disconnectProviderAuth).toHaveBeenCalledWith('openai-codex')
     })
+  })
+
+  test('constrains and centers the page content', async () => {
+    const { container } = await renderProviders()
+
+    expect(container.firstElementChild?.className).toContain('max-w-5xl')
+    expect(container.firstElementChild?.className).toContain('mx-auto')
   })
 })

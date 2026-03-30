@@ -125,7 +125,7 @@ function ProviderContainer() {
 
 export const Providers: React.FC = () => {
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
       <div>
         <TypographyH3 className="text-left">Providers</TypographyH3>
         <TypographyMuted className="not-first:mt-2">

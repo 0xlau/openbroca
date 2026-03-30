@@ -119,4 +119,13 @@ describe('Dictionary', () => {
       usageCount: 0
     })
   })
+
+  test('constrains and centers the page content', async () => {
+    const { Dictionary } = await import('../dictionary')
+
+    const { container } = render(<Dictionary />)
+
+    expect(container.firstElementChild?.className).toContain('max-w-5xl')
+    expect(container.firstElementChild?.className).toContain('mx-auto')
+  })
 })

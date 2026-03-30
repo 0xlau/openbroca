@@ -90,4 +90,13 @@ describe('AboutMe', () => {
       expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
     })
   })
+
+  test('constrains and centers the page content', async () => {
+    const { AboutMe } = await import('../about-me')
+
+    const { container } = render(<AboutMe />)
+
+    expect(container.firstElementChild?.className).toContain('max-w-5xl')
+    expect(container.firstElementChild?.className).toContain('mx-auto')
+  })
 })
