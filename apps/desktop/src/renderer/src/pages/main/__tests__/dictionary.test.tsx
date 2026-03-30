@@ -44,6 +44,23 @@ vi.mock('@openbroca/ui', () => ({
   EmptyTitle: ({ children }: { children: ReactNode }) => <h3>{children}</h3>,
   Input: (props: ComponentProps<'input'>) => <input {...props} />,
   Separator: () => <hr />,
+  Switch: ({
+    checked,
+    onCheckedChange,
+    id
+  }: {
+    checked?: boolean
+    onCheckedChange?: (checked: boolean) => void
+    id?: string
+  }) => (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onCheckedChange?.(!checked)}
+    />
+  ),
   Textarea: (props: ComponentProps<'textarea'>) => <textarea {...props} />,
   TypographyH3: ({ children }: { children: ReactNode }) => <h1>{children}</h1>,
   TypographyLarge: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
@@ -63,6 +80,7 @@ const dictionaryStore = createStore(() => ({
       {
         id: 'hello',
         term: 'OpenBroca',
+        type: 'hotword',
         note: 'Product name',
         usageCount: 7,
         createdAt: '2026-03-28T08:00:00.000Z',
@@ -97,12 +115,12 @@ describe('Dictionary', () => {
     expect(screen.getByText('Used 7 times')).toBeTruthy()
   })
 
-  test('adds a new hotword through the inline form', async () => {
+  test('adds a new hotword through the dialog', async () => {
     const { Dictionary } = await import('../dictionary')
 
     render(<Dictionary />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Hotword' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     fireEvent.change(screen.getByLabelText('Hotword'), { target: { value: 'Whisper' } })
     fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'ASR model name' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -115,9 +133,75 @@ describe('Dictionary', () => {
     expect(nextState.entries).toHaveLength(2)
     expect(nextState.entries[1]).toMatchObject({
       term: 'Whisper',
+      type: 'hotword',
       note: 'ASR model name',
       usageCount: 0
     })
+  })
+
+  test('adds a replacement and stores both source and target text', async () => {
+    const { Dictionary } = await import('../dictionary')
+
+    render(<Dictionary />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.click(screen.getByRole('switch'))
+
+    expect(screen.getByText('Add a replacement')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Word'), { target: { value: 'open broker' } })
+    fireEvent.change(screen.getByLabelText('Replacement'), { target: { value: 'OpenBroca' } })
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Prefer the product name' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledTimes(1)
+    })
+
+    const nextState = replaceMock.mock.calls[0]?.[0]
+    expect(nextState.entries[1]).toMatchObject({
+      term: 'open broker',
+      type: 'replacement',
+      replacement: 'OpenBroca',
+      note: 'Prefer the product name',
+      usageCount: 0
+    })
+  })
+
+  test('renders replacements in the list', async () => {
+    const replacementStore = createStore(() => ({
+      data: {
+        entries: [
+          {
+            id: 'replacement-1',
+            term: 'open broker',
+            type: 'replacement',
+            replacement: 'OpenBroca',
+            note: 'Prefer product spelling',
+            usageCount: 3,
+            createdAt: '2026-03-29T08:00:00.000Z',
+            updatedAt: '2026-03-29T08:00:00.000Z'
+          }
+        ]
+      },
+      isHydrated: true,
+      update: updateMock,
+      replace: replaceMock,
+      hydrate: vi.fn()
+    }))
+
+    vi.doMock('@renderer/stores/dictionary-store', () => ({
+      dictionaryStore: replacementStore
+    }))
+
+    vi.resetModules()
+    const { Dictionary } = await import('../dictionary')
+
+    render(<Dictionary />)
+
+    expect(screen.getByText('open broker')).toBeTruthy()
+    expect(screen.getByText('OpenBroca')).toBeTruthy()
+    expect(screen.getByText('Prefer product spelling')).toBeTruthy()
   })
 
   test('constrains and centers the page content', async () => {

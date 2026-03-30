@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react'
-import { Delete02Icon } from '@hugeicons/core-free-icons'
+import { ArrowRight02Icon, Delete02Icon, Pen01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import {
   EmptyTitle,
   Input,
   Separator,
+  Switch,
   Textarea,
   TypographyH3,
   TypographyMuted,
@@ -31,11 +31,15 @@ import { useStore } from 'zustand'
 
 interface DictionaryDraft {
   term: string
+  replacement: string
+  isReplacement: boolean
   note: string
 }
 
 const EMPTY_DRAFT: DictionaryDraft = {
   term: '',
+  replacement: '',
+  isReplacement: false,
   note: ''
 }
 
@@ -48,8 +52,12 @@ function createEntryId(): string {
 }
 
 function toDraft(entry?: DictionaryEntry): DictionaryDraft {
+  const isReplacement = entry?.type === 'replacement'
+
   return {
     term: entry?.term ?? '',
+    replacement: isReplacement ? (entry?.replacement ?? '') : '',
+    isReplacement,
     note: entry?.note ?? ''
   }
 }
@@ -60,6 +68,8 @@ function createDictionaryEntry(draft: DictionaryDraft): DictionaryEntry {
   return {
     id: createEntryId(),
     term: draft.term.trim(),
+    type: draft.isReplacement ? 'replacement' : 'hotword',
+    replacement: draft.isReplacement ? draft.replacement.trim() : undefined,
     note: draft.note.trim() || undefined,
     usageCount: 0,
     createdAt: now,
@@ -71,14 +81,19 @@ function updateDictionaryEntry(entry: DictionaryEntry, draft: DictionaryDraft): 
   return {
     ...entry,
     term: draft.term.trim(),
+    type: draft.isReplacement ? 'replacement' : 'hotword',
+    replacement: draft.isReplacement ? draft.replacement.trim() : undefined,
     note: draft.note.trim() || undefined,
     updatedAt: new Date().toISOString()
   }
 }
 
+function getEntryType(entry: DictionaryEntry): 'hotword' | 'replacement' {
+  return entry.type === 'replacement' ? 'replacement' : 'hotword'
+}
+
 function DictionaryEditor({
-  title,
-  description,
+  mode,
   open,
   draft,
   onDraftChange,
@@ -86,8 +101,7 @@ function DictionaryEditor({
   onSubmit,
   submitLabel
 }: {
-  title: string
-  description: string
+  mode: 'create' | 'edit'
   open: boolean
   draft: DictionaryDraft
   onDraftChange: (draft: DictionaryDraft) => void
@@ -96,6 +110,24 @@ function DictionaryEditor({
   submitLabel: string
 }) {
   const term = draft.term.trim()
+  const replacement = draft.replacement.trim()
+  const isReplacement = draft.isReplacement
+  const canSubmit = isReplacement ? Boolean(term && replacement) : Boolean(term)
+  const title =
+    mode === 'edit'
+      ? isReplacement
+        ? 'Edit replacement'
+        : 'Edit hotword'
+      : isReplacement
+        ? 'Add a replacement'
+        : 'Add Hotword'
+  const description = isReplacement
+    ? mode === 'edit'
+      ? 'Update the source word, replacement text, or note without changing the current usage count.'
+      : 'Replacements are stored locally and map one phrase to the one you want to keep.'
+    : mode === 'edit'
+      ? 'Update the term or note without changing the current usage count.'
+      : 'Hotwords are stored locally and their usage count starts at zero.'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,7 +136,7 @@ function DictionaryEditor({
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault()
-            if (!term) {
+            if (!canSubmit) {
               return
             }
             onSubmit()
@@ -115,16 +147,53 @@ function DictionaryEditor({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2">
+              <div className="min-w-0">
+                <label htmlFor="dictionary-replacement-mode" className="block text-sm font-medium">
+                  It is a replacement
+                </label>
+                <TypographyMuted className="text-xs">
+                  Turn this on to add a word replacement pair instead of a hotword.
+                </TypographyMuted>
+              </div>
+              <Switch
+                id="dictionary-replacement-mode"
+                checked={draft.isReplacement}
+                onCheckedChange={(checked) =>
+                  onDraftChange({
+                    ...draft,
+                    isReplacement: checked
+                  })
+                }
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
             <label htmlFor="dictionary-term" className="block text-sm font-medium">
-              Hotword
+              {isReplacement ? 'Word' : 'Hotword'}
             </label>
             <Input
               id="dictionary-term"
               value={draft.term}
-              placeholder="Enter a word or phrase"
+              placeholder={
+                isReplacement ? 'Enter the original word or phrase' : 'Enter a word or phrase'
+              }
               onChange={(event) => onDraftChange({ ...draft, term: event.target.value })}
             />
           </div>
+          {isReplacement ? (
+            <div className="space-y-2">
+              <label htmlFor="dictionary-replacement" className="block text-sm font-medium">
+                Replacement
+              </label>
+              <Input
+                id="dictionary-replacement"
+                value={draft.replacement}
+                placeholder="Enter the replacement text"
+                onChange={(event) => onDraftChange({ ...draft, replacement: event.target.value })}
+              />
+            </div>
+          ) : null}
           <div className="space-y-2">
             <label htmlFor="dictionary-note" className="block text-sm font-medium">
               Note
@@ -140,7 +209,7 @@ function DictionaryEditor({
             <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={!term}>
+            <Button type="submit" size="sm" disabled={!canSubmit}>
               {submitLabel}
             </Button>
           </DialogFooter>
@@ -161,28 +230,37 @@ function DictionaryRow({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const entryType = getEntryType(entry)
+  const isReplacement = entryType === 'replacement' && Boolean(entry.replacement)
+
   return (
     <>
       <div className="px-4 py-3 transition-colors hover:bg-muted/50">
         <div className="flex items-center gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <TypographySmall>{entry.term}</TypographySmall>
-              <Badge variant="secondary" className="text-xs">
-                Used {entry.usageCount} times
-              </Badge>
+              <div className="flex min-w-0 items-center gap-2">
+                <TypographySmall>{entry.term}</TypographySmall>
+                {isReplacement ? (
+                  <>
+                    <HugeiconsIcon
+                      icon={ArrowRight02Icon}
+                      strokeWidth={2}
+                      size={16}
+                      className="shrink-0"
+                    />
+                    <TypographySmall>{entry.replacement}</TypographySmall>
+                  </>
+                ) : null}
+              </div>
             </div>
             {entry.note ? (
               <TypographyMuted className="mt-1 text-xs">{entry.note}</TypographyMuted>
-            ) : (
-              <TypographyMuted className="mt-1 text-xs">
-                No note yet. Add context to help future you recognize this hotword.
-              </TypographyMuted>
-            )}
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2 self-center">
-            <Button variant="ghost" size="sm" onClick={onEdit}>
-              Edit
+            <Button variant="ghost" size="icon-sm" className="gap-1.5" onClick={onEdit}>
+              <HugeiconsIcon icon={Pen01Icon} size={14} />
             </Button>
             <Button variant="ghost" size="icon-sm" className="gap-1.5" onClick={onDelete}>
               <HugeiconsIcon icon={Delete02Icon} size={14} />
@@ -200,12 +278,10 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
     <Empty className="min-h-90 flex-1 rounded-xl border border-dashed border-foreground/15 bg-muted/20">
       <EmptyHeader>
         <EmptyTitle>Your dictionary is empty</EmptyTitle>
-        <EmptyDescription>
-          Add product names, people, or domain terms you want to keep visible in one place.
-        </EmptyDescription>
+        <EmptyDescription>Add hotwords or replacements.</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button onClick={onAdd}>Create my first hotword</Button>
+        <Button onClick={onAdd}>Create my first entry</Button>
       </EmptyContent>
     </Empty>
   )
@@ -282,12 +358,12 @@ export const Dictionary: React.FC = () => {
         <div className="min-w-0 flex-1">
           <TypographyH3 className="text-left">Dictionary</TypographyH3>
           <TypographyMuted className="not-first:mt-2">
-            Manage your hotwords, keep notes with them, and track a local usage count for each
-            entry.
+            Manage your hotwords and replacements, keep notes with them, and track a local usage
+            count for each entry.
           </TypographyMuted>
         </div>
         <Button className="shrink-0 self-center" onClick={startCreate}>
-          Add Hotword
+          Add
         </Button>
       </div>
 
@@ -314,8 +390,7 @@ export const Dictionary: React.FC = () => {
       )}
 
       <DictionaryEditor
-        title="Add Hotword"
-        description="Hotwords are stored locally and their usage count starts at zero."
+        mode="create"
         open={isCreating}
         draft={draft}
         onDraftChange={setDraft}
@@ -329,8 +404,7 @@ export const Dictionary: React.FC = () => {
       />
 
       <DictionaryEditor
-        title="Edit Hotword"
-        description="Update the term or note without changing the current usage count."
+        mode="edit"
         open={editingId !== null}
         draft={draft}
         onDraftChange={setDraft}
