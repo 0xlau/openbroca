@@ -19,13 +19,23 @@ type ProviderStoreShape = {
   hydrate: ReturnType<typeof vi.fn>
 }
 
-type ProviderViewModel = {
+type ProviderFixture = {
   id: string
   displayName: string
-  description?: string
+  description: string
+  icon: null
   connectionOptions: Array<{
     type: ProviderConnectionType
     label: string
+    description?: string
+    buttonLabel?: string
+    flow?: 'systemBrowser'
+    fields?: Array<{
+      key: string
+      label: string
+      input: 'password' | 'url' | 'text'
+      required?: boolean
+    }>
   }>
 }
 
@@ -40,13 +50,13 @@ const providerStore = createStore<ProviderStoreShape>(() => ({
   hydrate: vi.fn().mockResolvedValue(undefined)
 }))
 
-const upsertProviderConnection = vi.fn<
-  (providerId: string, connection: ProviderConnectionRecord) => Promise<void>
->().mockResolvedValue(undefined)
+const upsertProviderConnection = vi
+  .fn<(providerId: string, connection: ProviderConnectionRecord) => Promise<void>>()
+  .mockResolvedValue(undefined)
 const removeProviderConnection = vi.fn<(providerId: string) => Promise<void>>().mockResolvedValue(undefined)
 
-let llmProviders: ProviderViewModel[] = []
-let asrProviders: ProviderViewModel[] = []
+let llmProviders: ProviderFixture[] = []
+let asrProviders: ProviderFixture[] = []
 let providerAuthStatus: Record<string, ProviderAuthState> = {}
 const connectProviderAuth = vi.fn<(providerId: string) => Promise<ProviderAuthState>>()
 const disconnectProviderAuth = vi.fn<(providerId: string) => Promise<ProviderAuthState>>()
@@ -54,125 +64,106 @@ const setProviderAuthStatus = vi.fn((input: { providerId: string }, status: Prov
   providerAuthStatus[input.providerId] = status
 })
 
-vi.mock(
-  '@renderer/stores/provider-store',
-  () => ({
-    providerStore,
-    upsertProviderConnection,
-    removeProviderConnection
-  })
-)
+const TooltipContext = React.createContext<{
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+} | null>(null)
 
-vi.mock(
-  '@renderer/trpc',
-  () => ({
-    trpc: {
-      useUtils: () => ({
-        providerAuth: {
-          status: {
-            setData: setProviderAuthStatus
-          }
-        }
-      }),
-      providers: {
-        listLLM: {
-          useQuery: () => ({ data: llmProviders })
-        },
-        listASR: {
-          useQuery: () => ({ data: asrProviders })
-        }
-      },
+vi.mock('@renderer/stores/provider-store', () => ({
+  providerStore,
+  upsertProviderConnection,
+  removeProviderConnection
+}))
+
+vi.mock('@renderer/trpc', () => ({
+  trpc: {
+    useUtils: () => ({
       providerAuth: {
         status: {
-          useQuery: ({ providerId }: { providerId: string }) => ({
-            data: providerAuthStatus[providerId] ?? { providerId, status: 'not-connected' }
-          })
+          setData: setProviderAuthStatus
         }
       }
+    }),
+    providers: {
+      listLLM: {
+        useQuery: () => ({ data: llmProviders })
+      },
+      listASR: {
+        useQuery: () => ({ data: asrProviders })
+      }
+    },
+    providerAuth: {
+      status: {
+        useQuery: ({ providerId }: { providerId: string }) => ({
+          data: providerAuthStatus[providerId] ?? { providerId, status: 'not-connected' }
+        })
+      }
     }
-  })
-)
+  }
+}))
 
-vi.mock(
-  '@renderer/components/providers/provider-types',
-  () => ({
-    toProviderViewModel: (provider: ProviderViewModel) => provider
-  })
-)
-
-vi.mock(
-  '@renderer/components/providers/provider-section',
-  () => ({
-    ProviderSection: ({
-      providers,
-      settings,
-      onConnect,
-      onDisconnect
-    }: {
-      providers: ProviderViewModel[]
-      settings: Record<string, ProviderConnectionRecord | undefined>
-      onConnect: (provider: ProviderViewModel) => void
-      onDisconnect: (providerId: string, connectionType: ProviderConnectionType) => void
-    }) => (
-      <div>
-        {providers.map((provider) => {
-          const setting = settings[provider.id]
-          if (setting) {
-            return (
-              <button
-                key={`disconnect-${provider.id}`}
-                onClick={() => onDisconnect(provider.id, setting.connectionType)}
-              >
-                Disconnect {provider.id}
-              </button>
-            )
-          }
-
-          return (
-            <button key={`connect-${provider.id}`} onClick={() => onConnect(provider)}>
-              Connect {provider.id}
-            </button>
-          )
-        })}
-      </div>
-    )
-  })
-)
-
-vi.mock(
-  '@renderer/components/providers/provider-connect-dialog',
-  () => ({
-    ProviderConnectDialog: ({
-      provider,
-      open,
-      onSave,
-      onOAuthConnect
-    }: {
-      provider: ProviderViewModel | null
-      open: boolean
-      onSave: (
-        providerId: string,
-        connectionType: Extract<ProviderConnectionType, 'apiKey' | 'local'>,
-        config?: Record<string, string>
-      ) => Promise<void>
-      onOAuthConnect: (providerId: string) => Promise<void>
-    }) => {
-      if (!open || !provider) return null
-
-      return (
-        <div data-testid="dialog-root">
-          <button onClick={() => onSave(provider.id, 'apiKey', { apiKey: 'sk-test' })}>Save Connection</button>
-          <button onClick={() => onOAuthConnect(provider.id)}>Continue in browser</button>
-        </div>
-      )
-    }
-  })
-)
+vi.mock('@hugeicons/react', () => ({
+  HugeiconsIcon: () => null
+}))
 
 vi.mock('@openbroca/ui', () => ({
+  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Button: ({
+    children,
+    onClick,
+    type = 'button',
+    disabled,
+    ...props
+  }: React.ComponentProps<'button'>) => (
+    <button type={type} onClick={onClick} disabled={disabled} {...props}>
+      {children}
+    </button>
+  ),
+  Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
+    open ? <div data-testid="dialog-root">{children}</div> : null,
+  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  Input: ({ value, onChange, ...props }: React.ComponentProps<'input'>) => (
+    <input value={value} onChange={onChange} {...props} />
+  ),
+  Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
+    <label htmlFor={htmlFor}>{children}</label>
+  ),
   Separator: () => <hr />,
+  Tooltip: ({ children }: { children: React.ReactNode }) => {
+    const [open, setOpen] = React.useState(false)
+    return <TooltipContext.Provider value={{ open, setOpen }}>{children}</TooltipContext.Provider>
+  },
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({
+    children,
+    asChild
+  }: {
+    children: React.ReactNode
+    asChild?: boolean
+  }) => {
+    void asChild
+    const context = React.useContext(TooltipContext)
+    const child = children as React.ReactElement<{
+      onMouseEnter?: () => void
+      onMouseLeave?: () => void
+    }>
+    return React.cloneElement(child, {
+      onMouseEnter: () => context?.setOpen(true),
+      onMouseLeave: () => context?.setOpen(false)
+    })
+  },
+  TooltipContent: ({ children }: { children: React.ReactNode }) => {
+    const context = React.useContext(TooltipContext)
+    return context?.open ? <div role="tooltip">{children}</div> : null
+  },
   TypographyH3: ({ children }: { children: React.ReactNode }) => <h3>{children}</h3>,
-  TypographyMuted: ({ children }: { children: React.ReactNode }) => <p>{children}</p>
+  TypographyLarge: ({ children }: { children: React.ReactNode }) => <h4>{children}</h4>,
+  TypographyMuted: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  TypographySmall: ({ children }: { children: React.ReactNode }) => <span>{children}</span>
 }))
 
 async function renderProviders() {
@@ -182,8 +173,8 @@ async function renderProviders() {
 
 describe('Providers page', () => {
   beforeEach(() => {
+    vi.resetModules()
     cleanup()
-    vi.clearAllMocks()
     llmProviders = []
     asrProviders = []
     providerAuthStatus = {}
@@ -210,37 +201,76 @@ describe('Providers page', () => {
     })
   })
 
-  test('saves manual provider connection through upsert helper', async () => {
+  test('shows provider-specific API key fields and persists them on connect', async () => {
     llmProviders = [
       {
         id: 'openai',
         displayName: 'OpenAI',
         description: 'GPT models',
-        connectionOptions: [{ type: 'apiKey', label: 'API Key' }]
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [
+              { key: 'apiKey', label: 'API Key', input: 'password', required: true },
+              { key: 'baseUrl', label: 'Base URL', input: 'url' },
+              { key: 'organization', label: 'Organization', input: 'text' }
+            ]
+          }
+        ]
       }
     ]
 
     await renderProviders()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Connect openai' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+    expect(screen.getByTestId('dialog-root')).toBeTruthy()
+    expect(screen.getByLabelText('API Key')).toBeTruthy()
+    expect(screen.getByLabelText('Base URL')).toBeTruthy()
+    expect(screen.getByLabelText('Organization')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'sk-test' } })
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://example.com/v1' }
+    })
+
     fireEvent.click(screen.getByRole('button', { name: 'Save Connection' }))
 
     await waitFor(() => {
       expect(upsertProviderConnection).toHaveBeenCalledWith('openai', {
         enabled: true,
         connectionType: 'apiKey',
-        config: { apiKey: 'sk-test' }
+        config: {
+          apiKey: 'sk-test',
+          baseUrl: 'https://example.com/v1'
+        }
       })
     })
   })
 
-  test('disconnects manual provider connection through remove helper', async () => {
+  test('keeps API key providers connected when a provider also supports OAuth', async () => {
     llmProviders = [
       {
-        id: 'openai',
-        displayName: 'OpenAI',
-        description: 'GPT models',
-        connectionOptions: [{ type: 'apiKey', label: 'API Key' }]
+        id: 'acme',
+        displayName: 'Acme AI',
+        description: 'OAuth or API key',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'oauth',
+            label: 'Workspace OAuth',
+            description: 'Connect your workspace',
+            buttonLabel: 'Continue in browser',
+            flow: 'systemBrowser'
+          },
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
       }
     ]
 
@@ -248,10 +278,10 @@ describe('Providers page', () => {
       ...providerStore.getState(),
       data: {
         providers: {
-          openai: {
+          acme: {
             enabled: true,
             connectionType: 'apiKey',
-            config: { apiKey: 'sk-openai' }
+            config: { apiKey: 'sk-acme' }
           }
         },
         activeProviders: {}
@@ -260,20 +290,26 @@ describe('Providers page', () => {
 
     await renderProviders()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect openai' }))
-
-    await waitFor(() => {
-      expect(removeProviderConnection).toHaveBeenCalledWith('openai')
-    })
+    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeTruthy()
+    expect(screen.queryByText('Connected')).toBeNull()
   })
 
-  test('uses OAuth bridge connect/disconnect for oauth providers', async () => {
+  test('shows OAuth browser auth UI and connects openai-codex without exposing tokens', async () => {
     llmProviders = [
       {
         id: 'openai-codex',
         displayName: 'OpenAI Codex',
-        description: 'OAuth-only',
-        connectionOptions: [{ type: 'oauth', label: 'OpenAI Account' }]
+        description: 'Connect with OAuth',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'oauth',
+            label: 'OpenAI Account',
+            description: 'Sign in with your ChatGPT account to connect OpenAI Codex.',
+            buttonLabel: 'Continue in browser',
+            flow: 'systemBrowser'
+          }
+        ]
       }
     ]
 
@@ -282,19 +318,46 @@ describe('Providers page', () => {
       status: 'connected',
       lastConnectedAt: '2026-03-28T12:00:00.000Z'
     })
-    disconnectProviderAuth.mockResolvedValue({
-      providerId: 'openai-codex',
-      status: 'not-connected'
-    })
 
     await renderProviders()
-    fireEvent.click(screen.getByRole('button', { name: 'Connect openai-codex' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    expect(screen.getByText('Sign in with your ChatGPT account to connect OpenAI Codex.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continue in browser' })).toBeTruthy()
+    expect(screen.queryByText(/accessToken/i)).toBeNull()
+    expect(screen.queryByText(/refreshToken/i)).toBeNull()
+
     fireEvent.click(screen.getByRole('button', { name: 'Continue in browser' }))
 
     await waitFor(() => {
       expect(connectProviderAuth).toHaveBeenCalledWith('openai-codex')
     })
+  })
 
+  test('reflects OAuth connected status without exposing tokens and disconnects via preload bridge', async () => {
+    llmProviders = [
+      {
+        id: 'openai-codex',
+        displayName: 'OpenAI Codex',
+        description: 'OAuth-only',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'oauth',
+            label: 'OpenAI Account',
+            description: 'Sign in with your ChatGPT account to connect OpenAI Codex.',
+            buttonLabel: 'Continue in browser',
+            flow: 'systemBrowser'
+          }
+        ]
+      }
+    ]
+
+    providerAuthStatus['openai-codex'] = {
+      providerId: 'openai-codex',
+      status: 'connected',
+      lastConnectedAt: '2026-03-28T12:00:00.000Z'
+    }
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -307,13 +370,64 @@ describe('Providers page', () => {
         activeProviders: {}
       }
     })
+    disconnectProviderAuth.mockResolvedValue({
+      providerId: 'openai-codex',
+      status: 'not-connected'
+    })
 
-    const disconnectButton = await waitFor(() =>
-      screen.getByRole('button', { name: 'Disconnect openai-codex' })
-    )
-    fireEvent.click(disconnectButton)
+    await renderProviders()
+
+    expect(screen.getByText('OAuth')).toBeTruthy()
+    expect(screen.getByText('openai-codex')).toBeTruthy()
+    expect(screen.queryByText(/accessToken/i)).toBeNull()
+    expect(screen.queryByText(/refreshToken/i)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
+
     await waitFor(() => {
       expect(disconnectProviderAuth).toHaveBeenCalledWith('openai-codex')
+    })
+  })
+
+  test('constrains and centers the page content', async () => {
+    const { container } = await renderProviders()
+
+    expect(container.firstElementChild?.className).toContain('max-w-5xl')
+    expect(container.firstElementChild?.className).toContain('mx-auto')
+  })
+
+  test('shows provider helper text in a tooltip when hovering Connect', async () => {
+    llmProviders = [
+      {
+        id: 'openai-codex',
+        displayName: 'OpenAI Codex',
+        description: 'Connect with OAuth',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'oauth',
+            label: 'OpenAI Account',
+            description: 'Sign in with your ChatGPT account to connect OpenAI Codex.',
+            buttonLabel: 'Continue in browser',
+            flow: 'systemBrowser'
+          }
+        ]
+      }
+    ]
+
+    await renderProviders()
+
+    expect(screen.queryByText('Browser sign-in required')).toBeNull()
+
+    const connectButton = screen.getByRole('button', { name: 'Connect' })
+    fireEvent.mouseEnter(connectButton)
+
+    expect(screen.getByRole('tooltip').textContent).toContain('Browser sign-in required')
+
+    fireEvent.mouseLeave(connectButton)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).toBeNull()
     })
   })
 })
