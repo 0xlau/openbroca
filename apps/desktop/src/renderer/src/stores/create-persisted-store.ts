@@ -4,6 +4,7 @@ import { trpcClient } from '../trpc/client'
 interface PersistedStoreConfig<T> {
   key: string
   defaults: T
+  normalize?: (raw: unknown) => T
 }
 
 export interface PersistedStoreState<T> {
@@ -17,6 +18,9 @@ export interface PersistedStoreState<T> {
 export function createPersistedStore<T extends object>(
   config: PersistedStoreConfig<T>
 ): StoreApi<PersistedStoreState<T>> {
+  const normalize = (raw: unknown): T =>
+    config.normalize ? config.normalize(raw) : { ...config.defaults, ...(raw as T) }
+
   const zustandStore = createStore<PersistedStoreState<T>>((set, get) => ({
     data: config.defaults,
     isHydrated: false,
@@ -35,7 +39,7 @@ export function createPersistedStore<T extends object>(
     hydrate: async () => {
       const raw = await trpcClient.store.get.query({ key: config.key })
       if (raw != null) {
-        set({ data: { ...config.defaults, ...(raw as T) }, isHydrated: true })
+        set({ data: normalize(raw), isHydrated: true })
       } else {
         set({ isHydrated: true })
       }
@@ -51,7 +55,7 @@ export function createPersistedStore<T extends object>(
     {
       onData: (newValue) => {
         if (newValue != null) {
-          zustandStore.setState({ data: { ...config.defaults, ...(newValue as T) } })
+          zustandStore.setState({ data: normalize(newValue) })
         }
       }
     }
