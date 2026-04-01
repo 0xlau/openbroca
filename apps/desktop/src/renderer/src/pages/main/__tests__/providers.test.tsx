@@ -112,7 +112,11 @@ vi.mock('@openbroca/ui', () => ({
   }) => {
     void asChild
     const context = React.useContext(TooltipContext)
-    return React.cloneElement(children as React.ReactElement, {
+    const child = children as React.ReactElement<{
+      onMouseEnter?: () => void
+      onMouseLeave?: () => void
+    }>
+    return React.cloneElement(child, {
       onMouseEnter: () => context?.setOpen(true),
       onMouseLeave: () => context?.setOpen(false)
     })

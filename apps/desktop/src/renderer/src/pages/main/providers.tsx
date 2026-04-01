@@ -3,7 +3,12 @@ import type { ProviderConnectionType } from '@openbroca/providers'
 import { Separator, TypographyH3, TypographyMuted } from '@openbroca/ui'
 import { trpc } from '@renderer/trpc'
 import { useStore } from 'zustand'
-import { providerStore, type ProviderSettings } from '@renderer/stores/provider-store'
+import {
+  providerStore,
+  removeProviderConnection,
+  upsertProviderConnection,
+  type ProviderSettings
+} from '@renderer/stores/provider-store'
 import { ProviderConnectDialog } from '@renderer/components/providers/provider-connect-dialog'
 import { ProviderSection } from '@renderer/components/providers/provider-section'
 import {
@@ -16,12 +21,10 @@ function useProviderViewModel(): {
   asrProviders: ProviderViewModel[]
   isLoading: boolean
   settings: ProviderSettings
-  updateSettings: (partial: Partial<ProviderSettings>) => Promise<void>
-  replaceSettings: (next: ProviderSettings) => Promise<void>
 } {
   const { data: llmData } = trpc.providers.listLLM.useQuery()
   const { data: asrData } = trpc.providers.listASR.useQuery()
-  const { data: settings, isHydrated, update, replace } = useStore(providerStore)
+  const { data: settings, isHydrated } = useStore(providerStore)
 
   const isLoading = !isHydrated || llmData === undefined || asrData === undefined
 
@@ -33,15 +36,12 @@ function useProviderViewModel(): {
     llmProviders,
     asrProviders,
     isLoading,
-    settings,
-    updateSettings: update,
-    replaceSettings: replace
+    settings
   }
 }
 
 function ProviderContainer() {
-  const { llmProviders, asrProviders, isLoading, settings, updateSettings, replaceSettings } =
-    useProviderViewModel()
+  const { llmProviders, asrProviders, isLoading, settings } = useProviderViewModel()
   const trpcUtils = trpc.useUtils()
   const [selectedProvider, setSelectedProvider] = React.useState<ProviderViewModel | null>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -51,12 +51,10 @@ function ProviderContainer() {
     connectionType: Extract<ProviderConnectionType, 'apiKey' | 'local'>,
     config?: Record<string, string>
   ) {
-    await updateSettings({
-      [providerId]: {
-        enabled: true,
-        connectionType,
-        config
-      }
+    await upsertProviderConnection(providerId, {
+      enabled: true,
+      connectionType,
+      config
     })
   }
 
@@ -72,9 +70,7 @@ function ProviderContainer() {
       return
     }
 
-    const nextSettings = { ...settings }
-    delete nextSettings[providerId]
-    await replaceSettings(nextSettings)
+    await removeProviderConnection(providerId)
   }
 
   function handleConnect(provider: ProviderViewModel) {
@@ -92,7 +88,7 @@ function ProviderContainer() {
         <ProviderSection
           title="ASR Providers"
           providers={asrProviders}
-          settings={settings}
+          settings={settings.providers}
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
         />
@@ -100,7 +96,7 @@ function ProviderContainer() {
         <ProviderSection
           title="LLM Providers"
           providers={llmProviders}
-          settings={settings}
+          settings={settings.providers}
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
         />
@@ -108,7 +104,7 @@ function ProviderContainer() {
 
       <ProviderConnectDialog
         provider={selectedProvider}
-        currentSetting={selectedProvider ? settings[selectedProvider.id] : undefined}
+        currentSetting={selectedProvider ? settings.providers[selectedProvider.id] : undefined}
         open={isDialogOpen}
         onOAuthConnect={handleOAuthConnect}
         onOpenChange={(next) => {
