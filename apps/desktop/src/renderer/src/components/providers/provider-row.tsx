@@ -22,14 +22,18 @@ import {
 export function ProviderRow({
   provider,
   setting,
+  isActive,
   isLast,
   onConnect,
+  onSetActive,
   onDisconnect
 }: {
   provider: ProviderViewModel
   setting?: ProviderConnectionRecord
+  isActive: boolean
   isLast: boolean
   onConnect: (provider: ProviderViewModel) => void
+  onSetActive: (providerId: string) => void
   onDisconnect: (
     providerId: string,
     connectionType: ProviderConnectionRecord['connectionType']
@@ -42,20 +46,42 @@ export function ProviderRow({
     { enabled: isOAuth }
   )
 
-  const state = resolveProviderConnectionState(provider, setting, authStatus)
-  const actionButton = (
+  const state = resolveProviderConnectionState(provider, setting, authStatus, isActive)
+  const connectButton = (
     <Button
-      variant={state.isConnected ? 'ghost' : 'secondary'}
+      variant="secondary"
       size="sm"
       className="shrink-0 gap-1.5"
-      onClick={() =>
-        state.isConnected && state.disconnectConnectionType
-          ? onDisconnect(provider.id, state.disconnectConnectionType)
-          : onConnect(provider)
-      }
+      onClick={() => onConnect(provider)}
     >
-      {state.isConnected ? null : <HugeiconsIcon icon={PlusSignIcon} size={14} />}
-      {state.buttonLabel}
+      <HugeiconsIcon icon={PlusSignIcon} size={14} />
+      Connect
+    </Button>
+  )
+  const disconnectButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="shrink-0 gap-1.5"
+      onClick={() => {
+        if (!state.disconnectConnectionType) {
+          return
+        }
+        onDisconnect(provider.id, state.disconnectConnectionType)
+      }}
+    >
+      Disconnect
+    </Button>
+  )
+  const activeButton = (
+    <Button
+      variant={state.isActive ? 'secondary' : 'ghost'}
+      size="sm"
+      className="shrink-0 gap-1.5"
+      onClick={() => onSetActive(provider.id)}
+      disabled={state.isActive}
+    >
+      {state.isActive ? 'Active' : 'Set as active'}
     </Button>
   )
 
@@ -86,15 +112,22 @@ export function ProviderRow({
           </div>
           <TypographyMuted className="mt-1 truncate text-xs">{state.description}</TypographyMuted>
         </div>
-        {state.helperText && !state.isConnected ? (
+        {!state.isConnected && state.helperText ? (
           <Tooltip>
-            <TooltipTrigger asChild>{actionButton}</TooltipTrigger>
+            <TooltipTrigger asChild>{connectButton}</TooltipTrigger>
             <TooltipContent sideOffset={0} side="left">
               {state.helperText}
             </TooltipContent>
           </Tooltip>
+        ) : null}
+        {!state.isConnected && !state.helperText ? connectButton : null}
+        {state.isConnected ? (
+          <div className="flex items-center gap-2">
+            {disconnectButton}
+            {activeButton}
+          </div>
         ) : (
-          actionButton
+          null
         )}
       </div>
       {!isLast ? <Separator /> : null}

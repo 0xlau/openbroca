@@ -79,6 +79,7 @@ export interface ResolvedProviderConnectionState {
   description: string
   disconnectConnectionType?: ProviderConnectionRecord['connectionType']
   helperText?: string
+  isActive: boolean
   isConnected: boolean
   isConnectedViaOAuth: boolean
   statusBadge?: string
@@ -87,7 +88,8 @@ export interface ResolvedProviderConnectionState {
 export function resolveProviderConnectionState(
   provider: ProviderViewModel,
   setting: ProviderConnectionRecord | undefined,
-  authStatus: ProviderAuthState | undefined
+  authStatus: ProviderAuthState | undefined,
+  isActive: boolean
 ): ResolvedProviderConnectionState {
   const oauthOption = getOAuthConnectionOption(provider)
   const isOAuth = !!oauthOption
@@ -114,6 +116,7 @@ export function resolveProviderConnectionState(
       isOAuth && oauthOption?.flow === 'systemBrowser' && !isConnected
         ? 'Browser sign-in required'
         : undefined,
+    isActive: isConnected && isActive,
     isConnected,
     isConnectedViaOAuth,
     statusBadge

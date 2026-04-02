@@ -5,7 +5,6 @@ import { trpc } from '@renderer/trpc'
 import { useStore } from 'zustand'
 import {
   providerStore,
-  removeProviderConnection,
   upsertProviderConnection,
   type ProviderSettings
 } from '@renderer/stores/provider-store'
@@ -63,14 +62,50 @@ function ProviderContainer() {
     trpcUtils.providerAuth.status.setData({ providerId }, status)
   }
 
-  async function handleDisconnect(providerId: string, connectionType: ProviderConnectionType) {
+  async function handleSetActive(section: 'llm' | 'asr', providerId: string) {
+    const current = providerStore.getState().data
+    await providerStore.getState().replace({
+      providers: current.providers,
+      activeProviders: {
+        ...current.activeProviders,
+        [section]: providerId
+      }
+    })
+  }
+
+  async function handleDisconnect(
+    section: 'llm' | 'asr',
+    providerId: string,
+    connectionType: ProviderConnectionType
+  ) {
     if (connectionType === 'oauth') {
       const status = await window.api.providerAuth.disconnect(providerId)
       trpcUtils.providerAuth.status.setData({ providerId }, status)
+      const current = providerStore.getState().data
+      const nextActiveProviders = { ...current.activeProviders }
+      if (nextActiveProviders[section] === providerId) {
+        delete nextActiveProviders[section]
+      }
+      await providerStore.getState().replace({
+        providers: current.providers,
+        activeProviders: nextActiveProviders
+      })
       return
     }
 
-    await removeProviderConnection(providerId)
+    const current = providerStore.getState().data
+    const nextProviders = { ...current.providers }
+    delete nextProviders[providerId]
+
+    const nextActiveProviders = { ...current.activeProviders }
+    if (nextActiveProviders[section] === providerId) {
+      delete nextActiveProviders[section]
+    }
+
+    await providerStore.getState().replace({
+      providers: nextProviders,
+      activeProviders: nextActiveProviders
+    })
   }
 
   function handleConnect(provider: ProviderViewModel) {
@@ -86,18 +121,24 @@ function ProviderContainer() {
     <>
       <div className="space-y-8">
         <ProviderSection
+          section="asr"
           title="ASR Providers"
           providers={asrProviders}
           settings={settings.providers}
+          activeProviderId={settings.activeProviders.asr}
           onConnect={handleConnect}
+          onSetActive={handleSetActive}
           onDisconnect={handleDisconnect}
         />
         <Separator />
         <ProviderSection
+          section="llm"
           title="LLM Providers"
           providers={llmProviders}
           settings={settings.providers}
+          activeProviderId={settings.activeProviders.llm}
           onConnect={handleConnect}
+          onSetActive={handleSetActive}
           onDisconnect={handleDisconnect}
         />
       </div>
@@ -125,7 +166,7 @@ export const Providers: React.FC = () => {
       <div>
         <TypographyH3 className="text-left">Providers</TypographyH3>
         <TypographyMuted className="not-first:mt-2">
-          Manage API credentials for ASR and LLM Providers.
+          Connect multiple providers, then choose which one each pipeline uses.
         </TypographyMuted>
       </div>
       <ProviderContainer />

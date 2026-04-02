@@ -4,17 +4,27 @@ import type { ProviderViewModel } from './provider-types'
 import { ProviderRow } from './provider-row'
 
 export function ProviderSection({
+  section,
   title,
   providers,
   settings,
+  activeProviderId,
   onConnect,
+  onSetActive,
   onDisconnect
 }: {
+  section: 'llm' | 'asr'
   title: string
   providers: ProviderViewModel[]
   settings: Record<string, ProviderConnectionRecord | undefined>
+  activeProviderId?: string
   onConnect: (provider: ProviderViewModel) => void
-  onDisconnect: (providerId: string, connectionType: ProviderConnectionRecord['connectionType']) => void
+  onSetActive: (section: 'llm' | 'asr', providerId: string) => void
+  onDisconnect: (
+    section: 'llm' | 'asr',
+    providerId: string,
+    connectionType: ProviderConnectionRecord['connectionType']
+  ) => void
 }) {
   return (
     <section className="space-y-3">
@@ -27,9 +37,13 @@ export function ProviderSection({
             key={provider.id}
             provider={provider}
             setting={settings[provider.id]}
+            isActive={activeProviderId === provider.id}
             isLast={index === providers.length - 1}
             onConnect={onConnect}
-            onDisconnect={onDisconnect}
+            onSetActive={(providerId) => onSetActive(section, providerId)}
+            onDisconnect={(providerId, connectionType) =>
+              onDisconnect(section, providerId, connectionType)
+            }
           />
         ))}
       </div>

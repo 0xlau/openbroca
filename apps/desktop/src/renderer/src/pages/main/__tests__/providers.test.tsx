@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createStore } from 'zustand'
 import type { ProviderConnectionType } from '@openbroca/providers'
 import type {
@@ -334,6 +334,99 @@ describe('Providers page', () => {
     })
   })
 
+  test('shows Set as active for connected inactive LLM providers and writes only activeProviders.llm', async () => {
+    llmProviders = [
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        description: 'GPT models',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+
+    const connectedOpenAI: ProviderConnectionRecord = {
+      enabled: true,
+      connectionType: 'apiKey',
+      config: { apiKey: 'sk-openai' }
+    }
+    const replaceSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: connectedOpenAI
+        },
+        activeProviders: {
+          asr: 'deepgram'
+        }
+      },
+      replace: replaceSettings
+    })
+
+    await renderProviders()
+
+    expect(screen.getByRole('button', { name: 'Set as active' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Set as active' }))
+
+    await waitFor(() => {
+      expect(replaceSettings).toHaveBeenCalledWith({
+        providers: {
+          openai: connectedOpenAI
+        },
+        activeProviders: {
+          llm: 'openai',
+          asr: 'deepgram'
+        }
+      })
+    })
+  })
+
+  test('shows Active action for the active provider in its section', async () => {
+    llmProviders = [
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        description: 'GPT models',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        activeProviders: {
+          llm: 'openai'
+        }
+      }
+    })
+
+    await renderProviders()
+
+    expect(screen.getByRole('button', { name: 'Active' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Set as active' })).toBeNull()
+  })
+
   test('reflects OAuth connected status without exposing tokens and disconnects via preload bridge', async () => {
     llmProviders = [
       {
@@ -389,11 +482,113 @@ describe('Providers page', () => {
     })
   })
 
+  test('disconnecting an active ASR provider clears only activeProviders.asr', async () => {
+    asrProviders = [
+      {
+        id: 'openai-realtime',
+        displayName: 'OpenAI Realtime',
+        description: 'Realtime ASR via OAuth',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'oauth',
+            label: 'OpenAI Account',
+            description: 'Connect your OpenAI account',
+            buttonLabel: 'Continue in browser',
+            flow: 'systemBrowser'
+          }
+        ]
+      }
+    ]
+    llmProviders = [
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        description: 'GPT models',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+
+    providerAuthStatus['openai-realtime'] = {
+      providerId: 'openai-realtime',
+      status: 'connected',
+      lastConnectedAt: '2026-03-28T12:00:00.000Z'
+    }
+    disconnectProviderAuth.mockResolvedValue({
+      providerId: 'openai-realtime',
+      status: 'not-connected'
+    })
+
+    const replaceSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          'openai-realtime': {
+            enabled: true,
+            connectionType: 'oauth'
+          },
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        activeProviders: {
+          asr: 'openai-realtime',
+          llm: 'openai'
+        }
+      },
+      replace: replaceSettings
+    })
+
+    await renderProviders()
+
+    const asrSection = screen.getByText('ASR Providers').closest('section')
+    expect(asrSection).toBeTruthy()
+    fireEvent.click(within(asrSection as HTMLElement).getByRole('button', { name: 'Disconnect' }))
+
+    await waitFor(() => {
+      expect(disconnectProviderAuth).toHaveBeenCalledWith('openai-realtime')
+      expect(replaceSettings).toHaveBeenCalledWith({
+        providers: {
+          'openai-realtime': {
+            enabled: true,
+            connectionType: 'oauth'
+          },
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        activeProviders: {
+          llm: 'openai'
+        }
+      })
+    })
+  })
+
   test('constrains and centers the page content', async () => {
     const { container } = await renderProviders()
 
     expect(container.firstElementChild?.className).toContain('max-w-5xl')
     expect(container.firstElementChild?.className).toContain('mx-auto')
+  })
+
+  test('shows updated provider page copy', async () => {
+    await renderProviders()
+
+    expect(
+      screen.getByText('Connect multiple providers, then choose which one each pipeline uses.')
+    ).toBeTruthy()
   })
 
   test('shows provider helper text in a tooltip when hovering Connect', async () => {
