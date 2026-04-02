@@ -4,11 +4,20 @@ import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import type { CompletionChunk } from '@openbroca/providers/llm'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
-import { getLLMProviderRuntimeConfig, resolveLLMProvider } from '../providers/runtime'
+import {
+  getActiveASRProviderId,
+  getActiveLLMProviderId,
+  getLLMProviderRuntimeConfig,
+  resolveActiveLLMProvider,
+  resolveLLMProvider
+} from '../providers/runtime'
 
 class MemoryStore {
   private state: Record<string, unknown> = {
-    providers: {}
+    providers: {
+      providers: {},
+      activeProviders: {}
+    }
   }
 
   get<T>(key: string): T | undefined {
@@ -66,16 +75,21 @@ describe('provider runtime resolution', () => {
     } satisfies SecureStorage
     const store = new MemoryStore()
     store.set('providers', {
-      'openai-codex': {
-        enabled: true,
-        connectionType: 'oauth',
-        account: {
-          accountId: 'acct_codex'
-        },
-        auth: {
-          status: 'connected',
-          lastConnectedAt: '2026-03-30T00:00:00.000Z'
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth',
+          account: {
+            accountId: 'acct_codex'
+          },
+          auth: {
+            status: 'connected',
+            lastConnectedAt: '2026-03-30T00:00:00.000Z'
+          }
         }
+      },
+      activeProviders: {
+        llm: 'openai-codex'
       }
     })
 
@@ -86,7 +100,7 @@ describe('provider runtime resolution', () => {
         'openai-codex': {
           authorize: vi.fn(),
           dispose: vi.fn()
-        }
+        },
       }
     })
     const llmRegistry = new LLMProviderRegistry()
@@ -170,5 +184,62 @@ describe('provider runtime resolution', () => {
       { delta: 'hello', finishReason: null },
       { delta: '', finishReason: 'stop' }
     ])
+  })
+
+  test('reads active llm/asr provider IDs from structured provider settings', () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth'
+        },
+        deepgram: {
+          enabled: true,
+          connectionType: 'api-key',
+          config: {
+            apiKey: 'test'
+          }
+        }
+      },
+      activeProviders: {
+        llm: 'openai-codex',
+        asr: 'deepgram'
+      }
+    })
+
+    expect(getActiveLLMProviderId(store)).toBe('openai-codex')
+    expect(getActiveASRProviderId(store)).toBe('deepgram')
+  })
+
+  test('resolveActiveLLMProvider throws clear configuration error when no active llm is selected', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register(openaiCodexDescriptor)
+
+    await expect(
+      resolveActiveLLMProvider({
+        llmRegistry,
+        oauthService,
+        store
+      })
+    ).rejects.toThrowError(
+      '[provider:not-configured] Select an active LLM provider before requesting runtime access.'
+    )
   })
 })

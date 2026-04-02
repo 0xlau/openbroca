@@ -2,12 +2,15 @@ import { ConfigurationError } from '@openbroca/providers'
 import type { OAuthAuthorizer, OAuthTokens } from './openai-codex-oauth'
 import type { SecureStorage } from './secure-storage'
 import {
+  clearActiveProviderSelections,
   createConnectedProviderMetadata,
+  normalizeProviderSettings,
   toProviderAuthState,
   type ConnectedProviderAuthState,
   type ProviderAuthState,
   type ProviderConnectionMetadata,
-  type ProviderConnectionRecord
+  type ProviderConnectionRecord,
+  type ProviderSettings
 } from '../../shared/provider-auth'
 
 interface StoreLike {
@@ -43,12 +46,19 @@ export class OAuthService {
       JSON.stringify(session.tokens)
     )
 
-    const providers =
-      this.options.store.get<Record<string, ProviderConnectionMetadata>>('providers') ?? {}
-    const existing = providers[providerId]
+    const settings = this.getProviderSettings()
+    const existingRecord = settings.providers[providerId]
+    const existing =
+      existingRecord?.connectionType === 'oauth'
+        ? (existingRecord as Partial<ProviderConnectionMetadata>)
+        : undefined
+
     this.options.store.set('providers', {
-      ...providers,
-      [providerId]: createConnectedProviderMetadata(session.account, lastConnectedAt, existing)
+      ...settings,
+      providers: {
+        ...settings.providers,
+        [providerId]: createConnectedProviderMetadata(session.account, lastConnectedAt, existing)
+      }
     })
 
     return {
@@ -64,12 +74,17 @@ export class OAuthService {
 
     await this.options.secureStorage.deleteSecret(`provider:${providerId}`)
 
-    const providers =
-      this.options.store.get<Record<string, ProviderConnectionMetadata>>('providers') ?? {}
-    if (providerId in providers) {
-      const nextProviders = { ...providers }
+    const settings = this.getProviderSettings()
+    const hasProviderRecord = providerId in settings.providers
+    const activeProviders = clearActiveProviderSelections(settings.activeProviders, providerId)
+    if (hasProviderRecord || activeProviders !== settings.activeProviders) {
+      const nextProviders = { ...settings.providers }
       delete nextProviders[providerId]
-      this.options.store.set('providers', nextProviders)
+      this.options.store.set('providers', {
+        ...settings,
+        providers: nextProviders,
+        activeProviders
+      })
     }
 
     return toProviderAuthState(providerId)
@@ -133,21 +148,30 @@ export class OAuthService {
     }
   }
 
-  private getProviderRecords(): Record<string, ProviderConnectionRecord> {
-    return this.options.store.get<Record<string, ProviderConnectionRecord>>('providers') ?? {}
+  private getProviderSettings(): ProviderSettings {
+    return normalizeProviderSettings(this.options.store.get<unknown>('providers'))
+  }
+
+  private getProviderRecords(): Record<string, ProviderConnectionRecord | undefined> {
+    return this.getProviderSettings().providers
   }
 
   private clearProviderRecord(
     providerId: string,
-    providers: Record<string, ProviderConnectionRecord>
+    providers: Record<string, ProviderConnectionRecord | undefined>
   ): void {
     if (!(providerId in providers)) {
       return
     }
 
+    const settings = this.getProviderSettings()
     const nextProviders = { ...providers }
     delete nextProviders[providerId]
-    this.options.store.set('providers', nextProviders)
+    this.options.store.set('providers', {
+      ...settings,
+      providers: nextProviders,
+      activeProviders: clearActiveProviderSelections(settings.activeProviders, providerId)
+    })
   }
 
   private async getStoredTokens(providerId: string): Promise<OAuthTokens | null> {

@@ -1,4 +1,5 @@
 import ElectronStore from 'electron-store'
+import { defaultProviderSettings } from '../../shared/provider-auth'
 import type { StoreSchema } from './schema'
 
 const Store: typeof ElectronStore =
@@ -9,7 +10,7 @@ export const store = new Store<StoreSchema>({
   defaults: {
     aboutMe: {},
     dictionary: {},
-    providers: {},
+    providers: defaultProviderSettings,
     settings: {}
   }
 })

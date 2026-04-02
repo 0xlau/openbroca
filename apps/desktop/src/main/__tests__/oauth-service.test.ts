@@ -5,7 +5,10 @@ import type { SecureStorage } from '../auth/secure-storage'
 
 class MemoryStore {
   private state: Record<string, unknown> = {
-    providers: {}
+    providers: {
+      providers: {},
+      activeProviders: {}
+    }
   }
 
   get<T>(key: string): T | undefined {
@@ -18,7 +21,7 @@ class MemoryStore {
 }
 
 describe('OAuthService', () => {
-  test('starts browser oauth, handles callback, and persists token to secure storage', async () => {
+  test('starts browser oauth, handles callback, and persists structured provider settings', async () => {
     const session = {
       tokens: {
         accessToken: 'access-token',
@@ -57,21 +60,24 @@ describe('OAuthService', () => {
       expect.stringContaining('"refreshToken"')
     )
     expect(store.get('providers')).toEqual({
-      'openai-codex': {
-        enabled: true,
-        connectionType: 'oauth',
-        account: session.account,
-        auth: {
-          status: 'connected',
-          lastConnectedAt: expect.any(String)
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth',
+          account: session.account,
+          auth: {
+            status: 'connected',
+            lastConnectedAt: expect.any(String)
+          }
         }
-      }
+      },
+      activeProviders: {}
     })
     expect(JSON.stringify(store.get('providers'))).not.toContain('access-token')
     expect(JSON.stringify(store.get('providers'))).not.toContain('refresh-token')
   })
 
-  test('disconnect removes the secure token and stored auth metadata', async () => {
+  test('disconnect removes the secure token, auth metadata, and active provider selections', async () => {
     const secureStorage = {
       setSecret: vi.fn(async () => undefined),
       getSecret: vi.fn(async () => '{"accessToken":"access-token"}'),
@@ -79,17 +85,30 @@ describe('OAuthService', () => {
     } satisfies SecureStorage
     const store = new MemoryStore()
     store.set('providers', {
-      'openai-codex': {
-        enabled: true,
-        connectionType: 'oauth',
-        account: {
-          email: 'dev@example.com',
-          accountId: 'acct_123'
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth',
+          account: {
+            email: 'dev@example.com',
+            accountId: 'acct_123'
+          },
+          auth: {
+            status: 'connected',
+            lastConnectedAt: '2026-03-28T12:00:00.000Z'
+          }
         },
-        auth: {
-          status: 'connected',
-          lastConnectedAt: '2026-03-28T12:00:00.000Z'
+        deepgram: {
+          enabled: true,
+          connectionType: 'api-key',
+          config: {
+            apiKey: 'deepgram-key'
+          }
         }
+      },
+      activeProviders: {
+        llm: 'openai-codex',
+        asr: 'deepgram'
       }
     })
 
@@ -111,7 +130,20 @@ describe('OAuthService', () => {
       status: 'not-connected'
     })
     expect(secureStorage.deleteSecret).toHaveBeenCalledWith('provider:openai-codex')
-    expect(store.get('providers')).toEqual({})
+    expect(store.get('providers')).toEqual({
+      providers: {
+        deepgram: {
+          enabled: true,
+          connectionType: 'api-key',
+          config: {
+            apiKey: 'deepgram-key'
+          }
+        }
+      },
+      activeProviders: {
+        asr: 'deepgram'
+      }
+    })
   })
 
   test('getStatus returns not-connected and clears stale store metadata when secret is missing', async () => {
@@ -122,18 +154,21 @@ describe('OAuthService', () => {
     } satisfies SecureStorage
     const store = new MemoryStore()
     store.set('providers', {
-      'openai-codex': {
-        enabled: true,
-        connectionType: 'oauth',
-        account: {
-          email: 'dev@example.com',
-          accountId: 'acct_123'
-        },
-        auth: {
-          status: 'connected',
-          lastConnectedAt: '2026-03-28T12:00:00.000Z'
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth',
+          account: {
+            email: 'dev@example.com',
+            accountId: 'acct_123'
+          },
+          auth: {
+            status: 'connected',
+            lastConnectedAt: '2026-03-28T12:00:00.000Z'
+          }
         }
-      }
+      },
+      activeProviders: {}
     })
 
     const oauthService = new OAuthService({
@@ -154,6 +189,9 @@ describe('OAuthService', () => {
       providerId: 'openai-codex',
       status: 'not-connected'
     })
-    expect(store.get('providers')).toEqual({})
+    expect(store.get('providers')).toEqual({
+      providers: {},
+      activeProviders: {}
+    })
   })
 })

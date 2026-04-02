@@ -1,7 +1,7 @@
 import { ConfigurationError } from '@openbroca/providers'
 import type { LLMProvider, LLMProviderRegistry } from '@openbroca/providers/llm'
 import type { OAuthService } from '../auth/oauth-service'
-import type { ProviderConnectionRecord } from '../../shared/provider-auth'
+import { normalizeProviderSettings, type ProviderConnectionRecord } from '../../shared/provider-auth'
 
 interface StoreLike {
   get<T>(key: string): T | undefined
@@ -13,8 +13,16 @@ interface ProviderRuntimeDeps {
   store: StoreLike
 }
 
-function getProviderRecords(store: StoreLike): Record<string, ProviderConnectionRecord> {
-  return store.get<Record<string, ProviderConnectionRecord>>('providers') ?? {}
+function getProviderRecords(store: StoreLike): Record<string, ProviderConnectionRecord | undefined> {
+  return normalizeProviderSettings(store.get<unknown>('providers')).providers
+}
+
+export function getActiveLLMProviderId(store: StoreLike): string | undefined {
+  return normalizeProviderSettings(store.get<unknown>('providers')).activeProviders.llm
+}
+
+export function getActiveASRProviderId(store: StoreLike): string | undefined {
+  return normalizeProviderSettings(store.get<unknown>('providers')).activeProviders.asr
 }
 
 export async function getLLMProviderRuntimeConfig(
@@ -47,4 +55,16 @@ export async function resolveLLMProvider(
   const config = await getLLMProviderRuntimeConfig(providerId, deps)
   await deps.llmRegistry.evict(providerId)
   return deps.llmRegistry.resolve(providerId, config)
+}
+
+export async function resolveActiveLLMProvider(deps: ProviderRuntimeDeps): Promise<LLMProvider> {
+  const providerId = getActiveLLMProviderId(deps.store)
+  if (!providerId) {
+    throw new ConfigurationError(
+      'provider:not-configured',
+      'Select an active LLM provider before requesting runtime access.'
+    )
+  }
+
+  return resolveLLMProvider(providerId, deps)
 }
