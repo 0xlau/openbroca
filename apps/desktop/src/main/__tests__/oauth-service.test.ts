@@ -10,13 +10,19 @@ class MemoryStore {
       activeProviders: {}
     }
   }
+  private setCalls = 0
 
   get<T>(key: string): T | undefined {
     return this.state[key] as T | undefined
   }
 
   set(key: string, value: unknown): void {
+    this.setCalls += 1
     this.state[key] = value
+  }
+
+  getSetCallCount(): number {
+    return this.setCalls
   }
 }
 
@@ -193,5 +199,33 @@ describe('OAuthService', () => {
       providers: {},
       activeProviders: {}
     })
+  })
+
+  test('disconnect does not rewrite store when no provider record or active selection exists', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    const result = await oauthService.disconnect('openai-codex')
+
+    expect(result).toEqual({
+      providerId: 'openai-codex',
+      status: 'not-connected'
+    })
+    expect(secureStorage.deleteSecret).toHaveBeenCalledWith('provider:openai-codex')
+    expect(store.getSetCallCount()).toBe(0)
   })
 })

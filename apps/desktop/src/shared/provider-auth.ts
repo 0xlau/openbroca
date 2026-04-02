@@ -56,12 +56,18 @@ export function clearActiveProviderSelections(
   activeProviders: ActiveProviders,
   providerId: string
 ): ActiveProviders {
+  const llmChanged = activeProviders.llm === providerId
+  const asrChanged = activeProviders.asr === providerId
+  if (!llmChanged && !asrChanged) {
+    return activeProviders
+  }
+
   const next: ActiveProviders = {}
 
-  if (activeProviders.llm && activeProviders.llm !== providerId) {
+  if (activeProviders.llm && !llmChanged) {
     next.llm = activeProviders.llm
   }
-  if (activeProviders.asr && activeProviders.asr !== providerId) {
+  if (activeProviders.asr && !asrChanged) {
     next.asr = activeProviders.asr
   }
 
