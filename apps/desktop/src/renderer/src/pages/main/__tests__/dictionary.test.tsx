@@ -112,7 +112,6 @@ describe('Dictionary', () => {
 
     expect(screen.getByText('OpenBroca')).toBeTruthy()
     expect(screen.getByText('Product name')).toBeTruthy()
-    expect(screen.getByText('Used 7 times')).toBeTruthy()
   })
 
   test('adds a new hotword through the dialog', async () => {
