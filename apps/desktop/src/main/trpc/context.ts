@@ -4,6 +4,7 @@ import type { AudioCaptureSource } from '@openbroca/audio-capture'
 import type { ASRProviderRegistry } from '@openbroca/providers/asr'
 import type { LLMProviderRegistry } from '@openbroca/providers/llm'
 import type { OAuthService } from '../auth/oauth-service'
+import type { HistoryRepository } from '../history-repository'
 import type { StoreSchema } from '../store'
 
 export interface Context {
@@ -13,6 +14,7 @@ export interface Context {
   asrRegistry: ASRProviderRegistry
   captureSource: AudioCaptureSource
   oauthService: OAuthService
+  historyRepository: HistoryRepository
 }
 
 export function createContext(
@@ -21,7 +23,16 @@ export function createContext(
   llmRegistry: LLMProviderRegistry,
   asrRegistry: ASRProviderRegistry,
   captureSource: AudioCaptureSource,
-  oauthService: OAuthService
+  oauthService: OAuthService,
+  historyRepository: HistoryRepository
 ): Context {
-  return { window, store, llmRegistry, asrRegistry, captureSource, oauthService }
+  return {
+    window,
+    store,
+    llmRegistry,
+    asrRegistry,
+    captureSource,
+    oauthService,
+    historyRepository
+  }
 }

@@ -382,7 +382,7 @@ describe('Providers page', () => {
     })
   })
 
-  test('shows Active action for the active provider in its section', async () => {
+  test('shows Current action for the active provider in its section', async () => {
     llmProviders = [
       {
         id: 'openai',
@@ -417,7 +417,7 @@ describe('Providers page', () => {
 
     await renderProviders()
 
-    expect(screen.getByRole('button', { name: 'Active' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Current' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Set as active' })).toBeNull()
   })
 

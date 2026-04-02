@@ -1,6 +1,7 @@
 import ElectronStore from 'electron-store'
 import { defaultProviderSettings } from '../../shared/provider-auth'
 import type { StoreSchema } from './schema'
+import { defaultVoiceHistoryState } from '../../shared/voice-history'
 
 const Store: typeof ElectronStore =
   (ElectronStore as unknown as { default?: typeof ElectronStore }).default ?? ElectronStore
@@ -11,6 +12,7 @@ export const store = new Store<StoreSchema>({
     aboutMe: {},
     dictionary: {},
     providers: defaultProviderSettings,
-    settings: {}
+    settings: {},
+    voiceHistory: defaultVoiceHistoryState
   }
 })

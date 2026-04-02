@@ -9,6 +9,14 @@ import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
 import { RtAudioCaptureSource } from '@openbroca/audio-capture'
 import { ListeningSessionManager } from './listening-session'
+import { HistoryRepository } from './history-repository'
+import { RecordingStorage } from './recording-storage'
+import { PostRecordingPipeline } from './post-recording-pipeline'
+import {
+  resolveActiveASRProvider,
+  resolveActiveLLMProvider,
+  selectFirstLLMModel
+} from './providers/runtime'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
@@ -21,13 +29,33 @@ function getAccelerator(): string {
 }
 
 const captureSource = new RtAudioCaptureSource()
-const listeningSession = new ListeningSessionManager(captureSource)
 const oauthService = new OAuthService({
   store,
   secureStorage,
   providers: {
     'openai-codex': openaiCodexOAuth
   }
+})
+const historyRepository = new HistoryRepository(store)
+const recordingStorage = new RecordingStorage()
+const postRecordingPipeline = new PostRecordingPipeline({
+  historyRepository,
+  recordingStorage,
+  resolveActiveASRProvider: () =>
+    resolveActiveASRProvider({
+      asrRegistry,
+      store
+    }),
+  resolveActiveLLMProvider: () =>
+    resolveActiveLLMProvider({
+      llmRegistry,
+      oauthService,
+      store
+    }),
+  selectLLMModel: selectFirstLLMModel
+})
+const listeningSession = new ListeningSessionManager(captureSource, {
+  onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
 })
 
 app.whenReady().then(() => {
@@ -38,7 +66,15 @@ app.whenReady().then(() => {
   })
 
   registerTrpcIpcHandler(appTrpcRouter, (window) =>
-    createContext(window, store, llmRegistry, asrRegistry, captureSource, oauthService)
+    createContext(
+      window,
+      store,
+      llmRegistry,
+      asrRegistry,
+      captureSource,
+      oauthService,
+      historyRepository
+    )
   )
 
   ipcMain.handle('window:minimize', () => windowManager.getMain()?.minimize())
@@ -54,6 +90,7 @@ app.whenReady().then(() => {
   )
 
   listeningSession.subscribe((state) => {
+    console.debug('[voice-debug] broadcasting listening state', state)
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
         window.webContents.send('listening-session:state-changed', state)
@@ -62,6 +99,7 @@ app.whenReady().then(() => {
   })
 
   windowManager.setFloatingHiddenHandler(() => {
+    console.debug('[voice-debug] floating window hidden, stopping listening session')
     listeningSession.stop()
   })
 
@@ -71,11 +109,16 @@ app.whenReady().then(() => {
   shortcutManager.start(
     getAccelerator(),
     () => {
-      windowManager.showFloating()
       const mic = store.get('microphone') as { selectedDeviceId?: number | null } | undefined
+      console.debug('[voice-debug] shortcut key down', {
+        accelerator: getAccelerator(),
+        selectedDeviceId: mic?.selectedDeviceId ?? null
+      })
+      windowManager.showFloating()
       listeningSession.start({ deviceId: mic?.selectedDeviceId ?? undefined })
     },
     () => {
+      console.debug('[voice-debug] shortcut key up, hiding floating window')
       windowManager.hideFloating()
     }
   )

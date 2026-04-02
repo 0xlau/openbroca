@@ -1,31 +1,13 @@
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
-import type { AudioCaptureSource, AudioFormat, CaptureOptions } from '@openbroca/audio-capture'
+import type { AudioCaptureSource, CaptureOptions } from '@openbroca/audio-capture'
 import type { ListeningSessionState } from '../shared/listening-session-state'
+import type { CapturedRecording } from './recording-types'
 
 interface SessionOptions {
   deviceId?: number
 }
 
-function buildWavHeader(dataByteLength: number, format: AudioFormat): Buffer {
-  const byteRate = (format.sampleRate * format.channels * format.bitDepth) / 8
-  const blockAlign = (format.channels * format.bitDepth) / 8
-  const header = Buffer.alloc(44)
-  header.write('RIFF', 0)
-  header.writeUInt32LE(36 + dataByteLength, 4)
-  header.write('WAVE', 8)
-  header.write('fmt ', 12)
-  header.writeUInt32LE(16, 16) // PCM chunk size
-  header.writeUInt16LE(1, 20) // PCM format
-  header.writeUInt16LE(format.channels, 22)
-  header.writeUInt32LE(format.sampleRate, 24)
-  header.writeUInt32LE(byteRate, 28)
-  header.writeUInt16LE(blockAlign, 32)
-  header.writeUInt16LE(format.bitDepth, 34)
-  header.write('data', 36)
-  header.writeUInt32LE(dataByteLength, 40)
-  return header
+interface ListeningSessionOptions {
+  onRecordingComplete?: (recording: CapturedRecording) => Promise<void> | void
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -49,7 +31,10 @@ class ListeningSessionManager {
   private state: ListeningSessionState = { status: 'idle' }
   private listeners = new Set<(state: ListeningSessionState) => void>()
 
-  constructor(private captureSource: AudioCaptureSource) {}
+  constructor(
+    private captureSource: AudioCaptureSource,
+    private readonly options: ListeningSessionOptions = {}
+  ) {}
 
   getState(): ListeningSessionState {
     return this.state
@@ -63,11 +48,18 @@ class ListeningSessionManager {
   }
 
   start(options?: SessionOptions): void {
+    console.debug('[voice-debug] listening start requested', {
+      status: this.state.status,
+      deviceId: options?.deviceId ?? null
+    })
     if (
       this.state.status === 'starting' ||
       this.state.status === 'listening' ||
       this.state.status === 'stopping'
     ) {
+      console.debug('[voice-debug] listening start ignored', {
+        status: this.state.status
+      })
       return
     }
 
@@ -77,6 +69,9 @@ class ListeningSessionManager {
   }
 
   stop(): void {
+    console.debug('[voice-debug] listening stop requested', {
+      status: this.state.status
+    })
     if (this.state.status === 'idle') {
       return
     }
@@ -97,8 +92,15 @@ class ListeningSessionManager {
   }
 
   private async run(opts: SessionOptions & { signal: AbortSignal }): Promise<void> {
+    let chunks: Uint8Array[] = []
+    let format: ReturnType<AudioCaptureSource['resolveFormat']>
+    let startedAt = ''
+    let startedAtMs = 0
+    let didLogFirstChunk = false
+
     try {
       const captureOptions: CaptureOptions = {
+        sampleRate: 16000,
         channels: 1,
         bitDepth: 16,
         signal: opts.signal
@@ -107,30 +109,34 @@ class ListeningSessionManager {
         captureOptions.deviceId = opts.deviceId
       }
 
-      const format = this.captureSource.resolveFormat(captureOptions)
-      const chunks: Uint8Array[] = []
+      format = this.captureSource.resolveFormat(captureOptions)
+      console.debug('[voice-debug] capture format resolved', format)
+      chunks = []
+      startedAt = new Date().toISOString()
+      startedAtMs = Date.now()
 
       const stream = this.captureSource.capture(captureOptions)
       this.setState({ status: 'listening' })
 
       for await (const chunk of stream) {
+        if (!didLogFirstChunk) {
+          didLogFirstChunk = true
+          console.debug('[voice-debug] first audio chunk received', {
+            byteLength: chunk.byteLength
+          })
+        }
         chunks.push(chunk)
       }
 
-      if (chunks.length > 0) {
-        const pcm = Buffer.concat(
-          chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength))
-        )
-        const wav = Buffer.concat([buildWavHeader(pcm.byteLength, format), pcm])
-
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const outPath = join(app.getPath('temp'), `openbroca-${timestamp}.wav`)
-        writeFileSync(outPath, wav)
-        console.log(`[listening-session] saved recording: ${outPath}`)
-      }
-
+      console.debug('[voice-debug] capture stream ended', {
+        chunkCount: chunks.length
+      })
       this.setState({ status: 'idle' })
     } catch (error) {
+      console.debug('[voice-debug] listening run failed', {
+        aborted: opts.signal.aborted,
+        error: normalizeErrorMessage(error)
+      })
       if (isAbortLikeError(error, opts.signal)) {
         this.setState({ status: 'idle' })
         return
@@ -140,14 +146,41 @@ class ListeningSessionManager {
         status: 'error',
         message: normalizeErrorMessage(error)
       })
+      return
     } finally {
       if (this.abortController?.signal === opts.signal || opts.signal.aborted) {
         this.abortController = null
       }
     }
+
+    if (chunks.length > 0) {
+      const endedAt = new Date().toISOString()
+      const endedAtMs = Date.now()
+      const durationMs = Math.max(0, endedAtMs - startedAtMs)
+      console.debug('[voice-debug] dispatching completed recording', {
+        chunkCount: chunks.length,
+        durationMs
+      })
+
+      void Promise.resolve(
+        this.options.onRecordingComplete?.({
+          format,
+          chunks,
+          startedAt,
+          endedAt,
+          durationMs
+        })
+      ).catch((completionError) => {
+        console.error('[listening-session] recording completion failed', completionError)
+      })
+    }
   }
 
   private setState(next: ListeningSessionState): void {
+    console.debug('[voice-debug] listening state changed', {
+      from: this.state.status,
+      to: next.status
+    })
     this.state = next
     for (const listener of this.listeners) {
       listener(next)

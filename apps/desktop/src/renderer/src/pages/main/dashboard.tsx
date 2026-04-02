@@ -10,10 +10,13 @@ import {
   Separator,
   TypographyH1,
   TypographyLarge,
-  TypographyMuted,
-  TypographySmall
+  TypographyMuted
 } from '@openbroca/ui'
 import { Bar, BarChart, XAxis, YAxis } from 'recharts'
+import { useStore } from 'zustand'
+import { settingsStore } from '@renderer/stores/settings-store'
+import { HistoryRow } from '@renderer/components/history/history-row'
+import { HistoryDetailPanel } from '@renderer/components/history/history-detail-panel'
 
 const tokenUsageData = [
   { day: 'Mon', tokens: 4200 },
@@ -39,59 +42,6 @@ const statsData = [
   { label: 'Avg Dictation Speed', value: '142 wpm' }
 ]
 
-const historyData = [
-  {
-    id: 1,
-    datetime: '2026-03-21 14:32',
-    text: 'Send the report to the team by end of day Friday.'
-  },
-  {
-    id: 2,
-    datetime: '2026-03-21 11:08',
-    text: 'Schedule a meeting with the design team to review the new mockups.'
-  },
-  {
-    id: 3,
-    datetime: '2026-03-20 16:45',
-    text: 'Follow up with John about the project timeline.'
-  },
-  {
-    id: 4,
-    datetime: '2026-03-20 10:22',
-    text: 'Update the documentation for the API endpoints.'
-  },
-  {
-    id: 5,
-    datetime: '2026-03-19 15:13',
-    text: 'Remind myself to check the analytics dashboard tomorrow morning.'
-  },
-  {
-    id: 6,
-    datetime: '2026-03-19 09:55',
-    text: 'Draft an email to the client about the delay in delivery.'
-  },
-  {
-    id: 7,
-    datetime: '2026-03-18 17:30',
-    text: 'Create a list of action items from the sprint retrospective.'
-  },
-  {
-    id: 8,
-    datetime: '2026-03-18 13:47',
-    text: 'Look into the new voice recognition models available in the API.'
-  },
-  {
-    id: 9,
-    datetime: '2026-03-17 11:20',
-    text: 'Prepare the slides for the quarterly business review.'
-  },
-  {
-    id: 10,
-    datetime: '2026-03-17 08:35',
-    text: 'Add error handling to the file upload component.'
-  }
-]
-
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl p-4 ring-1 ring-foreground/10">
@@ -101,39 +51,64 @@ function StatCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-function HistoryRow({ item, isLast }: { item: (typeof historyData)[number]; isLast: boolean }) {
-  return (
-    <>
-      <div className="flex items-center gap-4 px-4 py-3">
-        <TypographyMuted className="w-36 shrink-0 pt-0.5">{item.datetime}</TypographyMuted>
-        <TypographySmall className="flex-1 font-normal">{item.text}</TypographySmall>
-      </div>
-      {!isLast && <Separator />}
-    </>
-  )
-}
-
 export const Dashboard: React.FC = () => {
+  const settings = useStore(settingsStore, (state) => state.data)
+  const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const [debugModeError, setDebugModeError] = React.useState<string | null>(null)
+
   const { data: appVersion } = trpc.app.getAppVersion.useQuery()
+  const historyListQuery = trpc.history.list.useQuery()
+  const selectedDetailQuery = trpc.history.getById.useQuery(
+    { id: selectedId ?? '' },
+    { enabled: selectedId !== null }
+  )
+
+  const historyItems = historyListQuery.data ?? []
+
+  const handleToggleDebugMode = React.useCallback(async () => {
+    setDebugModeError(null)
+    try {
+      await settingsStore.getState().update({ debugMode: !settings.debugMode })
+    } catch (error) {
+      console.error('Failed to persist debug mode setting', error)
+      setDebugModeError('Failed to save debug mode setting.')
+    }
+  }, [settings.debugMode])
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <div>
-        <TypographyH1
-          className="text-left font-extrabold tracking-normal text-5xl py-3"
-          style={{ fontFamily: "'Instrument Serif', serif" }}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <TypographyH1
+            className="text-left font-extrabold tracking-normal text-5xl py-3"
+            style={{ fontFamily: "'Instrument Serif', serif" }}
+          >
+            Wake your Broca, let thoughts speak
+          </TypographyH1>
+          <TypographyMuted>
+            Press{' '}
+            <KbdGroup>
+              <Kbd>Fn</Kbd>
+            </KbdGroup>{' '}
+            to start and stop dictation. Or hold to say something short.
+            {appVersion && ` · v${appVersion}`}
+          </TypographyMuted>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-full border border-border/60 px-3 py-1.5 text-sm transition-colors hover:bg-muted/50"
+          onClick={handleToggleDebugMode}
+          aria-label="Debug mode"
+          aria-pressed={settings.debugMode}
         >
-          Wake your Broca, let thoughts speak
-        </TypographyH1>
-        <TypographyMuted>
-          Press{' '}
-          <KbdGroup>
-            <Kbd>Fn</Kbd>
-          </KbdGroup>{' '}
-          to start and stop dictation. Or hold to say something short.
-          {appVersion && ` · v${appVersion}`}
-        </TypographyMuted>
+          Debug mode: {settings.debugMode ? 'On' : 'Off'}
+        </button>
       </div>
+      {debugModeError ? (
+        <div className="rounded-xl p-3 ring-1 ring-destructive/30">
+          <TypographyMuted>{debugModeError}</TypographyMuted>
+        </div>
+      ) : null}
 
       <div className="flex gap-6">
         <div className="flex flex-1 flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
@@ -164,10 +139,48 @@ export const Dashboard: React.FC = () => {
         <div className="px-1">
           <TypographyLarge>History</TypographyLarge>
         </div>
-        <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-          {historyData.map((item, index) => (
-            <HistoryRow key={item.id} item={item} isLast={index === historyData.length - 1} />
-          ))}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+            {historyListQuery.isLoading ? (
+              <div className="px-4 py-3">
+                <TypographyMuted>Loading history...</TypographyMuted>
+              </div>
+            ) : historyListQuery.isError ? (
+              <div className="px-4 py-3">
+                <TypographyMuted>Failed to load history.</TypographyMuted>
+              </div>
+            ) : historyItems.length === 0 ? (
+              <div className="px-4 py-3">
+                <TypographyMuted>No history yet.</TypographyMuted>
+              </div>
+            ) : (
+              historyItems.map((item, index) => (
+                <React.Fragment key={item.id}>
+                  <HistoryRow
+                    item={item}
+                    isSelected={item.id === selectedId}
+                    onSelect={setSelectedId}
+                  />
+                  {index === historyItems.length - 1 ? null : <Separator />}
+                </React.Fragment>
+              ))
+            )}
+          </div>
+          {selectedId === null ? (
+            <HistoryDetailPanel record={null} debugMode={settings.debugMode} />
+          ) : selectedDetailQuery.isLoading ? (
+            <div className="rounded-xl p-4 ring-1 ring-foreground/10">
+              <TypographyLarge>Details</TypographyLarge>
+              <TypographyMuted className="mt-2">Loading details...</TypographyMuted>
+            </div>
+          ) : selectedDetailQuery.isError ? (
+            <div className="rounded-xl p-4 ring-1 ring-foreground/10">
+              <TypographyLarge>Details</TypographyLarge>
+              <TypographyMuted className="mt-2">Failed to load details.</TypographyMuted>
+            </div>
+          ) : (
+            <HistoryDetailPanel record={selectedDetailQuery.data ?? null} debugMode={settings.debugMode} />
+          )}
         </div>
       </section>
     </div>
