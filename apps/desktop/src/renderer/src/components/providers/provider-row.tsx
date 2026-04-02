@@ -9,7 +9,7 @@ import {
   TypographySmall
 } from '@openbroca/ui'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignIcon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon, Unlink04Icon } from '@hugeicons/core-free-icons'
 import { trpc } from '@renderer/trpc'
 import type { ProviderConnectionRecord } from '@renderer/stores/provider-store'
 import type { ProviderViewModel } from './provider-types'
@@ -61,8 +61,9 @@ export function ProviderRow({
   const disconnectButton = (
     <Button
       variant="ghost"
-      size="sm"
-      className="shrink-0 gap-1.5"
+      size="icon-sm"
+      className="shrink-0"
+      aria-label="Disconnect"
       onClick={() => {
         if (!state.disconnectConnectionType) {
           return
@@ -70,7 +71,7 @@ export function ProviderRow({
         onDisconnect(provider.id, state.disconnectConnectionType)
       }}
     >
-      Disconnect
+      <HugeiconsIcon icon={Unlink04Icon} strokeWidth={2} size={14} />
     </Button>
   )
   const activeButton = (
@@ -81,7 +82,7 @@ export function ProviderRow({
       onClick={() => onSetActive(provider.id)}
       disabled={state.isActive}
     >
-      {state.isActive ? 'Active' : 'Set as active'}
+      {state.isActive ? 'Current' : 'Set as active'}
     </Button>
   )
 
@@ -123,12 +124,10 @@ export function ProviderRow({
         {!state.isConnected && !state.helperText ? connectButton : null}
         {state.isConnected ? (
           <div className="flex items-center gap-2">
-            {disconnectButton}
             {activeButton}
+            {disconnectButton}
           </div>
-        ) : (
-          null
-        )}
+        ) : null}
       </div>
       {!isLast ? <Separator /> : null}
     </>

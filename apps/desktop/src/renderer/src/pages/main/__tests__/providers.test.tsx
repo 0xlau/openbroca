@@ -288,6 +288,7 @@ describe('Providers page', () => {
     await renderProviders()
 
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeTruthy()
+    expect(screen.queryByText('Disconnect')).toBeNull()
     expect(screen.queryByText('Connected')).toBeNull()
   })
 
@@ -649,6 +650,107 @@ describe('Providers page', () => {
     expect(
       screen.getByText('Connect multiple providers, then choose which one each pipeline uses.')
     ).toBeTruthy()
+  })
+
+  test('orders providers as active first, then connected, then not connected while preserving group order', async () => {
+    llmProviders = [
+      {
+        id: 'first-connected',
+        displayName: 'First Connected',
+        description: 'First connected provider',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      },
+      {
+        id: 'active-provider',
+        displayName: 'Active Provider',
+        description: 'Currently active provider',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      },
+      {
+        id: 'second-connected',
+        displayName: 'Second Connected',
+        description: 'Second connected provider',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      },
+      {
+        id: 'not-connected',
+        displayName: 'Not Connected',
+        description: 'Not connected provider',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          'first-connected': {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-first' }
+          },
+          'active-provider': {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-active' }
+          },
+          'second-connected': {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-second' }
+          }
+        },
+        activeProviders: {
+          llm: 'active-provider'
+        }
+      }
+    })
+
+    await renderProviders()
+
+    const llmSection = screen.getByText('LLM Providers').closest('section')
+    expect(llmSection).toBeTruthy()
+
+    const providerNames = within(llmSection as HTMLElement)
+      .getAllByText(
+        /First Connected|Active Provider|Second Connected|Not Connected/
+      )
+      .map((element) => element.textContent)
+
+    expect(providerNames).toEqual([
+      'Active Provider',
+      'First Connected',
+      'Second Connected',
+      'Not Connected'
+    ])
   })
 
   test('shows provider helper text in a tooltip when hovering Connect', async () => {

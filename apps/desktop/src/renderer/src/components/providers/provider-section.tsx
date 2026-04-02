@@ -26,19 +26,37 @@ export function ProviderSection({
     connectionType: ProviderConnectionRecord['connectionType']
   ) => void
 }) {
+  const sortedProviders = providers
+    .map((provider, index) => ({
+      index,
+      provider,
+      isActive: activeProviderId === provider.id,
+      isConnected: !!settings[provider.id]?.enabled
+    }))
+    .sort((left, right) => {
+      const leftRank = left.isActive ? 0 : left.isConnected ? 1 : 2
+      const rightRank = right.isActive ? 0 : right.isConnected ? 1 : 2
+
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank
+      }
+
+      return left.index - right.index
+    })
+
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2.5 px-1">
         <TypographyLarge>{title}</TypographyLarge>
       </div>
       <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-        {providers.map((provider, index) => (
+        {sortedProviders.map(({ provider, isActive }, index) => (
           <ProviderRow
             key={provider.id}
             provider={provider}
             setting={settings[provider.id]}
-            isActive={activeProviderId === provider.id}
-            isLast={index === providers.length - 1}
+            isActive={isActive}
+            isLast={index === sortedProviders.length - 1}
             onConnect={onConnect}
             onSetActive={(providerId) => onSetActive(section, providerId)}
             onDisconnect={(providerId, connectionType) =>

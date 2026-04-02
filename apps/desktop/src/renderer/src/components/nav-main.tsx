@@ -14,7 +14,12 @@ import {
 } from '@openbroca/ui'
 import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { DashboardSquare01Icon, Mic01Icon, Refresh01Icon } from '@hugeicons/core-free-icons'
+import {
+  CursorInWindowIcon,
+  DashboardSquare01Icon,
+  Mic01Icon,
+  Refresh01Icon
+} from '@hugeicons/core-free-icons'
 import { NavItem } from '@renderer/types/nav'
 import { useMicrophones } from '@renderer/hooks/use-microphones'
 import { microphoneStore } from '@renderer/stores/microphone-store'
@@ -25,6 +30,11 @@ const navItems: NavItem[] = [
     name: 'Dashboard',
     url: '/',
     icon: <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />
+  },
+  {
+    name: 'Instructions',
+    url: '/instructions',
+    icon: <HugeiconsIcon icon={CursorInWindowIcon} strokeWidth={2} />
   }
 ]
 
