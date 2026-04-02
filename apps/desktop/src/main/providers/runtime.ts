@@ -19,16 +19,41 @@ interface ASRProviderRuntimeDeps {
   store: StoreLike
 }
 
+export interface ActiveLLMSelection {
+  providerId: string
+  model: string
+}
+
+function getNormalizedProviderSettings(store: StoreLike) {
+  return normalizeProviderSettings(store.get<unknown>('providers'))
+}
+
 function getProviderRecords(store: StoreLike): Record<string, ProviderConnectionRecord | undefined> {
-  return normalizeProviderSettings(store.get<unknown>('providers')).providers
+  return getNormalizedProviderSettings(store).providers
 }
 
 export function getActiveLLMProviderId(store: StoreLike): string | undefined {
-  return normalizeProviderSettings(store.get<unknown>('providers')).activeProviders.llm
+  return getNormalizedProviderSettings(store).activeProviders.llm
 }
 
 export function getActiveASRProviderId(store: StoreLike): string | undefined {
-  return normalizeProviderSettings(store.get<unknown>('providers')).activeProviders.asr
+  return getNormalizedProviderSettings(store).activeProviders.asr
+}
+
+export function getActiveLLMModel(store: StoreLike): string | undefined {
+  return getNormalizedProviderSettings(store).activeModels.llm
+}
+
+export function getActiveLLMSelection(store: StoreLike): ActiveLLMSelection | undefined {
+  const settings = getNormalizedProviderSettings(store)
+  const providerId = settings.activeProviders.llm
+  const model = settings.activeModels.llm
+
+  if (!providerId || !model) {
+    return undefined
+  }
+
+  return { providerId, model }
 }
 
 export async function resolveActiveASRProvider(deps: ASRProviderRuntimeDeps): Promise<ASRProvider> {
@@ -91,6 +116,35 @@ export async function resolveActiveLLMProvider(deps: LLMProviderRuntimeDeps): Pr
   }
 
   return resolveLLMProvider(providerId, deps)
+}
+
+export async function resolveActiveLLMModel({ store }: { store: StoreLike }): Promise<string> {
+  const selection = getActiveLLMSelection(store)
+  if (!selection) {
+    throw new ConfigurationError(
+      'provider:not-configured',
+      'Select an active LLM provider and model before requesting runtime access.'
+    )
+  }
+  return selection.model
+}
+
+export async function resolveActiveLLMSelection(
+  deps: LLMProviderRuntimeDeps
+): Promise<{ provider: LLMProvider; model: string }> {
+  const selection = getActiveLLMSelection(deps.store)
+  if (!selection) {
+    throw new ConfigurationError(
+      'provider:not-configured',
+      'Select an active LLM provider and model before requesting runtime access.'
+    )
+  }
+
+  const provider = await resolveLLMProvider(selection.providerId, deps)
+  return {
+    provider,
+    model: selection.model
+  }
 }
 
 export async function selectFirstLLMModel(provider: LLMProvider): Promise<string> {

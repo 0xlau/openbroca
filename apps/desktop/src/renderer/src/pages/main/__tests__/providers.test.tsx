@@ -39,10 +39,40 @@ type ProviderFixture = {
   }>
 }
 
+const openAIProviderFixture: ProviderFixture = {
+  id: 'openai',
+  displayName: 'OpenAI',
+  description: 'GPT models',
+  icon: null,
+  connectionOptions: [
+    {
+      type: 'apiKey',
+      label: 'API Key',
+      fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+    }
+  ]
+}
+
+const customProviderFixture: ProviderFixture = {
+  id: 'custom',
+  displayName: 'Custom LLM',
+  description: 'Self-hosted model provider',
+  icon: null,
+  connectionOptions: [
+    {
+      type: 'apiKey',
+      label: 'Token',
+      fields: [{ key: 'apiKey', label: 'Token', input: 'password', required: true }]
+    }
+  ]
+}
+
 const providerStore = createStore<ProviderStoreShape>(() => ({
   data: {
     providers: {},
-    activeProviders: {}
+    providerModels: {},
+    activeProviders: {},
+    activeModels: {}
   },
   isHydrated: true,
   update: vi.fn().mockResolvedValue(undefined),
@@ -56,6 +86,7 @@ const upsertProviderConnection = vi
 
 let llmProviders: ProviderFixture[] = []
 let asrProviders: ProviderFixture[] = []
+let llmModelsByProvider: Record<string, Array<{ id: string; name: string }>> = {}
 let providerAuthStatus: Record<string, ProviderAuthState> = {}
 const connectProviderAuth = vi.fn<(providerId: string) => Promise<ProviderAuthState>>()
 const disconnectProviderAuth = vi.fn<(providerId: string) => Promise<ProviderAuthState>>()
@@ -66,6 +97,12 @@ const setProviderAuthStatus = vi.fn((input: { providerId: string }, status: Prov
 const TooltipContext = React.createContext<{
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
+} | null>(null)
+const SelectContext = React.createContext<{
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+  value?: string
+  setValue: (value: string) => void
 } | null>(null)
 
 vi.mock('@renderer/stores/provider-store', () => ({
@@ -85,6 +122,16 @@ vi.mock('@renderer/trpc', () => ({
     providers: {
       listLLM: {
         useQuery: () => ({ data: llmProviders })
+      },
+      listModels: {
+        useQuery: (
+          { providerId }: { providerId: string },
+          options?: { enabled?: boolean }
+        ) => ({
+          data: options?.enabled === false ? undefined : (llmModelsByProvider[providerId] ?? []),
+          isLoading: false,
+          error: null
+        })
       },
       listASR: {
         useQuery: () => ({ data: asrProviders })
@@ -131,6 +178,73 @@ vi.mock('@openbroca/ui', () => ({
     <label htmlFor={htmlFor}>{children}</label>
   ),
   Separator: () => <hr />,
+  Select: ({
+    value,
+    defaultValue,
+    onValueChange,
+    children
+  }: {
+    value?: string
+    defaultValue?: string
+    onValueChange?: (value: string) => void
+    children: React.ReactNode
+  }) => {
+    const [open, setOpen] = React.useState(false)
+    const [internalValue, setInternalValue] = React.useState(defaultValue)
+    const selectedValue = value ?? internalValue
+
+    const setValue = (nextValue: string) => {
+      if (value === undefined) {
+        setInternalValue(nextValue)
+      }
+      onValueChange?.(nextValue)
+    }
+
+    return (
+      <SelectContext.Provider value={{ open, setOpen, value: selectedValue, setValue }}>
+        {children}
+      </SelectContext.Provider>
+    )
+  },
+  SelectTrigger: ({
+    children,
+    ...props
+  }: React.ComponentProps<'button'>) => {
+    const context = React.useContext(SelectContext)
+    return (
+      <button
+        type="button"
+        role="combobox"
+        aria-expanded={context?.open ?? false}
+        onClick={() => context?.setOpen((current) => !current)}
+        {...props}
+      >
+        {children}
+      </button>
+    )
+  },
+  SelectValue: ({ placeholder }: { placeholder?: string }) => {
+    const context = React.useContext(SelectContext)
+    return <span>{context?.value ?? placeholder}</span>
+  },
+  SelectContent: ({ children }: { children: React.ReactNode }) => {
+    const context = React.useContext(SelectContext)
+    return context?.open ? <div>{children}</div> : null
+  },
+  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => {
+    const context = React.useContext(SelectContext)
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          context?.setValue(value)
+          context?.setOpen(false)
+        }}
+      >
+        {children}
+      </button>
+    )
+  },
   Tooltip: ({ children }: { children: React.ReactNode }) => {
     const [open, setOpen] = React.useState(false)
     return <TooltipContext.Provider value={{ open, setOpen }}>{children}</TooltipContext.Provider>
@@ -175,6 +289,7 @@ describe('Providers page', () => {
     cleanup()
     llmProviders = []
     asrProviders = []
+    llmModelsByProvider = {}
     providerAuthStatus = {}
     connectProviderAuth.mockReset()
     disconnectProviderAuth.mockReset()
@@ -189,7 +304,9 @@ describe('Providers page', () => {
     providerStore.setState({
       data: {
         providers: {},
-        activeProviders: {}
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
       },
       isHydrated: true,
       update: vi.fn().mockResolvedValue(undefined),
@@ -281,7 +398,9 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-acme' }
           }
         },
-        activeProviders: {}
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
       }
     })
 
@@ -332,7 +451,7 @@ describe('Providers page', () => {
     })
   })
 
-  test('shows Set as active for connected inactive LLM providers and writes only activeProviders.llm', async () => {
+  test('shows Set as active for connected inactive LLM providers and writes activeProviders.llm plus activeModels.llm', async () => {
     llmProviders = [
       {
         id: 'openai',
@@ -348,6 +467,7 @@ describe('Providers page', () => {
         ]
       }
     ]
+    llmModelsByProvider.openai = [{ id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }]
 
     const connectedOpenAI: ProviderConnectionRecord = {
       enabled: true,
@@ -361,9 +481,13 @@ describe('Providers page', () => {
         providers: {
           openai: connectedOpenAI
         },
+        providerModels: {
+          openai: { model: 'gpt-4.1-mini' }
+        },
         activeProviders: {
           asr: 'deepgram'
-        }
+        },
+        activeModels: {}
       },
       update: updateSettings
     })
@@ -378,11 +502,14 @@ describe('Providers page', () => {
         activeProviders: {
           llm: 'openai'
         },
+        activeModels: {
+          llm: 'gpt-4.1-mini'
+        }
       })
     })
   })
 
-  test('shows Current action for the active provider in its section', async () => {
+  test('disables Set as active for connected llm providers without a saved model', async () => {
     llmProviders = [
       {
         id: 'openai',
@@ -409,8 +536,234 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
+      }
+    })
+
+    await renderProviders()
+
+    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('Choose a model first')).toBeTruthy()
+  })
+
+  test('saves a dropdown-selected model for openai without auto-activating it', async () => {
+    llmProviders = [openAIProviderFixture]
+    llmModelsByProvider.openai = [
+      { id: 'gpt-4.1', name: 'gpt-4.1' },
+      { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }
+    ]
+
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+    fireEvent.click(screen.getByRole('button', { name: 'Open model settings for OpenAI' }))
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByText('gpt-4.1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save model' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        providerModels: {
+          openai: { model: 'gpt-4.1' }
+        }
+      })
+    })
+  })
+
+  test('saves a manually entered model for a custom llm provider', async () => {
+    llmProviders = [customProviderFixture]
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          custom: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'custom-token' }
+          }
+        },
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+    fireEvent.click(screen.getByRole('button', { name: 'Open model settings for Custom LLM' }))
+    fireEvent.change(screen.getByLabelText('Model name'), { target: { value: 'my-model-v1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save model' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        providerModels: {
+          custom: { model: 'my-model-v1' }
+        }
+      })
+    })
+  })
+
+  test('allows applying a changed saved model for an already-active llm provider', async () => {
+    llmProviders = [openAIProviderFixture]
+    llmModelsByProvider.openai = [
+      { id: 'gpt-4.1', name: 'gpt-4.1' },
+      { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }
+    ]
+
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerModels: {
+          openai: { model: 'gpt-4.1' }
+        },
         activeProviders: {
           llm: 'openai'
+        },
+        activeModels: {
+          llm: 'gpt-4.1-mini'
+        }
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+
+    expect(screen.getByRole('button', { name: 'Apply saved model' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Apply saved model' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        activeProviders: {
+          llm: 'openai'
+        },
+        activeModels: {
+          llm: 'gpt-4.1'
+        }
+      })
+    })
+  })
+
+  test('allows activation with a saved dropdown model even before loading model options, while dialog save still requires a current option', async () => {
+    llmProviders = [openAIProviderFixture]
+    llmModelsByProvider.openai = []
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerModels: {
+          openai: { model: 'gpt-stale' }
+        },
+        activeProviders: {},
+        activeModels: {}
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+
+    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', false)
+    expect(screen.queryByText('Choose a model first')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Set as active' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        activeProviders: {
+          llm: 'openai'
+        },
+        activeModels: {
+          llm: 'gpt-stale'
+        }
+      })
+    })
+
+    llmModelsByProvider.openai = [{ id: 'gpt-4.1', name: 'gpt-4.1' }]
+    fireEvent.click(screen.getByRole('button', { name: 'Open model settings for OpenAI' }))
+    expect(screen.getByRole('button', { name: 'Save model' })).toHaveProperty('disabled', true)
+
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByText('gpt-4.1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save model' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        providerModels: {
+          openai: { model: 'gpt-4.1' }
+        }
+      })
+    })
+  })
+
+  test('shows Current action for a fully active llm provider with an active model', async () => {
+    llmProviders = [
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        description: 'GPT models',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerModels: {
+          openai: { model: 'gpt-4.1-mini' }
+        },
+        activeProviders: {
+          llm: 'openai'
+        },
+        activeModels: {
+          llm: 'gpt-4.1-mini'
         }
       }
     })
@@ -419,6 +772,51 @@ describe('Providers page', () => {
 
     expect(screen.getByRole('button', { name: 'Current' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Set as active' })).toBeNull()
+  })
+
+  test('keeps incomplete active llm selection recoverable when active model is missing', async () => {
+    llmProviders = [openAIProviderFixture]
+    llmModelsByProvider.openai = [{ id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }]
+
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerModels: {
+          openai: { model: 'gpt-4.1-mini' }
+        },
+        activeProviders: {
+          llm: 'openai'
+        },
+        activeModels: {}
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+
+    expect(screen.queryByRole('button', { name: 'Current' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set as active' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        activeProviders: {
+          llm: 'openai'
+        },
+        activeModels: {
+          llm: 'gpt-4.1-mini'
+        }
+      })
+    })
   })
 
   test('reflects OAuth connected status without exposing tokens and disconnects via preload bridge', async () => {
@@ -454,7 +852,9 @@ describe('Providers page', () => {
             connectionType: 'oauth'
           }
         },
-        activeProviders: {}
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
       }
     })
     disconnectProviderAuth.mockResolvedValue({
@@ -476,7 +876,7 @@ describe('Providers page', () => {
     })
   })
 
-  test('disconnecting an active ASR provider clears only activeProviders.asr', async () => {
+  test('oauth disconnect does not issue renderer-side providerStore.update after bridge disconnect resolves', async () => {
     asrProviders = [
       {
         id: 'openai-realtime',
@@ -521,6 +921,7 @@ describe('Providers page', () => {
     })
 
     const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const replaceSettings = vi.fn().mockResolvedValue(undefined)
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -535,12 +936,15 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
+        providerModels: {},
         activeProviders: {
           asr: 'openai-realtime',
           llm: 'openai'
-        }
+        },
+        activeModels: {}
       },
-      update: updateSettings
+      update: updateSettings,
+      replace: replaceSettings
     })
 
     await renderProviders()
@@ -551,11 +955,8 @@ describe('Providers page', () => {
 
     await waitFor(() => {
       expect(disconnectProviderAuth).toHaveBeenCalledWith('openai-realtime')
-      expect(updateSettings).toHaveBeenCalledWith({
-        activeProviders: {
-          asr: undefined
-        }
-      })
+      expect(updateSettings).not.toHaveBeenCalled()
+      expect(replaceSettings).not.toHaveBeenCalled()
     })
   })
 
@@ -607,10 +1008,12 @@ describe('Providers page', () => {
             config: { apiKey: 'dg-secret' }
           }
         },
+        providerModels: {},
         activeProviders: {
           llm: 'openai',
           asr: 'deepgram'
-        }
+        },
+        activeModels: {}
       },
       replace: replaceSettings
     })
@@ -630,9 +1033,11 @@ describe('Providers page', () => {
             config: { apiKey: 'dg-secret' }
           }
         },
+        providerModels: {},
         activeProviders: {
           asr: 'deepgram'
-        }
+        },
+        activeModels: {}
       })
     })
   })
@@ -728,8 +1133,12 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-second' }
           }
         },
+        providerModels: {},
         activeProviders: {
           llm: 'active-provider'
+        },
+        activeModels: {
+          llm: 'gpt-4.1-mini'
         }
       }
     })

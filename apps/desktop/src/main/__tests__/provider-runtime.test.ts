@@ -6,8 +6,11 @@ import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
 import {
   getActiveASRProviderId,
+  getActiveLLMSelection,
+  getActiveLLMModel,
   getActiveLLMProviderId,
   getLLMProviderRuntimeConfig,
+  resolveActiveLLMModel,
   resolveActiveLLMProvider,
   resolveLLMProvider
 } from '../providers/runtime'
@@ -210,6 +213,99 @@ describe('provider runtime resolution', () => {
 
     expect(getActiveLLMProviderId(store)).toBe('openai-codex')
     expect(getActiveASRProviderId(store)).toBe('deepgram')
+  })
+
+  test('reads the active llm model from structured provider settings', () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      providerModels: {
+        openai: { model: 'gpt-4.1' }
+      },
+      activeProviders: {
+        llm: 'openai'
+      },
+      activeModels: {
+        llm: 'gpt-4.1'
+      }
+    })
+
+    expect(getActiveLLMModel(store)).toBe('gpt-4.1')
+  })
+
+  test('reads the active llm provider and model atomically from structured provider settings', () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      providerModels: {
+        openai: { model: 'gpt-4.1' }
+      },
+      activeProviders: {
+        llm: 'openai'
+      },
+      activeModels: {
+        llm: 'gpt-4.1'
+      }
+    })
+
+    expect(getActiveLLMSelection(store)).toEqual({
+      providerId: 'openai',
+      model: 'gpt-4.1'
+    })
+  })
+
+  test('returns no active llm selection when provider or model is missing', () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      activeProviders: {
+        llm: 'openai'
+      },
+      activeModels: {}
+    })
+
+    expect(getActiveLLMSelection(store)).toBeUndefined()
+  })
+
+  test('throws a clear configuration error when an active llm provider has no active model', async () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth'
+        }
+      },
+      providerModels: {
+        'openai-codex': { model: 'gpt-5.2-codex' }
+      },
+      activeProviders: {
+        llm: 'openai-codex'
+      },
+      activeModels: {}
+    })
+
+    await expect(resolveActiveLLMModel({ store })).rejects.toThrowError(
+      '[provider:not-configured] Select an active LLM provider and model before requesting runtime access.'
+    )
   })
 
   test('resolveActiveLLMProvider throws clear configuration error when no active llm is selected', async () => {

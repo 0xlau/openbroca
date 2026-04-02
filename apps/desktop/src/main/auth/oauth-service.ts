@@ -2,9 +2,9 @@ import { ConfigurationError } from '@openbroca/providers'
 import type { OAuthAuthorizer, OAuthTokens } from './openai-codex-oauth'
 import type { SecureStorage } from './secure-storage'
 import {
-  clearActiveProviderSelections,
   createConnectedProviderMetadata,
   normalizeProviderSettings,
+  removeProviderState,
   toProviderAuthState,
   type ConnectedProviderAuthState,
   type ProviderAuthState,
@@ -74,17 +74,19 @@ export class OAuthService {
 
     await this.options.secureStorage.deleteSecret(`provider:${providerId}`)
 
-    const settings = this.getProviderSettings()
-    const hasProviderRecord = providerId in settings.providers
-    const activeProviders = clearActiveProviderSelections(settings.activeProviders, providerId)
-    if (hasProviderRecord || activeProviders !== settings.activeProviders) {
-      const nextProviders = { ...settings.providers }
-      delete nextProviders[providerId]
-      this.options.store.set('providers', {
-        ...settings,
-        providers: nextProviders,
-        activeProviders
-      })
+    const rawSettings = this.options.store.get<unknown>('providers')
+    const settings = normalizeProviderSettings(rawSettings)
+    const nextSettings = removeProviderState(settings, providerId)
+    const settingsChanged =
+      nextSettings.providers !== settings.providers ||
+      nextSettings.providerModels !== settings.providerModels ||
+      nextSettings.activeProviders !== settings.activeProviders ||
+      nextSettings.activeModels !== settings.activeModels
+    const shouldPersistRawModelCleanup =
+      this.hasRawProviderModel(rawSettings, providerId) ||
+      this.hasStaleRawActiveModel(rawSettings, providerId, settings)
+    if (settingsChanged || shouldPersistRawModelCleanup) {
+      this.options.store.set('providers', nextSettings)
     }
 
     return toProviderAuthState(providerId)
@@ -152,6 +154,40 @@ export class OAuthService {
     return normalizeProviderSettings(this.options.store.get<unknown>('providers'))
   }
 
+  private hasRawProviderModel(rawSettings: unknown, providerId: string): boolean {
+    if (!isRecord(rawSettings) || !isRecord(rawSettings.providerModels)) {
+      return false
+    }
+
+    return Object.prototype.hasOwnProperty.call(rawSettings.providerModels, providerId)
+  }
+
+  private hasStaleRawActiveModel(
+    rawSettings: unknown,
+    providerId: string,
+    normalizedSettings: ProviderSettings
+  ): boolean {
+    if (!isRecord(rawSettings) || !isRecord(rawSettings.activeModels)) {
+      return false
+    }
+
+    const rawLlmModel = rawSettings.activeModels.llm
+    if (typeof rawLlmModel !== 'string' || rawLlmModel.trim().length === 0) {
+      return false
+    }
+
+    const rawActiveProviders = isRecord(rawSettings.activeProviders)
+      ? (rawSettings.activeProviders as Record<string, unknown>)
+      : null
+    const rawActiveLlm = rawActiveProviders?.llm
+
+    if (rawActiveLlm === providerId) {
+      return true
+    }
+
+    return typeof normalizedSettings.activeModels.llm !== 'string'
+  }
+
   private getProviderRecords(): Record<string, ProviderConnectionRecord | undefined> {
     return this.getProviderSettings().providers
   }
@@ -165,13 +201,7 @@ export class OAuthService {
     }
 
     const settings = this.getProviderSettings()
-    const nextProviders = { ...providers }
-    delete nextProviders[providerId]
-    this.options.store.set('providers', {
-      ...settings,
-      providers: nextProviders,
-      activeProviders: clearActiveProviderSelections(settings.activeProviders, providerId)
-    })
+    this.options.store.set('providers', removeProviderState(settings, providerId))
   }
 
   private async getStoredTokens(providerId: string): Promise<OAuthTokens | null> {
@@ -186,4 +216,8 @@ export class OAuthService {
       throw new ConfigurationError(providerId, `Stored OAuth tokens are invalid: ${String(error)}`)
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

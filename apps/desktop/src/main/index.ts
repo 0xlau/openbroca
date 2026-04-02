@@ -14,8 +14,7 @@ import { RecordingStorage } from './recording-storage'
 import { PostRecordingPipeline } from './post-recording-pipeline'
 import {
   resolveActiveASRProvider,
-  resolveActiveLLMProvider,
-  selectFirstLLMModel
+  resolveActiveLLMSelection
 } from './providers/runtime'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
@@ -46,13 +45,12 @@ const postRecordingPipeline = new PostRecordingPipeline({
       asrRegistry,
       store
     }),
-  resolveActiveLLMProvider: () =>
-    resolveActiveLLMProvider({
+  resolveActiveLLMSelection: () =>
+    resolveActiveLLMSelection({
       llmRegistry,
       oauthService,
       store
-    }),
-  selectLLMModel: selectFirstLLMModel
+    })
 })
 const listeningSession = new ListeningSessionManager(captureSource, {
   onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)

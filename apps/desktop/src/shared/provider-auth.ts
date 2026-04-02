@@ -31,25 +31,37 @@ export interface ActiveProviders {
   asr?: string
 }
 
+export interface ActiveModels {
+  llm?: string
+}
+
+export interface ProviderModelSelection {
+  model: string
+}
+
 export interface ProviderSettings {
   providers: Record<string, ProviderConnectionRecord | undefined>
+  providerModels: Record<string, ProviderModelSelection | undefined>
   activeProviders: ActiveProviders
+  activeModels: ActiveModels
 }
 
 export const defaultProviderSettings: ProviderSettings = {
   providers: {},
-  activeProviders: {}
+  providerModels: {},
+  activeProviders: {},
+  activeModels: {}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function hasProviderRecord(
-  providers: Record<string, ProviderConnectionRecord | undefined>,
-  providerId: string
+function hasOwnRecord<T>(
+  records: Record<string, T | undefined>,
+  key: string
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(providers, providerId)
+  return Object.prototype.hasOwnProperty.call(records, key)
 }
 
 export function clearActiveProviderSelections(
@@ -74,6 +86,43 @@ export function clearActiveProviderSelections(
   return next
 }
 
+export function removeProviderState(
+  settings: ProviderSettings,
+  providerId: string
+): ProviderSettings {
+  const hadProvider = hasOwnRecord(settings.providers, providerId)
+  const hadProviderModel = hasOwnRecord(settings.providerModels, providerId)
+  const activeProviderRemoved =
+    settings.activeProviders.llm === providerId || settings.activeProviders.asr === providerId
+
+  const nextProviders = hadProvider ? { ...settings.providers } : settings.providers
+  if (hadProvider) {
+    delete nextProviders[providerId]
+  }
+
+  const nextProviderModels = hadProviderModel ? { ...settings.providerModels } : settings.providerModels
+  if (hadProviderModel) {
+    delete nextProviderModels[providerId]
+  }
+
+  const nextActiveProviders = activeProviderRemoved
+    ? clearActiveProviderSelections(settings.activeProviders, providerId)
+    : settings.activeProviders
+
+  const shouldClearActiveModel = !nextActiveProviders.llm && typeof settings.activeModels.llm === 'string'
+  const nextActiveModels = shouldClearActiveModel ? { ...settings.activeModels } : settings.activeModels
+  if (shouldClearActiveModel) {
+    delete nextActiveModels.llm
+  }
+
+  return {
+    providers: nextProviders,
+    providerModels: nextProviderModels,
+    activeProviders: nextActiveProviders,
+    activeModels: nextActiveModels
+  }
+}
+
 export function normalizeProviderSettings(raw: unknown): ProviderSettings {
   if (!isRecord(raw)) {
     return defaultProviderSettings
@@ -86,19 +135,41 @@ export function normalizeProviderSettings(raw: unknown): ProviderSettings {
   const rawActiveProviders = isRecord(raw.activeProviders)
     ? (raw.activeProviders as ActiveProviders)
     : {}
+  const rawProviderModels = isRecord(raw.providerModels)
+    ? (raw.providerModels as Record<string, unknown>)
+    : {}
+  const providerModels: Record<string, ProviderModelSelection | undefined> = {}
+  const rawActiveModels = isRecord(raw.activeModels)
+    ? (raw.activeModels as ActiveModels)
+    : {}
 
   const activeProviders: ActiveProviders = {}
+  const activeModels: ActiveModels = {}
 
-  if (typeof rawActiveProviders.llm === 'string' && hasProviderRecord(providers, rawActiveProviders.llm)) {
+  if (typeof rawActiveProviders.llm === 'string' && hasOwnRecord(providers, rawActiveProviders.llm)) {
     activeProviders.llm = rawActiveProviders.llm
   }
-  if (typeof rawActiveProviders.asr === 'string' && hasProviderRecord(providers, rawActiveProviders.asr)) {
+  if (typeof rawActiveProviders.asr === 'string' && hasOwnRecord(providers, rawActiveProviders.asr)) {
     activeProviders.asr = rawActiveProviders.asr
+  }
+  for (const [providerId, selection] of Object.entries(rawProviderModels)) {
+    if (!hasOwnRecord(providers, providerId) || !isRecord(selection)) {
+      continue
+    }
+    if (typeof selection.model !== 'string' || !selection.model.trim()) {
+      continue
+    }
+    providerModels[providerId] = { model: selection.model }
+  }
+  if (activeProviders.llm && typeof rawActiveModels.llm === 'string' && rawActiveModels.llm.trim()) {
+    activeModels.llm = rawActiveModels.llm
   }
 
   return {
     providers,
-    activeProviders
+    providerModels,
+    activeProviders,
+    activeModels
   }
 }
 

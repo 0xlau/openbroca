@@ -1,28 +1,25 @@
 import type { TranscriptionSegment } from '@openbroca/providers/asr'
-import type { CompletionRequest, LLMProvider } from '@openbroca/providers/llm'
+import type { CompletionRequest } from '@openbroca/providers/llm'
 import type { CapturedRecording } from './recording-types'
 import { buildRecognitionInput } from './audio-resampler'
 import type { HistoryRepository } from './history-repository'
 import type { RecordingStorage } from './recording-storage'
-import { selectFirstLLMModel } from './providers/runtime'
 
 const cleanupPrompt =
   'Clean up the dictated transcript into polished final text without changing intent.'
 
 export class PostRecordingPipeline {
-  private readonly selectLLMModel: (provider: LLMProvider) => Promise<string>
-
   constructor(
     private readonly deps: {
       historyRepository: HistoryRepository
       recordingStorage: RecordingStorage
       resolveActiveASRProvider: () => Promise<import('@openbroca/providers/asr').ASRProvider>
-      resolveActiveLLMProvider: () => Promise<import('@openbroca/providers/llm').LLMProvider>
-      selectLLMModel?: (provider: LLMProvider) => Promise<string>
+      resolveActiveLLMSelection: () => Promise<{
+        provider: import('@openbroca/providers/llm').LLMProvider
+        model: string
+      }>
     }
-  ) {
-    this.selectLLMModel = deps.selectLLMModel ?? selectFirstLLMModel
-  }
+  ) {}
 
   async process(recording: CapturedRecording): Promise<void> {
     console.debug('[voice-debug] post-recording pipeline started', {
@@ -170,14 +167,19 @@ export class PostRecordingPipeline {
     }
 
     let llmProvider: import('@openbroca/providers/llm').LLMProvider
-    let llmModel: string | undefined
+    let llmModel = ''
     let llmRequest: CompletionRequest | undefined
     try {
       pushTimeline('llm', 'started')
-      llmProvider = await this.deps.resolveActiveLLMProvider()
+      const llmSelection = await this.deps.resolveActiveLLMSelection()
+      llmProvider = llmSelection.provider
+      llmModel = llmSelection.model
       console.debug('[voice-debug] active LLM provider resolved', {
         providerId: llmProvider.id,
         displayName: llmProvider.displayName
+      })
+      console.debug('[voice-debug] LLM model selected', {
+        model: llmModel
       })
       this.deps.historyRepository.update(record.id, {
         llmProviderId: llmProvider.id
@@ -203,10 +205,6 @@ export class PostRecordingPipeline {
     }
 
     try {
-      llmModel = await this.selectLLMModel(llmProvider)
-      console.debug('[voice-debug] LLM model selected', {
-        model: llmModel
-      })
       llmRequest = {
         model: llmModel,
         messages: [

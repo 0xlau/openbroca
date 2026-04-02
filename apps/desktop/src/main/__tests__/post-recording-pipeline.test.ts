@@ -41,8 +41,9 @@ describe('PostRecordingPipeline', () => {
       historyRepository: repository as never,
       recordingStorage: storage as never,
       resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue(llmProvider),
-      selectLLMModel: vi.fn().mockResolvedValue('gpt-5.2-codex')
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
     })
 
     await pipeline.process({
@@ -124,8 +125,9 @@ describe('PostRecordingPipeline', () => {
       historyRepository: repository as never,
       recordingStorage: storage as never,
       resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue(llmProvider),
-      selectLLMModel: vi.fn().mockResolvedValue('gpt-5.2-codex')
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
     })
 
     await pipeline.process({
@@ -149,6 +151,64 @@ describe('PostRecordingPipeline', () => {
       { text: 'by', isFinal: false },
       { text: 'by friday', isFinal: true }
     ])
+  })
+
+  test('uses the active llm provider/model pair from a single selection resolver', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-active-model' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/active-model.wav',
+        fileName: 'active-model.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'raw transcript',
+        segments: [{ text: 'raw transcript', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai',
+      displayName: 'OpenAI',
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-first', name: 'gpt-first' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'clean transcript',
+        finishReason: 'stop',
+        usage: undefined
+      })
+    }
+
+    const resolveActiveLLMSelection = vi
+      .fn()
+      .mockResolvedValue({ provider: llmProvider as never, model: 'gpt-4.1' })
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRProvider: async () => asrProvider,
+      resolveActiveLLMSelection
+    })
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(llmProvider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-4.1' })
+    )
+    expect(llmProvider.listModels).not.toHaveBeenCalled()
+    expect(resolveActiveLLMSelection).toHaveBeenCalledTimes(1)
   })
 
   test('resamples non-16kHz mono PCM to 16kHz before calling ASR', async () => {
@@ -193,8 +253,9 @@ describe('PostRecordingPipeline', () => {
       historyRepository: repository as never,
       recordingStorage: storage as never,
       resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue(llmProvider),
-      selectLLMModel: vi.fn().mockResolvedValue('gpt-5.2-codex')
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
     })
 
     await pipeline.process({
@@ -238,14 +299,16 @@ describe('PostRecordingPipeline', () => {
           segments: [{ text: 'raw transcript', isFinal: true }]
         })
       }),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue({
-        id: 'openai-codex',
-        displayName: 'OpenAI Codex',
-        isConfigured: () => true,
-        listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
-        generate: vi.fn().mockRejectedValue(new Error('upstream 500'))
-      }),
-      selectLLMModel: vi.fn().mockResolvedValue('gpt-5.2-codex')
+      resolveActiveLLMSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          isConfigured: () => true,
+          listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+          generate: vi.fn().mockRejectedValue(new Error('upstream 500'))
+        },
+        model: 'gpt-5.2-codex'
+      })
     })
 
     await pipeline.process({
@@ -291,17 +354,19 @@ describe('PostRecordingPipeline', () => {
           segments: [{ text: 'raw transcript', isFinal: true }]
         })
       }),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue({
-        id: 'openai-codex',
-        displayName: 'OpenAI Codex',
-        isConfigured: () => true,
-        listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
-        generate: vi.fn().mockResolvedValue({
-          content: 'Send the report by Friday.',
-          finishReason: 'stop'
-        })
-      }),
-      selectLLMModel: vi.fn().mockResolvedValue('gpt-5.2-codex')
+      resolveActiveLLMSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          isConfigured: () => true,
+          listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+          generate: vi.fn().mockResolvedValue({
+            content: 'Send the report by Friday.',
+            finishReason: 'stop'
+          })
+        },
+        model: 'gpt-5.2-codex'
+      })
     })
 
     await pipeline.process({
@@ -339,15 +404,18 @@ describe('PostRecordingPipeline', () => {
         isConfigured: () => true,
         recognize: vi.fn().mockRejectedValue(new Error('asr timeout'))
       }),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue({
-        id: 'openai-codex',
-        displayName: 'OpenAI Codex',
-        isConfigured: () => true,
-        listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
-        generate: vi.fn().mockResolvedValue({
-          content: 'Send the report by Friday.',
-          finishReason: 'stop'
-        })
+      resolveActiveLLMSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          isConfigured: () => true,
+          listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+          generate: vi.fn().mockResolvedValue({
+            content: 'Send the report by Friday.',
+            finishReason: 'stop'
+          })
+        },
+        model: 'gpt-5.2-codex'
       })
     })
 
@@ -397,15 +465,18 @@ describe('PostRecordingPipeline', () => {
         isConfigured: () => true,
         recognize: vi.fn().mockRejectedValue(error)
       }),
-      resolveActiveLLMProvider: vi.fn().mockResolvedValue({
-        id: 'openai-codex',
-        displayName: 'OpenAI Codex',
-        isConfigured: () => true,
-        listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
-        generate: vi.fn().mockResolvedValue({
-          content: 'Send the report by Friday.',
-          finishReason: 'stop'
-        })
+      resolveActiveLLMSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          isConfigured: () => true,
+          listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+          generate: vi.fn().mockResolvedValue({
+            content: 'Send the report by Friday.',
+            finishReason: 'stop'
+          })
+        },
+        model: 'gpt-5.2-codex'
       })
     })
 

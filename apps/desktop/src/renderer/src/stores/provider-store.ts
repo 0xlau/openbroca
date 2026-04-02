@@ -5,9 +5,9 @@ import type {
   ProviderConnectionRecord
 } from '../../../shared/provider-auth'
 import {
-  clearActiveProviderSelections,
   defaultProviderSettings,
-  normalizeProviderSettings
+  normalizeProviderSettings,
+  removeProviderState
 } from '../../../shared/provider-auth'
 import { createPersistedStore } from './create-persisted-store'
 
@@ -26,15 +26,42 @@ const providerStoreBase = createPersistedStore<ProviderSettings>({
 
 async function updateProviderSettingsSafely(partial: Partial<ProviderSettings>): Promise<void> {
   const current = providerStoreBase.getState().data
+  const nextActiveProviders: ActiveProviders = {
+    ...current.activeProviders,
+    ...(partial.activeProviders ?? {})
+  }
+  const nextActiveModels = {
+    ...current.activeModels,
+    ...(partial.activeModels ?? {})
+  }
+  const hasLlmActiveProviderUpdate =
+    partial.activeProviders !== undefined &&
+    Object.prototype.hasOwnProperty.call(partial.activeProviders, 'llm')
+  const hasLlmActiveModelUpdate =
+    partial.activeModels !== undefined &&
+    Object.prototype.hasOwnProperty.call(partial.activeModels, 'llm')
+
+  if (
+    hasLlmActiveProviderUpdate &&
+    partial.activeProviders?.llm !== current.activeProviders.llm &&
+    !hasLlmActiveModelUpdate
+  ) {
+    delete nextActiveModels.llm
+  }
+
   const next = normalizeProviderSettings({
+    ...current,
+    ...partial,
     providers: {
       ...current.providers,
       ...(partial.providers ?? {})
     },
-    activeProviders: {
-      ...current.activeProviders,
-      ...(partial.activeProviders ?? {})
-    }
+    providerModels: {
+      ...current.providerModels,
+      ...(partial.providerModels ?? {})
+    },
+    activeProviders: nextActiveProviders,
+    activeModels: nextActiveModels
   })
 
   await providerStoreBase.getState().replace(next)
@@ -58,12 +85,6 @@ export async function upsertProviderConnection(
 }
 
 export async function removeProviderConnection(providerId: string): Promise<void> {
-  const { providers, activeProviders } = providerStore.getState().data
-  const nextProviders = { ...providers }
-  delete nextProviders[providerId]
-
-  await providerStore.getState().replace({
-    providers: nextProviders,
-    activeProviders: clearActiveProviderSelections(activeProviders, providerId)
-  })
+  const current = providerStore.getState().data
+  await providerStore.getState().replace(removeProviderState(current, providerId))
 }

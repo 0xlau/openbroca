@@ -9,30 +9,39 @@ import {
   TypographySmall
 } from '@openbroca/ui'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignIcon, Unlink04Icon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon, Settings01Icon, Unlink04Icon } from '@hugeicons/core-free-icons'
 import { trpc } from '@renderer/trpc'
 import type { ProviderConnectionRecord } from '@renderer/stores/provider-store'
 import type { ProviderViewModel } from './provider-types'
 import {
+  getLLMModelSummary,
   getOAuthConnectionOption,
   resolveProviderConnectionState,
   svgToDataUri
 } from './provider-types'
 
 export function ProviderRow({
+  section,
   provider,
   setting,
   isActive,
   isLast,
+  savedModel,
+  activeModel,
   onConnect,
+  onOpenModelSettings,
   onSetActive,
   onDisconnect
 }: {
+  section: 'llm' | 'asr'
   provider: ProviderViewModel
   setting?: ProviderConnectionRecord
   isActive: boolean
   isLast: boolean
+  savedModel?: string
+  activeModel?: string
   onConnect: (provider: ProviderViewModel) => void
+  onOpenModelSettings?: (provider: ProviderViewModel) => void
   onSetActive: (providerId: string) => void
   onDisconnect: (
     providerId: string,
@@ -47,6 +56,17 @@ export function ProviderRow({
   )
 
   const state = resolveProviderConnectionState(provider, setting, authStatus, isActive)
+  const isLLMRow = section === 'llm'
+  const normalizedSavedModel = savedModel?.trim()
+  const hasSavedModel = isLLMRow ? Boolean(normalizedSavedModel) : false
+  const pendingSavedModelChange =
+    isLLMRow &&
+    state.isActive &&
+    !!activeModel &&
+    hasSavedModel &&
+    normalizedSavedModel !== activeModel
+  const requiresModelSelection = isLLMRow && state.isConnected && !hasSavedModel && !state.isActive
+  const modelSummary = isLLMRow ? getLLMModelSummary(savedModel, activeModel) : []
   const connectButton = (
     <Button
       variant="secondary"
@@ -76,15 +96,27 @@ export function ProviderRow({
   )
   const activeButton = (
     <Button
-      variant={state.isActive ? 'secondary' : 'ghost'}
+      variant={state.isActive && !pendingSavedModelChange ? 'secondary' : 'ghost'}
       size="sm"
       className="shrink-0 gap-1.5"
       onClick={() => onSetActive(provider.id)}
-      disabled={state.isActive}
+      disabled={!pendingSavedModelChange && (state.isActive || requiresModelSelection)}
     >
-      {state.isActive ? 'Current' : 'Set as active'}
+      {pendingSavedModelChange ? 'Apply saved model' : state.isActive ? 'Current' : 'Set as active'}
     </Button>
   )
+  const modelSettingsButton =
+    isLLMRow && state.isConnected && onOpenModelSettings ? (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="shrink-0"
+        aria-label={`Open model settings for ${provider.displayName}`}
+        onClick={() => onOpenModelSettings(provider)}
+      >
+        <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} size={14} />
+      </Button>
+    ) : null
 
   return (
     <>
@@ -111,7 +143,15 @@ export function ProviderRow({
               </Badge>
             ) : null}
           </div>
-          <TypographyMuted className="mt-1 truncate text-xs">{state.description}</TypographyMuted>
+          <TypographyMuted className="mt-1 text-xs">{state.description}</TypographyMuted>
+          {modelSummary.map((line) => (
+            <TypographyMuted key={line} className="mt-1 text-xs">
+              {line}
+            </TypographyMuted>
+          ))}
+          {requiresModelSelection ? (
+            <TypographyMuted className="mt-1 text-xs">Choose a model first</TypographyMuted>
+          ) : null}
         </div>
         {!state.isConnected && state.helperText ? (
           <Tooltip>
@@ -124,6 +164,7 @@ export function ProviderRow({
         {!state.isConnected && !state.helperText ? connectButton : null}
         {state.isConnected ? (
           <div className="flex items-center gap-2">
+            {modelSettingsButton}
             {activeButton}
             {disconnectButton}
           </div>

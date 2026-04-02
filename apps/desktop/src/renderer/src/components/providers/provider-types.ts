@@ -20,6 +20,47 @@ export type EditableProviderConnectionOption = Extract<
 
 export type OAuthProviderConnectionOption = Extract<ProviderConnectionOption, { type: 'oauth' }>
 
+export type LLMModelInputMode = 'select' | 'manual'
+
+const dropdownProviderIds = new Set(['openai', 'openai-codex'])
+
+export function getLLMModelInputMode(providerId: string): LLMModelInputMode {
+  return dropdownProviderIds.has(providerId) ? 'select' : 'manual'
+}
+
+export function getLLMModelSummary(savedModel?: string, activeModel?: string): string[] {
+  if (!savedModel && !activeModel) {
+    return []
+  }
+
+  if (savedModel && activeModel && savedModel !== activeModel) {
+    return [`Active model: ${activeModel}`, `Saved model: ${savedModel}`]
+  }
+
+  return [`${activeModel ? 'Active model' : 'Saved model'}: ${activeModel ?? savedModel}`]
+}
+
+export function hasValidSavedLLMModel(
+  providerId: string,
+  savedModel: string | undefined,
+  availableModels?: Array<{ id: string }>
+): boolean {
+  const candidate = savedModel?.trim()
+  if (!candidate) {
+    return false
+  }
+
+  if (getLLMModelInputMode(providerId) === 'manual') {
+    return true
+  }
+
+  if (!availableModels?.length) {
+    return false
+  }
+
+  return availableModels.some((model) => model.id === candidate)
+}
+
 export function getConnectionOptionByType(
   provider: ProviderViewModel | null,
   connectionType: ProviderConnectionType | undefined

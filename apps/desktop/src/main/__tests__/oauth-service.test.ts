@@ -7,7 +7,9 @@ class MemoryStore {
   private state: Record<string, unknown> = {
     providers: {
       providers: {},
-      activeProviders: {}
+      providerModels: {},
+      activeProviders: {},
+      activeModels: {}
     }
   }
   private setCalls = 0
@@ -77,7 +79,9 @@ describe('OAuthService', () => {
           }
         }
       },
-      activeProviders: {}
+      providerModels: {},
+      activeProviders: {},
+      activeModels: {}
     })
     expect(JSON.stringify(store.get('providers'))).not.toContain('access-token')
     expect(JSON.stringify(store.get('providers'))).not.toContain('refresh-token')
@@ -146,9 +150,62 @@ describe('OAuthService', () => {
           }
         }
       },
+      providerModels: {},
       activeProviders: {
         asr: 'deepgram'
+      },
+      activeModels: {}
+    })
+  })
+
+  test('disconnect clears active llm model and saved provider model for the removed provider', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth',
+          account: { accountId: 'acct_codex' },
+          auth: {
+            status: 'connected',
+            lastConnectedAt: '2026-04-02T00:00:00.000Z'
+          }
+        }
+      },
+      providerModels: {
+        'openai-codex': { model: 'gpt-5.2-codex' }
+      },
+      activeProviders: {
+        llm: 'openai-codex'
+      },
+      activeModels: {
+        llm: 'gpt-5.2-codex'
       }
+    })
+
+    const service = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    await service.disconnect('openai-codex')
+
+    expect(store.get('providers')).toEqual({
+      providers: {},
+      providerModels: {},
+      activeProviders: {},
+      activeModels: {}
     })
   })
 
@@ -197,7 +254,9 @@ describe('OAuthService', () => {
     })
     expect(store.get('providers')).toEqual({
       providers: {},
-      activeProviders: {}
+      providerModels: {},
+      activeProviders: {},
+      activeModels: {}
     })
   })
 
@@ -227,5 +286,115 @@ describe('OAuthService', () => {
     })
     expect(secureStorage.deleteSecret).toHaveBeenCalledWith('provider:openai-codex')
     expect(store.getSetCallCount()).toBe(0)
+  })
+
+  test('disconnect rewrites store to clear stale model-only state without provider records', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {},
+      providerModels: {
+        'openai-codex': { model: 'gpt-5.2-codex' }
+      },
+      activeProviders: {},
+      activeModels: {
+        llm: 'gpt-5.2-codex'
+      }
+    })
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    const result = await oauthService.disconnect('openai-codex')
+
+    expect(result).toEqual({
+      providerId: 'openai-codex',
+      status: 'not-connected'
+    })
+    expect(store.get('providers')).toEqual({
+      providers: {},
+      providerModels: {},
+      activeProviders: {},
+      activeModels: {}
+    })
+    expect(store.getSetCallCount()).toBe(2)
+  })
+
+  test('disconnect does not rewrite store when unrelated provider model state remains valid', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        deepgram: {
+          enabled: true,
+          connectionType: 'api-key',
+          config: {
+            apiKey: 'deepgram-key'
+          }
+        }
+      },
+      providerModels: {
+        deepgram: { model: 'nova-3' }
+      },
+      activeProviders: {
+        llm: 'deepgram'
+      },
+      activeModels: {
+        llm: 'nova-3'
+      }
+    })
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {
+        'openai-codex': {
+          authorize: vi.fn(),
+          dispose: vi.fn()
+        }
+      }
+    })
+
+    const result = await oauthService.disconnect('openai-codex')
+
+    expect(result).toEqual({
+      providerId: 'openai-codex',
+      status: 'not-connected'
+    })
+    expect(store.get('providers')).toEqual({
+      providers: {
+        deepgram: {
+          enabled: true,
+          connectionType: 'api-key',
+          config: {
+            apiKey: 'deepgram-key'
+          }
+        }
+      },
+      providerModels: {
+        deepgram: { model: 'nova-3' }
+      },
+      activeProviders: {
+        llm: 'deepgram'
+      },
+      activeModels: {
+        llm: 'nova-3'
+      }
+    })
+    expect(store.getSetCallCount()).toBe(1)
   })
 })

@@ -1,4 +1,5 @@
 import { TypographyLarge } from '@openbroca/ui'
+import type { ProviderModelSelection } from '../../../../shared/provider-auth'
 import type { ProviderConnectionRecord } from '@renderer/stores/provider-store'
 import type { ProviderViewModel } from './provider-types'
 import { ProviderRow } from './provider-row'
@@ -8,8 +9,11 @@ export function ProviderSection({
   title,
   providers,
   settings,
+  providerModels,
   activeProviderId,
+  activeModel,
   onConnect,
+  onOpenModelSettings,
   onSetActive,
   onDisconnect
 }: {
@@ -17,8 +21,11 @@ export function ProviderSection({
   title: string
   providers: ProviderViewModel[]
   settings: Record<string, ProviderConnectionRecord | undefined>
+  providerModels: Record<string, ProviderModelSelection | undefined>
   activeProviderId?: string
+  activeModel?: string
   onConnect: (provider: ProviderViewModel) => void
+  onOpenModelSettings: (provider: ProviderViewModel) => void
   onSetActive: (section: 'llm' | 'asr', providerId: string) => void
   onDisconnect: (
     section: 'llm' | 'asr',
@@ -30,7 +37,8 @@ export function ProviderSection({
     .map((provider, index) => ({
       index,
       provider,
-      isActive: activeProviderId === provider.id,
+      isActive:
+        activeProviderId === provider.id && (section === 'llm' ? Boolean(activeModel) : true),
       isConnected: !!settings[provider.id]?.enabled
     }))
     .sort((left, right) => {
@@ -53,11 +61,15 @@ export function ProviderSection({
         {sortedProviders.map(({ provider, isActive }, index) => (
           <ProviderRow
             key={provider.id}
+            section={section}
             provider={provider}
             setting={settings[provider.id]}
             isActive={isActive}
             isLast={index === sortedProviders.length - 1}
+            savedModel={section === 'llm' ? providerModels[provider.id]?.model : undefined}
+            activeModel={section === 'llm' && isActive ? activeModel : undefined}
             onConnect={onConnect}
+            onOpenModelSettings={onOpenModelSettings}
             onSetActive={(providerId) => onSetActive(section, providerId)}
             onDisconnect={(providerId, connectionType) =>
               onDisconnect(section, providerId, connectionType)
