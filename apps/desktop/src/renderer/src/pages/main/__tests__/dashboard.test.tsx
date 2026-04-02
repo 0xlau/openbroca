@@ -127,6 +127,9 @@ vi.mock('@openbroca/ui', () => ({
   AlertDescription: ({ children, className }: { children: ReactNode; className?: string }) => (
     <div className={className}>{children}</div>
   ),
+  AlertTitle: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
   Button: ({
     children,
     className,
@@ -197,6 +200,7 @@ vi.mock('@hugeicons/react', () => ({
 }))
 
 vi.mock('@hugeicons/core-free-icons', () => ({
+  AlertCircleIcon: {},
   Bug02Icon: {},
   PauseIcon: {},
   PlayIcon: {}
@@ -245,7 +249,6 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /play history audio/i }))
     expect(playMock).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: /debug mode/i }))
     fireEvent.click(screen.getByRole('button', { name: /show history details/i }))
 
     expect(screen.getByTestId('dialog-root')).toBeTruthy()
