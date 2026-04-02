@@ -36,6 +36,7 @@ export const providersRouter = router({
       description: d.description,
       icon: d.icon ?? null,
       kind: d.kind,
+      capabilities: ctx.asrRegistry.getCapabilities(d.id),
       connectionOptions: d.connectionOptions ?? []
     }))
   })

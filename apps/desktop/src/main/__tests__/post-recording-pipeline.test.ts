@@ -1,16 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { PostRecordingPipeline } from '../post-recording-pipeline'
 
-function iterableOf(chunks: Uint8Array[]) {
-  return {
-    async *[Symbol.asyncIterator]() {
-      for (const chunk of chunks) {
-        yield chunk
-      }
-    }
-  }
-}
-
 describe('PostRecordingPipeline', () => {
   test('stores audio, runs ASR, runs LLM, and finalizes the history record', async () => {
     const repository = {
@@ -28,9 +18,7 @@ describe('PostRecordingPipeline', () => {
       id: 'deepgram',
       displayName: 'Deepgram',
       isConfigured: () => true,
-      transcribe: vi.fn(() =>
-        iterableOf([]) as unknown as AsyncIterable<{ text: string; isFinal: boolean }>
-      )
+      recognize: vi.fn()
     }
     const llmProvider = {
       id: 'openai-codex',
@@ -44,9 +32,10 @@ describe('PostRecordingPipeline', () => {
       })
     }
 
-    asrProvider.transcribe.mockReturnValue((async function* () {
-      yield { text: 'send the report by friday', isFinal: true }
-    })())
+    asrProvider.recognize.mockResolvedValue({
+      text: 'send the report by friday',
+      segments: [{ text: 'send the report by friday', isFinal: true }]
+    })
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -64,6 +53,18 @@ describe('PostRecordingPipeline', () => {
       durationMs: 1000
     })
 
+    const recognizeInput = asrProvider.recognize.mock.calls[0]?.[0] as
+      | { audio?: Uint8Array[] }
+      | undefined
+    expect(Array.isArray(recognizeInput?.audio)).toBe(true)
+    expect(asrProvider.recognize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encoding: 'linear16',
+        sampleRate: 16000,
+        channels: 1
+      }),
+      { language: 'en' }
+    )
     expect(storage.save).toHaveBeenCalledTimes(1)
     expect(llmProvider.generate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -79,7 +80,7 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
-  test('builds the LLM transcript from final ASR segments only', async () => {
+  test('uses RecognitionResult text for LLM and stores ASR segments', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-final-only' })),
       update: vi.fn()
@@ -95,7 +96,7 @@ describe('PostRecordingPipeline', () => {
       id: 'deepgram',
       displayName: 'Deepgram',
       isConfigured: () => true,
-      transcribe: vi.fn()
+      recognize: vi.fn()
     }
     const llmProvider = {
       id: 'openai-codex',
@@ -109,12 +110,15 @@ describe('PostRecordingPipeline', () => {
       })
     }
 
-    asrProvider.transcribe.mockReturnValue((async function* () {
-      yield { text: 'send the', isFinal: false }
-      yield { text: 'send the report', isFinal: true }
-      yield { text: 'by', isFinal: false }
-      yield { text: 'by friday', isFinal: true }
-    })())
+    asrProvider.recognize.mockResolvedValue({
+      text: 'send the report by friday',
+      segments: [
+        { text: 'send the', isFinal: false },
+        { text: 'send the report', isFinal: true },
+        { text: 'by', isFinal: false },
+        { text: 'by friday', isFinal: true }
+      ]
+    })
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -164,11 +168,9 @@ describe('PostRecordingPipeline', () => {
       id: 'deepgram',
       displayName: 'Deepgram',
       isConfigured: () => true,
-      transcribe: vi.fn(async function* (audio: AsyncIterable<Uint8Array>) {
-        for await (const chunk of audio) {
-          capturedAudio.push(chunk)
-        }
-        yield { text: 'hello world', isFinal: true }
+      recognize: vi.fn(async (input: { audio: Uint8Array[] }) => {
+        capturedAudio.push(...input.audio)
+        return { text: 'hello world', segments: [{ text: 'hello world', isFinal: true }] }
       })
     }
     const llmProvider = {
@@ -203,6 +205,14 @@ describe('PostRecordingPipeline', () => {
       durationMs: 1000
     })
 
+    expect(asrProvider.recognize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encoding: 'linear16',
+        sampleRate: 16000,
+        channels: 1
+      }),
+      { language: 'en' }
+    )
     const resampledBytes = capturedAudio.reduce((total, chunk) => total + chunk.byteLength, 0)
     expect(resampledBytes).toBeLessThan(inputSamples48k.byteLength)
     expect(resampledBytes).toBeGreaterThan(0)
@@ -223,10 +233,10 @@ describe('PostRecordingPipeline', () => {
         id: 'deepgram',
         displayName: 'Deepgram',
         isConfigured: () => true,
-        transcribe: () =>
-          (async function* () {
-            yield { text: 'raw transcript', isFinal: true }
-          })()
+        recognize: vi.fn().mockResolvedValue({
+          text: 'raw transcript',
+          segments: [{ text: 'raw transcript', isFinal: true }]
+        })
       }),
       resolveActiveLLMProvider: vi.fn().mockResolvedValue({
         id: 'openai-codex',
@@ -276,10 +286,10 @@ describe('PostRecordingPipeline', () => {
         id: 'deepgram',
         displayName: 'Deepgram',
         isConfigured: () => true,
-        transcribe: () =>
-          (async function* () {
-            yield { text: 'raw transcript', isFinal: true }
-          })()
+        recognize: vi.fn().mockResolvedValue({
+          text: 'raw transcript',
+          segments: [{ text: 'raw transcript', isFinal: true }]
+        })
       }),
       resolveActiveLLMProvider: vi.fn().mockResolvedValue({
         id: 'openai-codex',
@@ -312,7 +322,7 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
-  test('marks the record failed at asr and preserves partial transcript on failure', async () => {
+  test('marks the record failed at asr with empty transcript on failure', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-4' })),
       update: vi.fn()
@@ -327,11 +337,7 @@ describe('PostRecordingPipeline', () => {
         id: 'deepgram',
         displayName: 'Deepgram',
         isConfigured: () => true,
-        transcribe: () =>
-          (async function* () {
-            yield { text: 'first segment', isFinal: true }
-            throw new Error('asr timeout')
-          })()
+        recognize: vi.fn().mockRejectedValue(new Error('asr timeout'))
       }),
       resolveActiveLLMProvider: vi.fn().mockResolvedValue({
         id: 'openai-codex',
@@ -359,9 +365,67 @@ describe('PostRecordingPipeline', () => {
         status: 'failed',
         failureStage: 'asr',
         debug: expect.objectContaining({
-          rawTranscriptionText: 'first segment',
-          asrSegments: [{ text: 'first segment', isFinal: true }],
-          asrResponseSummary: { segmentCount: 1 }
+          rawTranscriptionText: '',
+          asrSegments: [],
+          asrResponseSummary: { segmentCount: 0 }
+        })
+      })
+    )
+  })
+
+  test('ignores error-attached recognition results on failure', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-5' })),
+      update: vi.fn()
+    }
+
+    const error = Object.assign(new Error('asr timeout'), {
+      result: {
+        text: 'should be ignored',
+        segments: [{ text: 'should be ignored', isFinal: true }]
+      }
+    })
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: {
+        save: vi.fn().mockResolvedValue({ audioFilePath: '/recordings/five.wav' })
+      } as never,
+      resolveActiveASRProvider: vi.fn().mockResolvedValue({
+        id: 'deepgram',
+        displayName: 'Deepgram',
+        isConfigured: () => true,
+        recognize: vi.fn().mockRejectedValue(error)
+      }),
+      resolveActiveLLMProvider: vi.fn().mockResolvedValue({
+        id: 'openai-codex',
+        displayName: 'OpenAI Codex',
+        isConfigured: () => true,
+        listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+        generate: vi.fn().mockResolvedValue({
+          content: 'Send the report by Friday.',
+          finishReason: 'stop'
+        })
+      })
+    })
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-5',
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'asr',
+        debug: expect.objectContaining({
+          rawTranscriptionText: '',
+          asrSegments: [],
+          asrResponseSummary: { segmentCount: 0 }
         })
       })
     )

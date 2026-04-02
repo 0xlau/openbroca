@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { z } from 'zod'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
+import { ASRProviderRegistry } from '@openbroca/providers/asr'
+import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
 import type { Context } from '../trpc/context'
 import { providersRouter } from '../trpc/routers/providers'
 import { OAuthService } from '../auth/oauth-service'
@@ -86,5 +89,49 @@ describe('providersRouter', () => {
 
     expect(models[0]).toEqual({ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' })
     expect(models).toHaveLength(6)
+  })
+
+  test('listASR returns normalized capabilities', async () => {
+    const llmRegistry = new LLMProviderRegistry()
+    const asrRegistry = new ASRProviderRegistry()
+    const store = new MemoryStore()
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    asrRegistry.register(deepgramDescriptor)
+    asrRegistry.register({
+      id: 'mock-asr',
+      displayName: 'Mock ASR',
+      description: 'Mock ASR provider',
+      kind: 'cloud',
+      configSchema: z.object({}),
+      create: () => ({
+        id: 'mock-asr',
+        displayName: 'Mock ASR',
+        isConfigured: () => true,
+        recognize: async () => ({ text: '', segments: [] })
+      })
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const providers = await caller.listASR()
+    const deepgram = providers.find((provider) => provider.id === 'deepgram')
+    const mock = providers.find((provider) => provider.id === 'mock-asr')
+
+    expect(deepgram?.capabilities).toEqual({ nonStreaming: true, streaming: true })
+    expect(mock?.capabilities).toEqual({ nonStreaming: true, streaming: false })
   })
 })

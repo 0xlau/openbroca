@@ -15,6 +15,7 @@ export const deepgramDescriptor: ASRProviderDescriptor<DeepgramConfig> = {
   icon,
   kind: 'cloud',
   configSchema,
+  capabilities: { streaming: true },
   connectionOptions: [
     {
       type: 'apiKey',

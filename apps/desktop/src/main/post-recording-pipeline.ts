@@ -1,31 +1,13 @@
 import type { TranscriptionSegment } from '@openbroca/providers/asr'
 import type { CompletionRequest, LLMProvider } from '@openbroca/providers/llm'
 import type { CapturedRecording } from './recording-types'
-import { normalizeRecordingForASR } from './audio-resampler'
+import { buildRecognitionInput } from './audio-resampler'
 import type { HistoryRepository } from './history-repository'
 import type { RecordingStorage } from './recording-storage'
 import { selectFirstLLMModel } from './providers/runtime'
 
-function toAsyncIterable(chunks: Uint8Array[]): AsyncIterable<Uint8Array> {
-  return {
-    async *[Symbol.asyncIterator]() {
-      for (const chunk of chunks) {
-        yield chunk
-      }
-    }
-  }
-}
-
 const cleanupPrompt =
   'Clean up the dictated transcript into polished final text without changing intent.'
-
-function buildFinalTranscript(segments: TranscriptionSegment[]): string {
-  return segments
-    .filter((segment) => segment.isFinal)
-    .map((segment) => segment.text)
-    .join(' ')
-    .trim()
-}
 
 export class PostRecordingPipeline {
   private readonly selectLLMModel: (provider: LLMProvider) => Promise<string>
@@ -136,7 +118,7 @@ export class PostRecordingPipeline {
     }
 
     let rawTranscriptionText = ''
-    const asrSegments: TranscriptionSegment[] = []
+    let asrSegments: TranscriptionSegment[] = []
     const asrRequest = { language: 'en' }
     if (recording.format.sampleRate !== 16000) {
       console.debug('[voice-debug] resampling audio for ASR', {
@@ -145,18 +127,12 @@ export class PostRecordingPipeline {
         chunkCount: recording.chunks.length
       })
     }
-    const asrChunks = normalizeRecordingForASR(recording)
+    const recognitionInput = buildRecognitionInput(recording)
 
     try {
-      for await (const segment of asrProvider.transcribe(toAsyncIterable(asrChunks), asrRequest)) {
-        console.debug('[voice-debug] ASR segment received', {
-          text: segment.text,
-          isFinal: segment.isFinal
-        })
-        asrSegments.push(segment)
-      }
-
-      rawTranscriptionText = buildFinalTranscript(asrSegments)
+      const asrResult = await asrProvider.recognize(recognitionInput, asrRequest)
+      rawTranscriptionText = asrResult.text ?? ''
+      asrSegments = asrResult.segments ?? []
       console.debug('[voice-debug] ASR transcription finalized', {
         finalTranscript: rawTranscriptionText,
         segmentCount: asrSegments.length
@@ -172,7 +148,8 @@ export class PostRecordingPipeline {
         }
       })
     } catch (error) {
-      rawTranscriptionText = buildFinalTranscript(asrSegments)
+      rawTranscriptionText = ''
+      asrSegments = []
       const message = error instanceof Error ? error.message : String(error)
       errors.push({ stage: 'asr', message, at: now() })
       pushTimeline('asr', 'failed', message)

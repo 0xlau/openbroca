@@ -148,7 +148,7 @@ All packages export **raw TypeScript source** — no build step, consumed direct
 **`@openbroca/providers`** now contains the full provider platform:
 - `@openbroca/providers` — `ProviderError`, `ConfigurationError`, `TranscriptionError`, `ConfigSchema<T>`, `Disposable`, `HealthCheckable`
 - `@openbroca/providers/llm` — `LLMProvider`, `LLMProviderDescriptor<TConfig>`, `LLMProviderRegistry`, `LLMMiddleware`, `CompletionFn`, `composeMiddleware`
-- `@openbroca/providers/asr` — `ASRProvider`, `CloudASRProvider`, `LocalASRProvider`, `ASRProviderDescriptor`, `ASRProviderRegistry`
+- `@openbroca/providers/asr` — `ASRProvider`, `CloudASRProvider`, `StreamingASRProvider`, `LocalASRProvider`, `ASRProviderDescriptor`, `ASRProviderRegistry`
 - `@openbroca/providers/llm/openai` — OpenAI LLM descriptor and implementation
 - `@openbroca/providers/asr/deepgram` — Deepgram ASR descriptor and implementation
 - `@openbroca/providers/asr/sherpa-onnx` — Sherpa-ONNX ASR descriptor and implementation
@@ -164,6 +164,10 @@ Package layout inside `packages/providers/src/` is domain-based:
 
 **`ConfigSchema<T>`** is our own minimal interface (`{ parse(data: unknown): T }`) — not coupled to Zod. Any validation library satisfies it.
 
-**`LocalASRProvider`** (sherpa-onnx) adds model management on top of the base `transcribe()`: `listModels()`, `downloadModel(id, signal?)` returning `AsyncIterable<DownloadProgress>`, and `deleteModel(id)`. The `transcribe()` method accepts `AsyncIterable<Uint8Array>` (raw PCM frames at 16kHz) to stay environment-agnostic.
+**`ASRProvider`** is the base contract and uses `recognize(input, options?)` returning a `RecognitionResult`. `RecognitionInput` accepts general audio payloads (`Uint8Array`, arrays, or async iterables) plus optional `mimeType`, `encoding`, `sampleRate`, and `channels`.
+
+**`StreamingASRProvider`** adds `transcribe()` for realtime output via `AsyncIterable<TranscriptionEvent>`.
+
+**`LocalASRProvider`** (sherpa-onnx) adds model management on top of `recognize()`: `listModels()`, `downloadModel(id, signal?)` returning `AsyncIterable<DownloadProgress>`, and `deleteModel(id)`.
 
 Provider instances run in the **Electron main process** (Node.js). Streaming results must cross the IPC boundary to reach the renderer — this wiring is not yet implemented.

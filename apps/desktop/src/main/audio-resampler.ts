@@ -1,4 +1,5 @@
 import type { AudioFormat } from '@openbroca/audio-capture'
+import type { RecognitionInput } from '@openbroca/providers/asr'
 
 function int16BytesToSamples(chunks: Uint8Array[]): Int16Array {
   const totalBytes = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
@@ -61,4 +62,17 @@ export function normalizeRecordingForASR(recording: {
   const samples = int16BytesToSamples(recording.chunks)
   const resampled = resampleMonoInt16(samples, recording.format.sampleRate, 16000)
   return [samplesToBytes(resampled)]
+}
+
+export function buildRecognitionInput(recording: {
+  format: AudioFormat
+  chunks: Uint8Array[]
+}): RecognitionInput {
+  const normalizedChunks = normalizeRecordingForASR(recording)
+  return {
+    audio: normalizedChunks,
+    encoding: 'linear16',
+    sampleRate: 16000,
+    channels: 1
+  }
 }

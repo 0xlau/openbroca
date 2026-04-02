@@ -6,7 +6,11 @@ import type {
   DownloadProgress,
   LocalASRProvider,
   LocalModelInfo,
-  TranscriptionOptions,
+  RecognitionInput,
+  RecognitionOptions,
+  RecognitionResult,
+  StreamingASRProvider,
+  TranscriptionEvent,
   TranscriptionSegment,
 } from '../../contracts.ts'
 
@@ -39,7 +43,7 @@ const MODEL_MANIFEST: Array<{
   },
 ]
 
-export class SherpaOnnxASRProvider implements LocalASRProvider {
+export class SherpaOnnxASRProvider implements LocalASRProvider, StreamingASRProvider {
   readonly id = 'sherpa-onnx'
   readonly displayName = 'Sherpa-ONNX (Local)'
 
@@ -51,6 +55,27 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
 
   isConfigured(): boolean {
     return this.modelDir !== null && fs.existsSync(this.modelDir)
+  }
+
+  async recognize(
+    input: RecognitionInput,
+    options?: RecognitionOptions
+  ): Promise<RecognitionResult> {
+    throwIfAborted(options?.signal)
+    assertInputSupported(this.id, input)
+    const audio = normalizeAudioInput(input.audio)
+    const segments: TranscriptionSegment[] = []
+
+    for await (const event of this.runTranscription(audio, options)) {
+      if (event.type === 'final') {
+        segments.push(event.segment)
+      }
+    }
+
+    return {
+      text: segments.map((segment) => segment.text).join(' ').trim(),
+      segments,
+    }
   }
 
   async listModels(): Promise<LocalModelInfo[]> {
@@ -92,9 +117,65 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
   }
 
   async *transcribe(
+    input: RecognitionInput,
+    options?: RecognitionOptions
+  ): AsyncIterable<TranscriptionEvent> {
+    assertInputSupported(this.id, input)
+    const audio = normalizeAudioInput(input.audio)
+
+    yield* this.runTranscription(audio, options)
+  }
+
+  private async *runTranscription(
     audio: AsyncIterable<Uint8Array>,
-    options?: TranscriptionOptions
-  ): AsyncIterable<TranscriptionSegment> {
+    options?: RecognitionOptions
+  ): AsyncIterable<TranscriptionEvent> {
+    const { recognizer, stream } = await this.createOnlineRecognizer(options)
+    const decodeReady = () => this.decodeAvailable(recognizer, stream)
+
+    for await (const chunk of audio) {
+      throwIfAborted(options?.signal)
+
+      const samples = int16ToFloat32(chunk)
+      stream.acceptWaveform({ sampleRate: 16000, samples })
+
+      yield* decodeReady()
+    }
+
+    throwIfAborted(options?.signal)
+    stream.inputFinished()
+    yield* decodeReady()
+  }
+
+  private *decodeAvailable(
+    recognizer: SherpaOnlineRecognizerLike,
+    stream: SherpaOnlineStreamLike
+  ): Generator<TranscriptionEvent> {
+    while (recognizer.isReady(stream)) {
+      recognizer.decode(stream)
+      const result = recognizer.getResult(stream)
+      if (result.text) {
+        const isFinal = recognizer.isEndpoint(stream) || Boolean(result.is_final) || Boolean(result.is_eof)
+        const segment: TranscriptionSegment = { text: result.text, isFinal }
+        const timing = extractTiming(result)
+        if (timing.startTime != null) {
+          segment.startTime = timing.startTime
+        }
+        if (timing.endTime != null) {
+          segment.endTime = timing.endTime
+        }
+        yield {
+          type: isFinal ? 'final' : 'interim',
+          segment,
+        }
+        if (isFinal) {
+          recognizer.reset(stream)
+        }
+      }
+    }
+  }
+
+  private async createOnlineRecognizer(options?: RecognitionOptions) {
     if (!this.isConfigured()) {
       throw new ConfigurationError(this.id, 'Provider is not configured')
     }
@@ -114,31 +195,10 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
 
     const modelPath = path.join(modelDir, downloadedModel.subDir)
     const recognizerConfig = buildRecognizerConfig(modelPath, downloadedModel.id, options?.language)
-    const recognizer = new sherpa.OnlineRecognizer(recognizerConfig)
-    const stream = recognizer.createStream()
+    const recognizer: SherpaOnlineRecognizerLike = new sherpa.OnlineRecognizer(recognizerConfig)
+    const stream: SherpaOnlineStreamLike = recognizer.createStream()
 
-    try {
-      for await (const chunk of audio) {
-        if (options?.signal?.aborted) break
-
-        const samples = int16ToFloat32(chunk)
-        stream.acceptWaveform({ sampleRate: 16000, samples })
-
-        while (recognizer.isReady(stream)) {
-          recognizer.decode(stream)
-          const result: { text: string; isEndpoint: boolean } = recognizer.getResult(stream)
-          if (result.text) {
-            const isFinal = result.isEndpoint
-            yield { text: result.text, isFinal }
-            if (isFinal) {
-              recognizer.reset(stream)
-            }
-          }
-        }
-      }
-    } finally {
-      stream.free()
-    }
+    return { recognizer, stream }
   }
 
   private assertModelDir(): string {
@@ -148,6 +208,107 @@ export class SherpaOnnxASRProvider implements LocalASRProvider {
 
     return this.modelDir
   }
+}
+
+function assertInputSupported(providerId: string, input: RecognitionInput): void {
+  if (input.mimeType) {
+    throw new TranscriptionError(
+      providerId,
+      'Recognition metadata is not supported by sherpa-onnx'
+    )
+  }
+
+  const encoding = input.encoding
+  const sampleRate = input.sampleRate
+  const channels = input.channels
+
+  if (encoding && encoding !== 'linear16') {
+    throw new TranscriptionError(
+      providerId,
+      'Recognition metadata is not supported by sherpa-onnx'
+    )
+  }
+
+  if (sampleRate !== undefined && sampleRate !== 16000) {
+    throw new TranscriptionError(
+      providerId,
+      'Recognition metadata is not supported by sherpa-onnx'
+    )
+  }
+
+  if (channels !== undefined && channels !== 1) {
+    throw new TranscriptionError(
+      providerId,
+      'Recognition metadata is not supported by sherpa-onnx'
+    )
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return
+
+  const error = new Error('Recognition aborted')
+  error.name = 'AbortError'
+  throw error
+}
+
+function normalizeAudioInput(
+  audio: RecognitionInput['audio']
+): AsyncIterable<Uint8Array> {
+  if (isAsyncIterable(audio)) {
+    return audio
+  }
+
+  const chunks = Array.isArray(audio) ? audio : [audio]
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const chunk of chunks) {
+        yield chunk
+      }
+    },
+  }
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<Uint8Array> {
+  if (!value) return false
+  return typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+}
+
+type SherpaOnlineResult = {
+  text: string
+  tokens?: string[]
+  timestamps?: number[]
+  start_time?: number
+  is_final?: boolean
+  is_eof?: boolean
+}
+
+type SherpaOnlineStreamLike = {
+  acceptWaveform: (data: { sampleRate: number; samples: Float32Array }) => void
+  inputFinished: () => void
+}
+
+type SherpaOnlineRecognizerLike = {
+  createStream: () => SherpaOnlineStreamLike
+  isReady: (stream: SherpaOnlineStreamLike) => boolean
+  decode: (stream: SherpaOnlineStreamLike) => void
+  getResult: (stream: SherpaOnlineStreamLike) => SherpaOnlineResult
+  isEndpoint: (stream: SherpaOnlineStreamLike) => boolean
+  reset: (stream: SherpaOnlineStreamLike) => void
+}
+
+function extractTiming(result: SherpaOnlineResult): { startTime?: number; endTime?: number } {
+  const timestamps = Array.isArray(result.timestamps) ? result.timestamps : []
+  const hasTimestamps = timestamps.length > 0
+  const startTime =
+    typeof result.start_time === 'number'
+      ? result.start_time
+      : hasTimestamps
+        ? timestamps[0]
+        : undefined
+  const endTime = hasTimestamps ? timestamps[timestamps.length - 1] : undefined
+
+  return { startTime, endTime }
 }
 
 function int16ToFloat32(buffer: Uint8Array): Float32Array {

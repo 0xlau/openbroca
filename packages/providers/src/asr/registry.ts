@@ -1,11 +1,15 @@
 import { ProviderError } from '../shared/errors.ts'
 import type {
+  ASRProvider,
+  ASRCapabilities,
   ASRProviderDescriptor,
   CloudASRProvider,
   LocalASRProvider,
+  StreamingASRProvider,
 } from './contracts.ts'
+import { resolveASRCapabilities } from './contracts.ts'
 
-export type AnyASRProvider = CloudASRProvider | LocalASRProvider
+export type AnyASRProvider = ASRProvider | CloudASRProvider | LocalASRProvider | StreamingASRProvider
 
 export interface ASRRegistryHooks {
   onRegistered?: (id: string, descriptor: ASRProviderDescriptor) => void
@@ -65,6 +69,19 @@ export class ASRProviderRegistry {
 
   isLocal(provider: AnyASRProvider): provider is LocalASRProvider {
     return 'listModels' in provider
+  }
+
+  getCapabilities(providerOrId: AnyASRProvider | string): ASRCapabilities {
+    const id = typeof providerOrId === 'string' ? providerOrId : providerOrId.id
+    const descriptor = this.descriptors.get(id)
+    return resolveASRCapabilities(descriptor?.capabilities)
+  }
+
+  isStreaming(provider: AnyASRProvider): provider is StreamingASRProvider {
+    return (
+      this.getCapabilities(provider).streaming &&
+      typeof (provider as Partial<StreamingASRProvider>).transcribe === 'function'
+    )
   }
 
   async disposeAll(): Promise<void> {

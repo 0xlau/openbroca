@@ -5,7 +5,9 @@ import type {
   ASRProviderDescriptor,
   CloudASRProvider,
   LocalASRProvider,
-  TranscriptionSegment,
+  RecognitionResult,
+  StreamingASRProvider,
+  TranscriptionEvent,
 } from '../contracts.ts'
 
 interface FakeCloudConfig { apiKey: string }
@@ -32,8 +34,8 @@ function makeCloudProvider(): CloudASRProvider {
     id: 'cloud',
     displayName: 'Cloud ASR',
     isConfigured: () => true,
-    async *transcribe(): AsyncIterable<TranscriptionSegment> {
-      yield { text: 'hello', isFinal: true }
+    async recognize(): Promise<RecognitionResult> {
+      return { text: 'hello', segments: [{ text: 'hello', isFinal: true }] }
     },
   }
 }
@@ -43,14 +45,28 @@ function makeLocalProvider(): LocalASRProvider {
     id: 'local',
     displayName: 'Local ASR',
     isConfigured: () => true,
-    async *transcribe(): AsyncIterable<TranscriptionSegment> {
-      yield { text: 'world', isFinal: true }
+    async recognize(): Promise<RecognitionResult> {
+      return { text: 'world', segments: [{ text: 'world', isFinal: true }] }
     },
     listModels: async () => [],
     async *downloadModel() {
       // empty
     },
     deleteModel: async () => {},
+  }
+}
+
+function makeStreamingProvider(): StreamingASRProvider {
+  return {
+    id: 'streaming',
+    displayName: 'Streaming ASR',
+    isConfigured: () => true,
+    async recognize(): Promise<RecognitionResult> {
+      return { text: 'hello world', segments: [{ text: 'hello', isFinal: true }] }
+    },
+    async *transcribe(): AsyncIterable<TranscriptionEvent> {
+      yield { type: 'final', segment: { text: 'hello', isFinal: true } }
+    },
   }
 }
 
@@ -162,6 +178,68 @@ describe('ASRProviderRegistry', () => {
       registry.register(makeCloudDescriptor())
       const provider = registry.resolve('cloud', { apiKey: 'k' })
       expect(registry.isLocal(provider)).toBe(false)
+    })
+  })
+
+  describe('getCapabilities', () => {
+    it('returns defaults for descriptors without overrides', () => {
+      const registry = new ASRProviderRegistry()
+      registry.register(makeCloudDescriptor('cap-default'))
+      const provider = registry.resolve('cap-default', { apiKey: 'k' })
+
+      expect(registry.getCapabilities(provider)).toEqual({
+        nonStreaming: true,
+        streaming: false,
+      })
+    })
+
+    it('merges descriptor overrides', () => {
+      const registry = new ASRProviderRegistry()
+      registry.register({
+        ...makeCloudDescriptor('cap-streaming'),
+        capabilities: { streaming: true },
+      })
+
+      expect(registry.getCapabilities('cap-streaming')).toEqual({
+        nonStreaming: true,
+        streaming: true,
+      })
+    })
+  })
+
+  describe('isStreaming', () => {
+    it('returns false when capability is not enabled even if provider has transcribe', () => {
+      const registry = new ASRProviderRegistry()
+      registry.register({
+        ...makeCloudDescriptor('legacy-stream'),
+        create: makeStreamingProvider,
+        capabilities: { streaming: false },
+      })
+      const provider = registry.resolve('legacy-stream', { apiKey: 'k' })
+      expect(registry.isStreaming(provider)).toBe(false)
+    })
+
+    it('returns false when capability is enabled but provider has no transcribe function', () => {
+      const registry = new ASRProviderRegistry()
+      registry.register({
+        ...makeCloudDescriptor('descriptor-only-stream'),
+        capabilities: { streaming: true },
+        create: makeCloudProvider,
+      })
+
+      const provider = registry.resolve('descriptor-only-stream', { apiKey: 'k' })
+      expect(registry.isStreaming(provider)).toBe(false)
+    })
+
+    it('returns true only when streaming capability is enabled', () => {
+      const registry = new ASRProviderRegistry()
+      registry.register({
+        ...makeCloudDescriptor('streaming'),
+        create: makeStreamingProvider,
+        capabilities: { streaming: true },
+      })
+      const provider = registry.resolve('streaming', { apiKey: 'k' })
+      expect(registry.isStreaming(provider)).toBe(true)
     })
   })
 

@@ -42,4 +42,10 @@ describe('deepgramDescriptor', () => {
     expect(provider.isConfigured()).toBe(true)
     expect('listModels' in provider).toBe(false)
   })
+
+  it('declares streaming capabilities', () => {
+    expect(deepgramDescriptor.capabilities).toEqual(
+      expect.objectContaining({ streaming: true })
+    )
+  })
 })

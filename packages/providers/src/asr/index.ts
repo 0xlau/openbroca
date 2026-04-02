@@ -2,12 +2,20 @@ export { ASRProviderRegistry, type AnyASRProvider, type ASRRegistryHooks } from 
 export {
   type ASRProvider,
   type ASRProviderDescriptor,
+  type ASRCapabilities,
   type CloudASRProvider,
   type DownloadProgress,
   type LocalASRProvider,
   type LocalModelInfo,
-  type TranscriptionOptions,
-  type TranscriptionSegment
+  type RecognitionInput,
+  type RecognitionOptions,
+  type RecognitionResult,
+  type StreamingASRProvider,
+  type TranscriptionEvent,
+  type TranscriptionSegment,
+  DEFAULT_ASR_CAPABILITIES,
+  recognizeFromTranscribe,
+  resolveASRCapabilities
 } from './contracts.ts'
 export {
   type ProviderConnectionField,

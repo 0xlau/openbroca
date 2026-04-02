@@ -14,6 +14,7 @@ export const sherpaOnnxDescriptor: ASRProviderDescriptor<SherpaOnnxConfig> = {
   description: 'On-device speech recognition powered by sherpa-onnx — no internet required',
   icon,
   kind: 'local',
+  capabilities: { streaming: true },
   configSchema,
   connectionOptions: [
     {

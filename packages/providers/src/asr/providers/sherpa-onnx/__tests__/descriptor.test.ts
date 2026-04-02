@@ -6,6 +6,9 @@ describe('sherpaOnnxDescriptor', () => {
     expect(sherpaOnnxDescriptor.id).toBe('sherpa-onnx')
     expect(sherpaOnnxDescriptor.displayName).toBe('@k2-fsa/sherpa-onnx')
     expect(sherpaOnnxDescriptor.kind).toBe('local')
+    expect(sherpaOnnxDescriptor.capabilities).toEqual(
+      expect.objectContaining({ streaming: true })
+    )
   })
 
   it('declares local connection fields', () => {
