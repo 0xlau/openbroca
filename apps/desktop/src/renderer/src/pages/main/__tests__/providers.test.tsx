@@ -53,7 +53,6 @@ const providerStore = createStore<ProviderStoreShape>(() => ({
 const upsertProviderConnection = vi
   .fn<(providerId: string, connection: ProviderConnectionRecord) => Promise<void>>()
   .mockResolvedValue(undefined)
-const removeProviderConnection = vi.fn<(providerId: string) => Promise<void>>().mockResolvedValue(undefined)
 
 let llmProviders: ProviderFixture[] = []
 let asrProviders: ProviderFixture[] = []
@@ -71,8 +70,7 @@ const TooltipContext = React.createContext<{
 
 vi.mock('@renderer/stores/provider-store', () => ({
   providerStore,
-  upsertProviderConnection,
-  removeProviderConnection
+  upsertProviderConnection
 }))
 
 vi.mock('@renderer/trpc', () => ({
@@ -182,7 +180,6 @@ describe('Providers page', () => {
     disconnectProviderAuth.mockReset()
     setProviderAuthStatus.mockClear()
     upsertProviderConnection.mockClear()
-    removeProviderConnection.mockClear()
     window.api = {
       providerAuth: {
         connect: connectProviderAuth,
@@ -356,7 +353,7 @@ describe('Providers page', () => {
       connectionType: 'apiKey',
       config: { apiKey: 'sk-openai' }
     }
-    const replaceSettings = vi.fn().mockResolvedValue(undefined)
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -367,7 +364,7 @@ describe('Providers page', () => {
           asr: 'deepgram'
         }
       },
-      replace: replaceSettings
+      update: updateSettings
     })
 
     await renderProviders()
@@ -376,14 +373,10 @@ describe('Providers page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set as active' }))
 
     await waitFor(() => {
-      expect(replaceSettings).toHaveBeenCalledWith({
-        providers: {
-          openai: connectedOpenAI
-        },
+      expect(updateSettings).toHaveBeenCalledWith({
         activeProviders: {
-          llm: 'openai',
-          asr: 'deepgram'
-        }
+          llm: 'openai'
+        },
       })
     })
   })
@@ -526,7 +519,7 @@ describe('Providers page', () => {
       status: 'not-connected'
     })
 
-    const replaceSettings = vi.fn().mockResolvedValue(undefined)
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -546,7 +539,7 @@ describe('Providers page', () => {
           llm: 'openai'
         }
       },
-      replace: replaceSettings
+      update: updateSettings
     })
 
     await renderProviders()
@@ -557,20 +550,87 @@ describe('Providers page', () => {
 
     await waitFor(() => {
       expect(disconnectProviderAuth).toHaveBeenCalledWith('openai-realtime')
-      expect(replaceSettings).toHaveBeenCalledWith({
+      expect(updateSettings).toHaveBeenCalledWith({
+        activeProviders: {
+          asr: undefined
+        }
+      })
+    })
+  })
+
+  test('disconnecting an active API key LLM provider removes connection and clears only activeProviders.llm', async () => {
+    llmProviders = [
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        description: 'GPT models',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+    asrProviders = [
+      {
+        id: 'deepgram',
+        displayName: 'Deepgram',
+        description: 'Speech to text',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+          }
+        ]
+      }
+    ]
+
+    const replaceSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
         providers: {
-          'openai-realtime': {
-            enabled: true,
-            connectionType: 'oauth'
-          },
           openai: {
             enabled: true,
             connectionType: 'apiKey',
             config: { apiKey: 'sk-openai' }
+          },
+          deepgram: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'dg-secret' }
           }
         },
         activeProviders: {
-          llm: 'openai'
+          llm: 'openai',
+          asr: 'deepgram'
+        }
+      },
+      replace: replaceSettings
+    })
+
+    await renderProviders()
+
+    const llmSection = screen.getByText('LLM Providers').closest('section')
+    expect(llmSection).toBeTruthy()
+    fireEvent.click(within(llmSection as HTMLElement).getByRole('button', { name: 'Disconnect' }))
+
+    await waitFor(() => {
+      expect(replaceSettings).toHaveBeenCalledWith({
+        providers: {
+          deepgram: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'dg-secret' }
+          }
+        },
+        activeProviders: {
+          asr: 'deepgram'
         }
       })
     })

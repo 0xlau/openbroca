@@ -63,11 +63,8 @@ function ProviderContainer() {
   }
 
   async function handleSetActive(section: 'llm' | 'asr', providerId: string) {
-    const current = providerStore.getState().data
-    await providerStore.getState().replace({
-      providers: current.providers,
+    await providerStore.getState().update({
       activeProviders: {
-        ...current.activeProviders,
         [section]: providerId
       }
     })
@@ -81,15 +78,15 @@ function ProviderContainer() {
     if (connectionType === 'oauth') {
       const status = await window.api.providerAuth.disconnect(providerId)
       trpcUtils.providerAuth.status.setData({ providerId }, status)
-      const current = providerStore.getState().data
-      const nextActiveProviders = { ...current.activeProviders }
-      if (nextActiveProviders[section] === providerId) {
-        delete nextActiveProviders[section]
+
+      const activeProviderId = providerStore.getState().data.activeProviders[section]
+      if (activeProviderId === providerId) {
+        await providerStore.getState().update({
+          activeProviders: {
+            [section]: undefined
+          }
+        })
       }
-      await providerStore.getState().replace({
-        providers: current.providers,
-        activeProviders: nextActiveProviders
-      })
       return
     }
 
