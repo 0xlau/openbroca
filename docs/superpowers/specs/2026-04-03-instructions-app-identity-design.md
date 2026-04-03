@@ -248,14 +248,23 @@ The page should mirror the existing main-page pattern used by other desktop sett
 - primary action to create a new instruction
 - list of existing rules
 
-Each rule row should show:
+The page should use a grid and card-based layout rather than a plain stacked settings list.
+
+Recommended direction:
+
+- a responsive grid container for rule cards
+- each instruction rendered as a card
+- card actions for edit and delete
+- shadcn-based UI primitives for cards, dialogs, form controls, badges, and switches
+
+Each instruction card should show:
 
 - `name`
 - number of bound apps
 - `autoEnter` state
 - a short preview of `customInstructions`
 
-Each row should support:
+Each card should support:
 
 - edit
 - delete
