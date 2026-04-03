@@ -303,6 +303,48 @@ describe('ListeningSessionManager', () => {
     })
   })
 
+  test('captures frontmost app snapshot when recording completes', async () => {
+    const captureSource = new FakeCaptureSource()
+    const onRecordingComplete = vi.fn().mockResolvedValue(undefined)
+    const getFrontmostAppSnapshot = vi.fn().mockResolvedValue({
+      id: 'com.recorded.app',
+      displayName: 'Recorded App',
+      platform: 'macos',
+      bundleId: 'com.recorded.bundle',
+      source: 'detected'
+    })
+    const manager = new ListeningSessionManager(captureSource, {
+      onRecordingComplete,
+      getFrontmostAppSnapshot
+    } as never)
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expect(manager.getState()).toEqual({ status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expect(manager.getState()).toEqual({ status: 'idle' })
+    })
+
+    await vi.waitFor(() => {
+      expect(onRecordingComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          frontmostAppSnapshot: expect.objectContaining({
+            id: 'com.recorded.app',
+            bundleId: 'com.recorded.bundle'
+          })
+        })
+      )
+    })
+  })
+
   test('emits debug logs for the capture lifecycle', async () => {
     const captureSource = new FakeCaptureSource()
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined)

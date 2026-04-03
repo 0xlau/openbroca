@@ -111,4 +111,62 @@ describe('createInstructionMatcher', () => {
       autoEnter: true
     })
   })
+
+  test.each([
+    {
+      label: 'bundleId',
+      activationApp: { bundleId: 'com.cursor.app' },
+      frontmostApp: { bundleId: 'com.cursor.app' }
+    },
+    {
+      label: 'aumid',
+      activationApp: { aumid: 'Cursor.Aumid' },
+      frontmostApp: { aumid: 'Cursor.Aumid' }
+    },
+    {
+      label: 'path',
+      activationApp: { path: 'C:\\Program Files\\Cursor\\Cursor.exe' },
+      frontmostApp: { path: 'C:\\Program Files\\Cursor\\Cursor.exe' }
+    }
+  ])('matches manual rule when id differs but $label matches', async ({ activationApp, frontmostApp }) => {
+    const settings: InstructionsSettings = {
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding',
+          activationApps: [
+            {
+              id: 'manual-arbitrary-id',
+              displayName: 'Cursor',
+              platform: 'windows',
+              source: 'manual',
+              ...activationApp
+            }
+          ],
+          customInstructions: 'Prefer concise technical language.',
+          autoEnter: true
+        }
+      ]
+    }
+
+    const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue({
+      id: 'detected-frontmost-id',
+      displayName: 'Cursor',
+      platform: 'windows',
+      source: 'detected',
+      ...frontmostApp
+    })
+
+    const matchInstruction = createInstructionMatcher({
+      getInstructions: () => settings,
+      getFrontmostApp
+    })
+
+    await expect(matchInstruction()).resolves.toEqual({
+      ruleId: 'rule-coding',
+      name: 'Coding',
+      customInstructions: 'Prefer concise technical language.',
+      autoEnter: true
+    })
+  })
 })

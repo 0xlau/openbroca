@@ -20,7 +20,9 @@ export class PostRecordingPipeline {
         provider: import('@openbroca/providers/llm').LLMProvider
         model: string
       }>
-      resolveMatchedInstruction?: () => Promise<MatchedInstructionRule | null>
+      resolveMatchedInstruction?: (
+        frontmostAppSnapshot?: CapturedRecording['frontmostAppSnapshot']
+      ) => Promise<MatchedInstructionRule | null>
       autoEnterService?: AutoEnterService
     }
   ) {}
@@ -173,7 +175,9 @@ export class PostRecordingPipeline {
     let matchedInstruction: MatchedInstructionRule | null = null
     if (this.deps.resolveMatchedInstruction) {
       try {
-        matchedInstruction = await this.deps.resolveMatchedInstruction()
+        matchedInstruction = await this.deps.resolveMatchedInstruction(
+          recording.frontmostAppSnapshot ?? null
+        )
         console.debug('[voice-debug] matched instruction resolved', {
           ruleId: matchedInstruction?.ruleId ?? null,
           autoEnter: matchedInstruction?.autoEnter ?? false

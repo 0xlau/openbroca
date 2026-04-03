@@ -1,4 +1,5 @@
 import type { AudioCaptureSource, CaptureOptions } from '@openbroca/audio-capture'
+import type { AppIdentity } from '@openbroca/app-identity'
 import type { ListeningSessionState } from '../shared/listening-session-state'
 import type { CapturedRecording } from './recording-types'
 
@@ -8,6 +9,7 @@ interface SessionOptions {
 
 interface ListeningSessionOptions {
   onRecordingComplete?: (recording: CapturedRecording) => Promise<void> | void
+  getFrontmostAppSnapshot?: () => Promise<AppIdentity | null>
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -157,9 +159,20 @@ class ListeningSessionManager {
       const endedAt = new Date().toISOString()
       const endedAtMs = Date.now()
       const durationMs = Math.max(0, endedAtMs - startedAtMs)
+      let frontmostAppSnapshot: AppIdentity | null = null
+      if (this.options.getFrontmostAppSnapshot) {
+        try {
+          frontmostAppSnapshot = await this.options.getFrontmostAppSnapshot()
+        } catch (error) {
+          console.debug('[voice-debug] failed to capture frontmost app snapshot', {
+            error: normalizeErrorMessage(error)
+          })
+        }
+      }
       console.debug('[voice-debug] dispatching completed recording', {
         chunkCount: chunks.length,
-        durationMs
+        durationMs,
+        frontmostAppId: frontmostAppSnapshot?.id ?? null
       })
 
       void Promise.resolve(
@@ -168,7 +181,8 @@ class ListeningSessionManager {
           chunks,
           startedAt,
           endedAt,
-          durationMs
+          durationMs,
+          frontmostAppSnapshot
         })
       ).catch((completionError) => {
         console.error('[listening-session] recording completion failed', completionError)

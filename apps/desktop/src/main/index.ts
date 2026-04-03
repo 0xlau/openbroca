@@ -55,11 +55,16 @@ const discoveryClient =
         listDetectedApps: listMacApps,
         getDetectedFrontmostApp: getMacFrontmostApp
       })
-    : createDiscoveryClient({
+    : process.platform === 'win32'
+      ? createDiscoveryClient({
         platform: 'windows',
         listDetectedApps: listWindowsApps,
         getDetectedFrontmostApp: getWindowsFrontmostApp
       })
+      : {
+          listApps: async () => [],
+          getFrontmostApp: async () => null
+        }
 const appIdentityService = new AppIdentityService({
   listApps: () => discoveryClient.listApps(),
   getFrontmostApp: () => discoveryClient.getFrontmostApp(),
@@ -92,6 +97,7 @@ const postRecordingPipeline = new PostRecordingPipeline({
   autoEnterService
 })
 const listeningSession = new ListeningSessionManager(captureSource, {
+  getFrontmostAppSnapshot: () => appIdentityService.getFrontmostApp(),
   onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
 })
 

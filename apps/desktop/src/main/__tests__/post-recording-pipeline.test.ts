@@ -285,6 +285,85 @@ describe('PostRecordingPipeline', () => {
     expect(triggerAutoEnter).not.toHaveBeenCalled()
   })
 
+  test('resolves matched instruction from recording frontmost snapshot', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-snapshot' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/snapshot.wav',
+        fileName: 'snapshot.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const resolveMatchedInstruction = vi.fn(async (app: { id?: string } | null) => {
+      if (app?.id !== 'com.snapshot.app') {
+        return null
+      }
+      return {
+        ruleId: 'rule-snapshot',
+        name: 'Snapshot Rule',
+        customInstructions: 'Use snapshot instruction.',
+        autoEnter: false
+      }
+    })
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000,
+      frontmostAppSnapshot: {
+        id: 'com.snapshot.app',
+        displayName: 'Snapshot',
+        platform: 'macos',
+        bundleId: 'com.snapshot.bundle',
+        source: 'detected'
+      }
+    } as never)
+
+    expect(resolveMatchedInstruction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'com.snapshot.app',
+        bundleId: 'com.snapshot.bundle'
+      })
+    )
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(llmRequest?.messages[0]?.content).toContain('Use snapshot instruction.')
+  })
+
   test('does not trigger auto enter when llm stage fails after request construction', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-auto-enter-llm-failure' })),

@@ -1,4 +1,5 @@
 import type { AudioFormat } from '@openbroca/audio-capture'
+import type { AppIdentity } from '@openbroca/app-identity'
 
 export interface CapturedRecording {
   format: AudioFormat
@@ -6,6 +7,7 @@ export interface CapturedRecording {
   startedAt: string
   endedAt: string
   durationMs: number
+  frontmostAppSnapshot?: AppIdentity | null
 }
 
 export interface StoredRecording {
