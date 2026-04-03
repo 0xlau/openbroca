@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
+import { normalizeInstructionsSettings } from '../../../shared/instructions'
 import { publicProcedure, router } from '../trpc'
 
 const allowedStoreKeys = new Set([
@@ -23,6 +24,14 @@ function assertAllowedStoreKey(key: string): asserts key is AllowedStoreKey {
   }
 }
 
+function normalizeStoreValue(key: AllowedStoreKey, value: unknown): unknown {
+  if (key === 'instructions') {
+    return normalizeInstructionsSettings(value)
+  }
+
+  return value
+}
+
 export const storeRouter = router({
   get: publicProcedure.input(z.object({ key: z.string() })).query(({ input, ctx }) => {
     assertAllowedStoreKey(input.key)
@@ -33,7 +42,7 @@ export const storeRouter = router({
     .input(z.object({ key: z.string(), value: z.unknown() }))
     .mutation(({ input, ctx }) => {
       assertAllowedStoreKey(input.key)
-      ctx.store.set(input.key, input.value)
+      ctx.store.set(input.key, normalizeStoreValue(input.key, input.value))
     }),
 
   delete: publicProcedure.input(z.object({ key: z.string() })).mutation(({ input, ctx }) => {

@@ -86,4 +86,109 @@ describe('storeRouter', () => {
       ]
     })
   })
+
+  test('normalizes malformed instructions payloads on write while preserving generic writes for other keys', async () => {
+    const store = new MemoryStore()
+    const caller = storeRouter.createCaller({ store } as unknown as Context)
+
+    await caller.set({ key: 'settings', value: { theme: 'system', nested: { preserve: true } } })
+    await caller.set({
+      key: 'instructions',
+      value: {
+        rules: [
+          {
+            id: 'rule-coding',
+            name: '  Coding  ',
+            activationApps: [
+              {
+                id: 'com.todesktop.230313mzl4w4u92',
+                displayName: 'Cursor',
+                platform: 'macos',
+                source: 'detected'
+              },
+              {
+                id: '   ',
+                displayName: 'Invalid App',
+                platform: 'macos',
+                source: 'detected'
+              }
+            ],
+            customInstructions: 123,
+            autoEnter: 'truthy'
+          },
+          {
+            id: 'rule-empty',
+            name: '   ',
+            activationApps: [
+              {
+                id: 'company.thebrowser.Browser',
+                displayName: 'Arc',
+                platform: 'macos',
+                source: 'detected'
+              }
+            ],
+            customInstructions: 'Should be dropped',
+            autoEnter: true
+          },
+          {
+            id: 'rule-writing',
+            name: 'Writing',
+            activationApps: [
+              {
+                id: 'com.todesktop.230313mzl4w4u92',
+                displayName: 'Cursor Duplicate',
+                platform: 'macos',
+                source: 'detected'
+              },
+              {
+                id: 'company.thebrowser.Browser',
+                displayName: 'Arc',
+                platform: 'macos',
+                source: 'detected'
+              }
+            ],
+            customInstructions: 'Summarize clearly',
+            autoEnter: 0
+          }
+        ]
+      }
+    })
+
+    await expect(caller.get({ key: 'settings' })).resolves.toEqual({
+      theme: 'system',
+      nested: { preserve: true }
+    })
+    await expect(caller.get({ key: 'instructions' })).resolves.toEqual({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding',
+          activationApps: [
+            {
+              id: 'com.todesktop.230313mzl4w4u92',
+              displayName: 'Cursor',
+              platform: 'macos',
+              source: 'detected'
+            }
+          ],
+          customInstructions: '',
+          autoEnter: true
+        },
+        {
+          id: 'rule-writing',
+          name: 'Writing',
+          activationApps: [
+            {
+              id: 'company.thebrowser.Browser',
+              displayName: 'Arc',
+              platform: 'macos',
+              source: 'detected'
+            }
+          ],
+          customInstructions: 'Summarize clearly',
+          autoEnter: false
+        }
+      ]
+    })
+  })
 })
