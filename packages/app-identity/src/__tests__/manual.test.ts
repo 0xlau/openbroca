@@ -20,4 +20,14 @@ describe('normalizeManualAppIdentity', () => {
       source: 'manual'
     })
   })
+
+  test('throws when stableId is blank', () => {
+    expect(() =>
+      normalizeManualAppIdentity({
+        displayName: 'Empty Id',
+        platform: 'macos',
+        stableId: '   '
+      })
+    ).toThrow('Manual app entry requires a stable id')
+  })
 })

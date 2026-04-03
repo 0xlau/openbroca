@@ -49,4 +49,35 @@ describe('normalizeDetectedAppIdentity', () => {
     expect(identities).toHaveLength(1)
     expect(identities[0]?.id).toBe('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
   })
+
+  test('prefers stable ids when mixed observations share a path', () => {
+    const identities = dedupeAppIdentities([
+      normalizeDetectedAppIdentity({
+        displayName: 'Drive',
+        platform: 'windows',
+        path: 'C:\\Program Files\\Drive\\drive.exe',
+        source: 'detected'
+      }),
+      normalizeDetectedAppIdentity({
+        displayName: 'Drive',
+        platform: 'windows',
+        path: 'C:\\Program Files\\Drive\\drive.exe',
+        aumid: 'Contoso.Drive_123!App',
+        source: 'detected'
+      })
+    ])
+
+    expect(identities).toHaveLength(1)
+    expect(identities[0]?.id).toBe('Contoso.Drive_123!App')
+  })
+
+  test('throws when no stable id is available', () => {
+    expect(() =>
+      normalizeDetectedAppIdentity({
+        displayName: 'Unknown',
+        platform: 'windows',
+        source: 'detected'
+      })
+    ).toThrow(/Unable to derive stable app id/)
+  })
 })

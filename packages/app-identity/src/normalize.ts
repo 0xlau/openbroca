@@ -33,11 +33,26 @@ export function normalizeDetectedAppIdentity(raw: RawAppIdentity): AppIdentity {
   }
 }
 
+function getCanonicalKey(item: AppIdentity): string {
+  return item.path ?? item.id
+}
+
+function getStabilityScore(item: AppIdentity): number {
+  let score = 0
+  if (item.platform === 'macos' && item.bundleId) score += 10
+  if (item.platform === 'windows' && item.aumid) score += 10
+  if (!!item.id && item.id !== item.path) score += 1
+  return score
+}
+
 export function dedupeAppIdentities(items: AppIdentity[]): AppIdentity[] {
-  const seen = new Set<string>()
-  return items.filter((item) => {
-    if (seen.has(item.id)) return false
-    seen.add(item.id)
-    return true
-  })
+  const map = new Map<string, AppIdentity>()
+  for (const item of items) {
+    const key = getCanonicalKey(item)
+    const existing = map.get(key)
+    if (!existing || getStabilityScore(item) > getStabilityScore(existing)) {
+      map.set(key, item)
+    }
+  }
+  return Array.from(map.values())
 }
