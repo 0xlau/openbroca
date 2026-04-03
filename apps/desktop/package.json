@@ -33,6 +33,7 @@
     "@hugeicons/core-free-icons": "^4.0.0",
     "@hugeicons/react": "^1.1.6",
     "@openbroca/audio-capture": "workspace:*",
+    "@openbroca/app-identity": "workspace:*",
     "@openbroca/providers": "workspace:*",
     "@openbroca/tailwind-config": "workspace:*",
     "@openbroca/ui": "workspace:*",
