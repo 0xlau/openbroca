@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
+import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import type { CompletionChunk } from '@openbroca/providers/llm'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
@@ -12,8 +13,33 @@ import {
   getLLMProviderRuntimeConfig,
   resolveActiveLLMModel,
   resolveActiveLLMProvider,
+  resolveActiveLLMSelection,
   resolveLLMProvider
 } from '../providers/runtime'
+
+const openrouterSdk = vi.hoisted(() => {
+  const modelsListForUser = vi.fn()
+  const chatSend = vi.fn()
+
+  class OpenRouter {
+    models = { listForUser: modelsListForUser }
+    chat = { send: chatSend }
+
+    constructor(_opts: unknown) {}
+  }
+
+  return {
+    OpenRouter,
+    modelsListForUser,
+    chatSend
+  }
+})
+
+vi.mock('@openrouter/sdk', () => {
+  return {
+    OpenRouter: openrouterSdk.OpenRouter
+  }
+})
 
 class MemoryStore {
   private state: Record<string, unknown> = {
@@ -63,6 +89,17 @@ describe('provider runtime resolution', () => {
   beforeEach(() => {
     fetchFn.mockReset()
     vi.stubGlobal('fetch', fetchFn)
+
+    openrouterSdk.modelsListForUser.mockReset()
+    openrouterSdk.modelsListForUser.mockResolvedValue({
+      data: [
+        {
+          id: 'openai/gpt-4.1-mini',
+          name: 'openai/gpt-4.1-mini',
+          contextLength: 128_000
+        }
+      ]
+    })
   })
 
   test('resolves openai-codex from keytar-backed oauth state and can use listModels/generate/complete', async () => {
@@ -337,5 +374,53 @@ describe('provider runtime resolution', () => {
     ).rejects.toThrowError(
       '[provider:not-configured] Select an active LLM provider before requesting runtime access.'
     )
+  })
+
+  test('resolveActiveLLMSelection returns openrouter provider + active model from structured manual settings', async () => {
+    const secureStorage = {
+      setSecret: vi.fn(async () => undefined),
+      getSecret: vi.fn(async () => null),
+      deleteSecret: vi.fn(async () => undefined)
+    } satisfies SecureStorage
+
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        openrouter: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: {
+            apiKey: 'or-key'
+          }
+        }
+      },
+      providerModels: {
+        openrouter: { model: 'openai/gpt-4.1-mini' }
+      },
+      activeProviders: {
+        llm: 'openrouter'
+      },
+      activeModels: {
+        llm: 'openai/gpt-4.1-mini'
+      }
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage,
+      store,
+      providers: {}
+    })
+
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register(openrouterDescriptor)
+
+    const selection = await resolveActiveLLMSelection({
+      llmRegistry,
+      oauthService,
+      store
+    })
+
+    expect(selection.provider.id).toBe('openrouter')
+    expect(selection.model).toBe('openai/gpt-4.1-mini')
   })
 })

@@ -2,12 +2,37 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { z } from 'zod'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
+import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import { ASRProviderRegistry } from '@openbroca/providers/asr'
 import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
 import type { Context } from '../trpc/context'
 import { providersRouter } from '../trpc/routers/providers'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
+
+const openrouterSdk = vi.hoisted(() => {
+  const modelsListForUser = vi.fn()
+  const chatSend = vi.fn()
+
+  class OpenRouter {
+    models = { listForUser: modelsListForUser }
+    chat = { send: chatSend }
+
+    constructor(_opts: unknown) {}
+  }
+
+  return {
+    OpenRouter,
+    modelsListForUser,
+    chatSend
+  }
+})
+
+vi.mock('@openrouter/sdk', () => {
+  return {
+    OpenRouter: openrouterSdk.OpenRouter
+  }
+})
 
 class MemoryStore {
   private state: Record<string, unknown> = {
@@ -43,6 +68,17 @@ describe('providersRouter', () => {
   beforeEach(() => {
     fetchFn.mockReset()
     vi.stubGlobal('fetch', fetchFn)
+
+    openrouterSdk.modelsListForUser.mockReset()
+    openrouterSdk.modelsListForUser.mockResolvedValue({
+      data: [
+        {
+          id: 'openai/gpt-4.1-mini',
+          name: 'openai/gpt-4.1-mini',
+          contextLength: 128_000
+        }
+      ]
+    })
   })
 
   test('listModels resolves openai-codex from oauth state in main', async () => {
@@ -133,5 +169,45 @@ describe('providersRouter', () => {
 
     expect(deepgram?.capabilities).toEqual({ nonStreaming: true, streaming: true })
     expect(mock?.capabilities).toEqual({ nonStreaming: true, streaming: false })
+  })
+
+  test('listModels resolves openrouter from manual apiKey provider settings', async () => {
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register(openrouterDescriptor)
+
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        openrouter: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: {
+            apiKey: 'or-key'
+          }
+        }
+      },
+      providerModels: {},
+      activeProviders: {},
+      activeModels: {}
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const models = await caller.listModels({ providerId: 'openrouter' })
+    expect(models[0]?.id).toBeTruthy()
   })
 })
