@@ -410,4 +410,40 @@ describe('Instructions', () => {
       ]
     })
   })
+
+  test('rolls back optimistic delete when persistence fails', async () => {
+    instructionsStoreMock = createInstructionsStore({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding focus',
+          activationApps: [detectedApps[0]],
+          customInstructions: 'Prefer concise technical language.',
+          autoEnter: true
+        }
+      ]
+    })
+
+    vi.mocked(instructionsStoreMock.getState().replace).mockImplementationOnce(async (nextData) => {
+      instructionsStoreMock.setState((state) => ({
+        ...state,
+        data: nextData
+      }))
+
+      throw new Error('persist failed')
+    })
+
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Coding focus' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('persist failed')).toBeTruthy()
+    })
+
+    expect(screen.getByText('Coding focus')).toBeTruthy()
+    expect(instructionsStoreMock.getState().data.rules).toHaveLength(1)
+  })
 })

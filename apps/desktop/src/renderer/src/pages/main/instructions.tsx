@@ -63,6 +63,13 @@ function toSortedDetectedApps(apps: AppIdentity[] | undefined): AppIdentity[] {
   return [...apps].sort((left, right) => left.displayName.localeCompare(right.displayName))
 }
 
+function cloneRulesSnapshot(rules: InstructionRule[]): InstructionRule[] {
+  return rules.map((rule) => ({
+    ...rule,
+    activationApps: rule.activationApps.map((app) => ({ ...app }))
+  }))
+}
+
 export const Instructions: React.FC = () => {
   const { data, isHydrated, replace } = useStore(instructionsStore)
   const [editorState, setEditorState] = React.useState<EditorState>(INITIAL_EDITOR_STATE)
@@ -97,16 +104,23 @@ export const Instructions: React.FC = () => {
       customInstructions: value.customInstructions,
       autoEnter: value.autoEnter
     }
+    const previousRules = cloneRulesSnapshot(instructionsStore.getState().data.rules)
 
     try {
-      const currentRules = instructionsStore.getState().data.rules
       const nextRules = editingRuleId
-        ? currentRules.map((rule) => (rule.id === editingRuleId ? nextRule : rule))
-        : [...currentRules, nextRule]
+        ? previousRules.map((rule) => (rule.id === editingRuleId ? nextRule : rule))
+        : [...previousRules, nextRule]
 
       await replace({ rules: nextRules })
       setEditorState(INITIAL_EDITOR_STATE)
     } catch (error) {
+      instructionsStore.setState((state) => ({
+        ...state,
+        data: {
+          ...state.data,
+          rules: previousRules
+        }
+      }))
       setEditorErrorMessage(
         error instanceof Error ? error.message : 'Failed to save instruction. Please try again.'
       )
@@ -122,13 +136,20 @@ export const Instructions: React.FC = () => {
 
     setIsPersisting(true)
     setPageErrorMessage(null)
+    const previousRules = cloneRulesSnapshot(instructionsStore.getState().data.rules)
 
     try {
-      const currentRules = instructionsStore.getState().data.rules
       await replace({
-        rules: currentRules.filter((rule) => rule.id !== ruleId)
+        rules: previousRules.filter((rule) => rule.id !== ruleId)
       })
     } catch (error) {
+      instructionsStore.setState((state) => ({
+        ...state,
+        data: {
+          ...state.data,
+          rules: previousRules
+        }
+      }))
       setPageErrorMessage(
         error instanceof Error ? error.message : 'Failed to delete instruction. Please try again.'
       )
