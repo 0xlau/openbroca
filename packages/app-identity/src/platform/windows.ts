@@ -65,7 +65,7 @@ async function loadStartApps(): Promise<StartAppRecord[]> {
 export async function listWindowsApps(): Promise<RawAppIdentity[]> {
   const startApps = await loadStartApps()
   const aumidByName = buildAumidByName(startApps)
-  const runningApps: RawAppIdentity[] = (await openWindows())
+  return (await openWindows())
     .filter((item): item is typeof item & { owner: NonNullable<typeof item.owner> } => Boolean(item.owner?.path))
     .map((item) => ({
       displayName: item.owner.name ?? item.title ?? item.owner.path.split('\\').pop() ?? item.owner.path,
@@ -74,18 +74,6 @@ export async function listWindowsApps(): Promise<RawAppIdentity[]> {
       aumid: resolveAumid([item.owner.name, item.title], aumidByName),
       source: 'detected'
     }))
-
-  return [
-    ...runningApps,
-    ...startApps
-      .filter((item) => item.AppID)
-      .map((item) => ({
-        displayName: item.Name ?? item.AppID ?? 'Unknown App',
-        platform: 'windows' as const,
-        aumid: item.AppID,
-        source: 'detected' as const
-      }))
-  ]
 }
 
 export async function getWindowsFrontmostApp(): Promise<RawAppIdentity | null> {

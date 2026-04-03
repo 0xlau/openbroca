@@ -194,24 +194,53 @@ describe('windows identity alignment', () => {
     const apps = await listWindowsApps()
     const frontmost = await getWindowsFrontmostApp()
 
-    expect(apps).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          displayName: 'ChatGPT',
-          path: 'C:\\Program Files\\OpenAI\\ChatGPT\\ChatGPT.exe',
-          aumid: 'OpenAI.ChatGPT_2p2nqsd0c76g0!ChatGPT'
-        }),
-        expect.objectContaining({
-          displayName: 'ChatGPT',
-          aumid: 'OpenAI.ChatGPT_2p2nqsd0c76g0!ChatGPT',
-          source: 'detected'
-        })
-      ])
-    )
+    expect(apps).toEqual([
+      expect.objectContaining({
+        displayName: 'ChatGPT',
+        path: 'C:\\Program Files\\OpenAI\\ChatGPT\\ChatGPT.exe',
+        aumid: 'OpenAI.ChatGPT_2p2nqsd0c76g0!ChatGPT',
+        source: 'detected'
+      })
+    ])
+    expect(apps.every((item) => Boolean(item.path))).toBe(true)
     expect(frontmost).toMatchObject({
       displayName: 'ChatGPT',
       path: 'C:\\Program Files\\OpenAI\\ChatGPT\\ChatGPT.exe',
       aumid: 'OpenAI.ChatGPT_2p2nqsd0c76g0!ChatGPT'
     })
+  })
+
+  test('suppresses start-menu entries that are not deterministically mappable to running app identities', async () => {
+    mockStartApps([
+      { Name: 'ChatGPT', AppID: 'OpenAI.ChatGPT_2p2nqsd0c76g0!ChatGPT' },
+      { Name: 'Unmatched Tool', AppID: 'Contoso.Tool_123!App' }
+    ])
+    openWindowsMock.mockResolvedValue([
+      {
+        platform: 'windows',
+        title: 'ChatGPT',
+        id: 1,
+        bounds: { x: 0, y: 0, width: 800, height: 600 },
+        contentBounds: { x: 0, y: 0, width: 800, height: 600 },
+        memoryUsage: 1,
+        owner: {
+          name: 'ChatGPT',
+          processId: 101,
+          path: 'C:\\Program Files\\OpenAI\\ChatGPT\\ChatGPT.exe'
+        }
+      }
+    ])
+
+    const apps = await listWindowsApps()
+
+    expect(apps).toEqual([
+      expect.objectContaining({
+        displayName: 'ChatGPT',
+        path: 'C:\\Program Files\\OpenAI\\ChatGPT\\ChatGPT.exe',
+        aumid: 'OpenAI.ChatGPT_2p2nqsd0c76g0!ChatGPT'
+      })
+    ])
+    expect(apps.some((item) => item.aumid === 'Contoso.Tool_123!App')).toBe(false)
+    expect(apps.every((item) => Boolean(item.path))).toBe(true)
   })
 })
