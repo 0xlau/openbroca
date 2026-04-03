@@ -98,6 +98,35 @@ describe('OpenRouterLLMProvider', () => {
     })
   })
 
+  it('generate() extracts text from structured assistant content arrays', async () => {
+    chatSendMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: [
+              { type: 'text', text: 'hello ' },
+              { type: 'text', text: 'world' },
+              { type: 'image', imageUrl: 'https://example.com/x.png' },
+            ],
+          },
+          finishReason: 'stop',
+        },
+      ],
+    })
+
+    const provider = new OpenRouterLLMProvider({ apiKey: 'or-key' })
+    const result = await provider.generate({
+      model: 'openai/gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+
+    expect(result).toEqual({
+      content: 'hello world',
+      finishReason: 'stop',
+      usage: undefined,
+    })
+  })
+
   it('complete() yields streaming deltas and a terminal chunk', async () => {
     async function* stream() {
       yield {
@@ -166,7 +195,10 @@ describe('OpenRouterLLMProvider', () => {
       }
     }
 
-    await expect(consume()).rejects.toThrow('unauthorized')
+    await expect(consume()).rejects.toMatchObject({
+      message: expect.stringContaining('unauthorized'),
+      code: 401,
+    })
   })
 
   it('unconfigured provider usage throws ConfigurationError', async () => {
@@ -202,4 +234,3 @@ describe('OpenRouterLLMProvider', () => {
     })).rejects.toBe(genErr)
   })
 })
-

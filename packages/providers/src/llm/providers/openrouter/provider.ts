@@ -19,6 +19,35 @@ const normalizeFinishReason = (reason: unknown): CompletionChunk['finishReason']
   return null
 }
 
+const extractAssistantText = (content: unknown): string => {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (part && typeof part === 'object') {
+          const maybeType = Reflect.get(part as object, 'type')
+          const maybeText = Reflect.get(part as object, 'text')
+
+          if (maybeType === 'text' && typeof maybeText === 'string') {
+            return maybeText
+          }
+
+          // Be permissive: some SDK variants may omit `type` but still carry a text field.
+          if (typeof maybeText === 'string') {
+            return maybeText
+          }
+        }
+        return ''
+      })
+      .join('')
+  }
+
+  return ''
+}
+
 export class OpenRouterLLMProvider implements LLMProvider {
   readonly id = 'openrouter'
   readonly displayName = 'OpenRouter'
@@ -96,7 +125,7 @@ export class OpenRouterLLMProvider implements LLMProvider {
     }, { signal: request.signal })
 
     const choice = response.choices[0]
-    const content = typeof choice?.message?.content === 'string' ? choice.message.content : ''
+    const content = extractAssistantText(choice?.message?.content)
     const finishReason = normalizeFinishReason(choice?.finishReason) ?? 'stop'
 
     return {
@@ -130,7 +159,10 @@ export class OpenRouterLLMProvider implements LLMProvider {
     for await (const chunk of stream) {
       if (chunk.error) {
         // The SDK surfaced a structured error object within the stream.
-        throw new Error(chunk.error.message)
+        const error = new Error(`[OpenRouter ${chunk.error.code}] ${chunk.error.message}`)
+        ;(error as any).code = chunk.error.code
+        ;(error as any).openrouter = chunk.error
+        throw error
       }
 
       for (const choice of chunk.choices) {
