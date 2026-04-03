@@ -4,9 +4,14 @@ import path from 'node:path'
 import { activeWindow, openWindows } from 'get-windows'
 import type { RawAppIdentity } from '../contracts'
 
+const WINDOW_QUERY_OPTIONS = {
+  accessibilityPermission: false,
+  screenRecordingPermission: false
+} as const
+
 export async function listMacApps(): Promise<RawAppIdentity[]> {
   const roots = ['/Applications', path.join(os.homedir(), 'Applications')]
-  const runningApps: RawAppIdentity[] = (await openWindows())
+  const runningApps: RawAppIdentity[] = (await openWindows(WINDOW_QUERY_OPTIONS))
     .filter((item): item is (typeof item & { owner: NonNullable<typeof item.owner> }) => Boolean(item.owner?.path))
     .map((item) => ({
       displayName: item.owner.name ?? item.title ?? item.owner.path,
@@ -37,7 +42,7 @@ export async function listMacApps(): Promise<RawAppIdentity[]> {
 }
 
 export async function getMacFrontmostApp(): Promise<RawAppIdentity | null> {
-  const window = await activeWindow()
+  const window = await activeWindow(WINDOW_QUERY_OPTIONS)
   if (!window?.owner?.path) return null
 
   return {

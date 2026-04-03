@@ -9,12 +9,20 @@ type ServiceDeps = {
 export class AppIdentityService {
   constructor(private readonly deps: ServiceDeps) {}
 
+  private async resolveIconDataUrl(path?: string): Promise<string | undefined> {
+    try {
+      return await this.deps.resolveIconDataUrl(path)
+    } catch {
+      return undefined
+    }
+  }
+
   async listApps(): Promise<AppIdentity[]> {
     const apps = await this.deps.listApps()
     return Promise.all(
       apps.map(async (item) => ({
         ...item,
-        iconDataUrl: item.iconDataUrl ?? (await this.deps.resolveIconDataUrl(item.path))
+        iconDataUrl: item.iconDataUrl ?? (await this.resolveIconDataUrl(item.path))
       }))
     )
   }
@@ -25,7 +33,7 @@ export class AppIdentityService {
 
     return {
       ...item,
-      iconDataUrl: item.iconDataUrl ?? (await this.deps.resolveIconDataUrl(item.path))
+      iconDataUrl: item.iconDataUrl ?? (await this.resolveIconDataUrl(item.path))
     }
   }
 }
