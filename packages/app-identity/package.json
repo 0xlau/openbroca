@@ -1,0 +1,22 @@
+{
+  "name": "@openbroca/app-identity",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "get-windows": "^9.3.0"
+  },
+  "devDependencies": {
+    "@openbroca/typescript-config": "workspace:*",
+    "@types/node": "^22.19.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

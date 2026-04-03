@@ -1,0 +1,4 @@
+{
+  "extends": "@openbroca/typescript-config/node",
+  "include": ["src/**/*.ts"]
+}
