@@ -67,6 +67,20 @@ const customProviderFixture: ProviderFixture = {
   ]
 }
 
+const openRouterProviderFixture: ProviderFixture = {
+  id: 'openrouter',
+  displayName: 'OpenRouter',
+  description: 'OpenRouter hosted models',
+  icon: null,
+  connectionOptions: [
+    {
+      type: 'apiKey',
+      label: 'API Key',
+      fields: [{ key: 'apiKey', label: 'API Key', input: 'password', required: true }]
+    }
+  ]
+}
+
 const providerStore = createStore<ProviderStoreShape>(() => ({
   data: {
     providers: {},
@@ -621,6 +635,38 @@ describe('Providers page', () => {
         }
       })
     })
+  })
+
+  test('uses dropdown for OpenRouter model settings', async () => {
+    llmProviders = [openRouterProviderFixture]
+    llmModelsByProvider.openrouter = [
+      { id: 'openrouter-1', name: 'OpenRouter Model 1' },
+      { id: 'openrouter-2', name: 'OpenRouter Model 2' }
+    ]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openrouter: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openrouter' }
+          }
+        },
+        providerModels: {},
+        activeProviders: {},
+        activeModels: {}
+      },
+      isHydrated: true
+    })
+
+    await renderProviders()
+
+    fireEvent.click(screen.getByRole('button', { name: /open model settings for openrouter/i }))
+
+    expect(screen.getByRole('combobox')).toBeTruthy()
+    expect(screen.queryByLabelText('Model name')).toBeNull()
   })
 
   test('allows applying a changed saved model for an already-active llm provider', async () => {

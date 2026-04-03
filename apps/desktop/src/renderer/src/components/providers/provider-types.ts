@@ -22,7 +22,7 @@ export type OAuthProviderConnectionOption = Extract<ProviderConnectionOption, { 
 
 export type LLMModelInputMode = 'select' | 'manual'
 
-const dropdownProviderIds = new Set(['openai', 'openai-codex'])
+const dropdownProviderIds = new Set(['openai', 'openai-codex', 'openrouter'])
 
 export function getLLMModelInputMode(providerId: string): LLMModelInputMode {
   return dropdownProviderIds.has(providerId) ? 'select' : 'manual'
