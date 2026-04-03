@@ -164,6 +164,192 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
+  test('does not trigger auto enter when matched instruction has autoEnter disabled', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-auto-enter-disabled' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/auto-enter-disabled.wav',
+        fileName: 'auto-enter-disabled.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnter: false
+      }),
+      autoEnterService: {
+        triggerAutoEnter
+      }
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(triggerAutoEnter).not.toHaveBeenCalled()
+  })
+
+  test('does not trigger auto enter when no matched instruction exists', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-no-matched-instruction' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/no-match.wav',
+        fileName: 'no-match.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue(null),
+      autoEnterService: {
+        triggerAutoEnter
+      }
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(triggerAutoEnter).not.toHaveBeenCalled()
+  })
+
+  test('does not trigger auto enter when llm stage fails after request construction', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-auto-enter-llm-failure' })),
+      update: vi.fn()
+    }
+    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: {
+        save: vi.fn().mockResolvedValue({ audioFilePath: '/recordings/llm-failure.wav' })
+      } as never,
+      resolveActiveASRProvider: vi.fn().mockResolvedValue({
+        id: 'deepgram',
+        displayName: 'Deepgram',
+        isConfigured: () => true,
+        recognize: vi.fn().mockResolvedValue({
+          text: 'raw transcript',
+          segments: [{ text: 'raw transcript', isFinal: true }]
+        })
+      }),
+      resolveActiveLLMSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          isConfigured: () => true,
+          listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+          generate: vi.fn().mockRejectedValue(new Error('upstream 500'))
+        },
+        model: 'gpt-5.2-codex'
+      }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnter: true
+      }),
+      autoEnterService: {
+        triggerAutoEnter
+      }
+    })
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(triggerAutoEnter).not.toHaveBeenCalled()
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-auto-enter-llm-failure',
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'llm',
+        debug: expect.objectContaining({
+          llmRequest: expect.objectContaining({
+            model: 'gpt-5.2-codex'
+          })
+        })
+      })
+    )
+  })
+
   test('uses RecognitionResult text for LLM and stores ASR segments', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-final-only' })),
