@@ -44,7 +44,46 @@ describe('storeRouter', () => {
     const caller = storeRouter.createCaller({ store } as unknown as Context)
 
     await caller.set({ key: 'settings', value: { theme: 'light' } })
+    await caller.set({
+      key: 'instructions',
+      value: {
+        rules: [
+          {
+            id: 'rule-coding',
+            name: 'Coding',
+            activationApps: [
+              {
+                id: 'com.todesktop.230313mzl4w4u92',
+                displayName: 'Cursor',
+                platform: 'macos',
+                source: 'detected'
+              }
+            ],
+            customInstructions: 'Stay concise',
+            autoEnter: true
+          }
+        ]
+      }
+    })
 
     await expect(caller.get({ key: 'settings' })).resolves.toEqual({ theme: 'light' })
+    await expect(caller.get({ key: 'instructions' })).resolves.toEqual({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding',
+          activationApps: [
+            {
+              id: 'com.todesktop.230313mzl4w4u92',
+              displayName: 'Cursor',
+              platform: 'macos',
+              source: 'detected'
+            }
+          ],
+          customInstructions: 'Stay concise',
+          autoEnter: true
+        }
+      ]
+    })
   })
 })

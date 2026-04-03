@@ -5,6 +5,7 @@ import { publicProcedure, router } from '../trpc'
 const allowedStoreKeys = new Set([
   'aboutMe',
   'dictionary',
+  'instructions',
   'providers',
   'settings',
   'microphone',
