@@ -3,7 +3,7 @@ import type { LLMProviderDescriptor } from '../../contracts.ts'
 import { OpenRouterLLMProvider, type OpenRouterConfig } from './provider.ts'
 
 const configSchema = z.object({
-  apiKey: z.string().min(1, 'API key is required')
+  apiKey: z.string().trim().min(1, 'API key is required')
 })
 
 export const openrouterDescriptor: LLMProviderDescriptor<OpenRouterConfig> = {

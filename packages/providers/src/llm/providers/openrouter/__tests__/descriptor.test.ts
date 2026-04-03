@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { ConfigurationError } from '../../../../shared/errors.ts'
+import { OpenRouterLLMProvider } from '../provider.ts'
 import { openrouterDescriptor } from '../index.ts'
 
 describe('openrouterDescriptor', () => {
@@ -33,6 +35,10 @@ describe('openrouterDescriptor', () => {
     expect(config.apiKey).toBe('or-key')
   })
 
+  it('rejects whitespace-only apiKey', () => {
+    expect(() => openrouterDescriptor.configSchema.parse({ apiKey: '   ' })).toThrow()
+  })
+
   it('rejects empty apiKey', () => {
     expect(() => openrouterDescriptor.configSchema.parse({ apiKey: '' })).toThrow()
   })
@@ -41,6 +47,28 @@ describe('openrouterDescriptor', () => {
     const provider = openrouterDescriptor.create({ apiKey: 'or-key' })
     expect(provider.id).toBe('openrouter')
     expect(provider.displayName).toBe('OpenRouter')
+    expect(provider.isConfigured()).toBe(true)
+  })
+})
+
+describe('OpenRouterLLMProvider stub', () => {
+  const provider = new OpenRouterLLMProvider({
+    apiKey: 'or-key'
+  })
+
+  const request = {
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: 'test' }]
+  }
+
+  it('throws ConfigurationError for listModels/generate/complete', async () => {
+    await expect(provider.listModels()).rejects.toBeInstanceOf(ConfigurationError)
+    await expect(provider.generate(request)).rejects.toBeInstanceOf(ConfigurationError)
+    const completeIterator = provider.complete(request)
+    await expect(completeIterator.next()).rejects.toBeInstanceOf(ConfigurationError)
+  })
+
+  it('remains configured with a trimmed apiKey', () => {
     expect(provider.isConfigured()).toBe(true)
   })
 })

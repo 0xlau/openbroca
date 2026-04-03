@@ -14,7 +14,7 @@ export interface OpenRouterConfig {
 export class OpenRouterLLMProvider implements LLMProvider {
   readonly id = 'openrouter'
   readonly displayName = 'OpenRouter'
-  readonly config: OpenRouterConfig
+  private readonly config: OpenRouterConfig
 
   constructor(config: OpenRouterConfig) {
     this.config = config
