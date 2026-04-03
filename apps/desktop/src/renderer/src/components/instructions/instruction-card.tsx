@@ -3,11 +3,12 @@ import type { InstructionRule } from '@renderer/stores/instructions-store'
 
 interface InstructionCardProps {
   rule: InstructionRule
-  onEdit: () => void
-  onDelete: () => void
+  disabled?: boolean
+  onEdit: () => void | Promise<void>
+  onDelete: () => void | Promise<void>
 }
 
-export function InstructionCard({ rule, onEdit, onDelete }: InstructionCardProps) {
+export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: InstructionCardProps) {
   const appCountLabel = `${rule.activationApps.length} ${rule.activationApps.length === 1 ? 'app' : 'apps'}`
   const instructionPreview = rule.customInstructions.trim() || 'No custom instructions.'
 
@@ -16,7 +17,14 @@ export function InstructionCard({ rule, onEdit, onDelete }: InstructionCardProps
       <CardHeader>
         <CardTitle className="truncate">{rule.name}</CardTitle>
         <CardAction className="flex items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" aria-label={`Edit ${rule.name}`} onClick={onEdit}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Edit ${rule.name}`}
+            disabled={disabled}
+            onClick={onEdit}
+          >
             Edit
           </Button>
           <Button
@@ -24,6 +32,7 @@ export function InstructionCard({ rule, onEdit, onDelete }: InstructionCardProps
             variant="ghost"
             size="sm"
             aria-label={`Delete ${rule.name}`}
+            disabled={disabled}
             onClick={onDelete}
           >
             Delete

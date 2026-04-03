@@ -66,6 +66,9 @@ function toSortedDetectedApps(apps: AppIdentity[] | undefined): AppIdentity[] {
 export const Instructions: React.FC = () => {
   const { data, isHydrated, replace } = useStore(instructionsStore)
   const [editorState, setEditorState] = React.useState<EditorState>(INITIAL_EDITOR_STATE)
+  const [isPersisting, setIsPersisting] = React.useState(false)
+  const [editorErrorMessage, setEditorErrorMessage] = React.useState<string | null>(null)
+  const [pageErrorMessage, setPageErrorMessage] = React.useState<string | null>(null)
   const { data: detectedAppsRaw } = trpc.appIdentity.listApps.useQuery()
 
   const detectedApps = React.useMemo(() => toSortedDetectedApps(detectedAppsRaw), [detectedAppsRaw])
@@ -77,27 +80,61 @@ export const Instructions: React.FC = () => {
 
   const mode = editorState.rule ? 'edit' : 'create'
 
-  async function handleSave(value: InstructionEditorValue) {
+  async function handleSave(value: InstructionEditorValue): Promise<void> {
+    if (isPersisting) {
+      return
+    }
+
+    setIsPersisting(true)
+    setEditorErrorMessage(null)
+    setPageErrorMessage(null)
+
+    const editingRuleId = editorState.rule?.id ?? null
     const nextRule: InstructionRule = {
-      id: editorState.rule?.id ?? createRuleId(),
+      id: editingRuleId ?? createRuleId(),
       name: value.name,
       activationApps: value.activationApps,
       customInstructions: value.customInstructions,
       autoEnter: value.autoEnter
     }
 
-    const nextRules = editorState.rule
-      ? data.rules.map((rule) => (rule.id === editorState.rule?.id ? nextRule : rule))
-      : [...data.rules, nextRule]
+    try {
+      const currentRules = instructionsStore.getState().data.rules
+      const nextRules = editingRuleId
+        ? currentRules.map((rule) => (rule.id === editingRuleId ? nextRule : rule))
+        : [...currentRules, nextRule]
 
-    await replace({ rules: nextRules })
-    setEditorState(INITIAL_EDITOR_STATE)
+      await replace({ rules: nextRules })
+      setEditorState(INITIAL_EDITOR_STATE)
+    } catch (error) {
+      setEditorErrorMessage(
+        error instanceof Error ? error.message : 'Failed to save instruction. Please try again.'
+      )
+    } finally {
+      setIsPersisting(false)
+    }
   }
 
   async function handleDelete(ruleId: string) {
-    await replace({
-      rules: data.rules.filter((rule) => rule.id !== ruleId)
-    })
+    if (isPersisting) {
+      return
+    }
+
+    setIsPersisting(true)
+    setPageErrorMessage(null)
+
+    try {
+      const currentRules = instructionsStore.getState().data.rules
+      await replace({
+        rules: currentRules.filter((rule) => rule.id !== ruleId)
+      })
+    } catch (error) {
+      setPageErrorMessage(
+        error instanceof Error ? error.message : 'Failed to delete instruction. Please try again.'
+      )
+    } finally {
+      setIsPersisting(false)
+    }
   }
 
   return (
@@ -110,10 +147,21 @@ export const Instructions: React.FC = () => {
           </TypographyMuted>
         </div>
 
-        <Button type="button" className="shrink-0" onClick={() => setEditorState({ open: true, rule: null })}>
+        <Button
+          type="button"
+          className="shrink-0"
+          disabled={isPersisting}
+          onClick={() => {
+            setEditorErrorMessage(null)
+            setPageErrorMessage(null)
+            setEditorState({ open: true, rule: null })
+          }}
+        >
           New instruction
         </Button>
       </div>
+
+      {pageErrorMessage ? <p className="text-sm text-destructive">{pageErrorMessage}</p> : null}
 
       {!isHydrated ? (
         <TypographyMuted>Loading instructions...</TypographyMuted>
@@ -124,8 +172,13 @@ export const Instructions: React.FC = () => {
               <InstructionCard
                 key={rule.id}
                 rule={rule}
-                onEdit={() => setEditorState({ open: true, rule })}
-                onDelete={() => void handleDelete(rule.id)}
+                disabled={isPersisting}
+                onEdit={() => {
+                  setEditorErrorMessage(null)
+                  setPageErrorMessage(null)
+                  setEditorState({ open: true, rule })
+                }}
+                onDelete={() => handleDelete(rule.id)}
               />
             ))
           ) : (
@@ -139,7 +192,15 @@ export const Instructions: React.FC = () => {
                     </EmptyDescription>
                   </EmptyHeader>
                   <EmptyContent>
-                    <Button type="button" onClick={() => setEditorState({ open: true, rule: null })}>
+                    <Button
+                      type="button"
+                      disabled={isPersisting}
+                      onClick={() => {
+                        setEditorErrorMessage(null)
+                        setPageErrorMessage(null)
+                        setEditorState({ open: true, rule: null })
+                      }}
+                    >
                       Create instruction
                     </Button>
                   </EmptyContent>
@@ -156,12 +217,18 @@ export const Instructions: React.FC = () => {
         rule={editorState.rule}
         detectedApps={detectedApps}
         ownedAppNamesById={ownedAppNamesById}
+        isSubmitting={isPersisting}
+        errorMessage={editorErrorMessage}
         onOpenChange={(open) => {
+          if (isPersisting) {
+            return
+          }
           setEditorState((current) => (open ? current : INITIAL_EDITOR_STATE))
+          if (!open) {
+            setEditorErrorMessage(null)
+          }
         }}
-        onSubmit={(value) => {
-          void handleSave(value)
-        }}
+        onSubmit={handleSave}
       />
     </div>
   )

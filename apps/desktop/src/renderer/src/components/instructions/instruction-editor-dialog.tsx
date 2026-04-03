@@ -33,8 +33,10 @@ interface InstructionEditorDialogProps {
   rule: InstructionRule | null
   detectedApps: AppIdentity[]
   ownedAppNamesById: Record<string, string>
+  isSubmitting: boolean
+  errorMessage: string | null
   onOpenChange: (open: boolean) => void
-  onSubmit: (value: InstructionEditorValue) => void
+  onSubmit: (value: InstructionEditorValue) => Promise<void>
 }
 
 function toDraft(rule: InstructionRule | null): InstructionEditorValue {
@@ -52,6 +54,8 @@ export function InstructionEditorDialog({
   rule,
   detectedApps,
   ownedAppNamesById,
+  isSubmitting,
+  errorMessage,
   onOpenChange,
   onSubmit
 }: InstructionEditorDialogProps) {
@@ -64,7 +68,7 @@ export function InstructionEditorDialog({
     setDraft(toDraft(rule))
   }, [open, rule])
 
-  const canSubmit = Boolean(draft.name.trim()) && draft.activationApps.length > 0
+  const canSubmit = Boolean(draft.name.trim()) && draft.activationApps.length > 0 && !isSubmitting
 
   const dialogTitle = mode === 'create' ? 'Create instruction' : 'Edit instruction'
   const submitLabel = mode === 'create' ? 'Create instruction' : 'Save changes'
@@ -74,13 +78,13 @@ export function InstructionEditorDialog({
       <DialogContent className="sm:max-w-lg">
         <form
           className="flex flex-col gap-5"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault()
             if (!canSubmit) {
               return
             }
 
-            onSubmit({
+            await onSubmit({
               ...draft,
               name: draft.name.trim(),
               customInstructions: draft.customInstructions.trim()
@@ -167,8 +171,16 @@ export function InstructionEditorDialog({
             </Field>
           </FieldGroup>
 
+          {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+
           <DialogFooter>
-            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isSubmitting}
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" size="sm" disabled={!canSubmit}>

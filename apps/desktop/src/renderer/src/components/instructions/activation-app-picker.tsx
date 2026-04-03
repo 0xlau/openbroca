@@ -118,6 +118,7 @@ export function ActivationAppPicker({
                 <CommandItem
                   key={app.id}
                   value={toSearchText(app)}
+                  disabled={isOwnedByOtherRule || isSelected}
                   onSelect={() => {
                     if (isOwnedByOtherRule || isSelected) {
                       return

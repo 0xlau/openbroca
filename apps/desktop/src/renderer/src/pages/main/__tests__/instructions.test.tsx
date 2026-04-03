@@ -12,6 +12,9 @@ type InstructionsStoreState = PersistedStoreState<InstructionsSettings>
 
 let instructionsStoreMock: ReturnType<typeof createInstructionsStore>
 let detectedApps: AppIdentity[] = []
+const { commandItemSpy } = vi.hoisted(() => ({
+  commandItemSpy: vi.fn<(input: { value?: string; disabled?: boolean }) => void>()
+}))
 
 function createInstructionsStore(data: InstructionsSettings) {
   return createStore<InstructionsStoreState>((set, get) => ({
@@ -99,15 +102,23 @@ vi.mock('@openbroca/ui', () => ({
   CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CommandItem: ({
     children,
-    className
+    className,
+    value,
+    disabled
   }: {
     children: React.ReactNode
     className?: string
-  }) => (
-    <div className={className}>
-      {children}
-    </div>
-  ),
+    value?: string
+    disabled?: boolean
+  }) => {
+    commandItemSpy({ value, disabled })
+
+    return (
+      <div className={className} data-value={value} data-disabled={disabled}>
+        {children}
+      </div>
+    )
+  },
   CommandEmpty: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
   CommandSeparator: () => <hr />,
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
@@ -225,6 +236,7 @@ describe('Instructions', () => {
     instructionsStoreMock = createInstructionsStore({
       rules: []
     })
+    commandItemSpy.mockReset()
 
     detectedApps = [
       {
@@ -372,11 +384,18 @@ describe('Instructions', () => {
     expect(screen.getByText('Terminal')).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Terminal writing' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create instruction' }))
+    const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
+    fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
 
     await waitFor(() => {
       expect(instructionsStoreMock.getState().replace).toHaveBeenCalledTimes(1)
     })
+
+    expect(
+      commandItemSpy.mock.calls.some(
+        ([input]) => input.value?.includes('cursor') && input.disabled === true
+      )
+    ).toBe(true)
 
     const nextSettings = vi.mocked(instructionsStoreMock.getState().replace).mock.calls[0]?.[0]
     expect(nextSettings.rules).toHaveLength(2)
