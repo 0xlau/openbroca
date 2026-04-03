@@ -209,7 +209,7 @@ The desktop app will enforce these invariants:
 - each rule must have a non-empty `name`
 - `activationApps` may contain multiple apps
 - an app id may only appear in one rule across the entire store
-- `customInstructions` is required and save is blocked when it is empty after trimming
+- `customInstructions` may be empty and is stored as an empty string when omitted
 - `autoEnter` is stored per rule and only affects behavior when that rule matches
 
 ### Persistence Strategy
