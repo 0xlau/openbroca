@@ -1,5 +1,12 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
+import {
+  createDiscoveryClient,
+  getMacFrontmostApp,
+  getWindowsFrontmostApp,
+  listMacApps,
+  listWindowsApps
+} from '@openbroca/app-identity'
 import { appTrpcRouter } from './trpc/router'
 import { createContext } from './trpc/context'
 import { registerTrpcIpcHandler } from './trpc/ipc-handler'
@@ -16,6 +23,7 @@ import {
   resolveActiveASRProvider,
   resolveActiveLLMSelection
 } from './providers/runtime'
+import { AppIdentityService } from './app-identity/service'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
@@ -55,6 +63,27 @@ const postRecordingPipeline = new PostRecordingPipeline({
 const listeningSession = new ListeningSessionManager(captureSource, {
   onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
 })
+const discoveryClient =
+  process.platform === 'darwin'
+    ? createDiscoveryClient({
+        platform: 'macos',
+        listDetectedApps: listMacApps,
+        getDetectedFrontmostApp: getMacFrontmostApp
+      })
+    : createDiscoveryClient({
+        platform: 'windows',
+        listDetectedApps: listWindowsApps,
+        getDetectedFrontmostApp: getWindowsFrontmostApp
+      })
+const appIdentityService = new AppIdentityService({
+  listApps: () => discoveryClient.listApps(),
+  getFrontmostApp: () => discoveryClient.getFrontmostApp(),
+  resolveIconDataUrl: async (filePath) => {
+    if (!filePath) return undefined
+    const icon = await app.getFileIcon(filePath)
+    return icon.isEmpty() ? undefined : icon.toDataURL()
+  }
+})
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
@@ -71,7 +100,8 @@ app.whenReady().then(() => {
       asrRegistry,
       captureSource,
       oauthService,
-      historyRepository
+      historyRepository,
+      appIdentityService
     )
   )
 

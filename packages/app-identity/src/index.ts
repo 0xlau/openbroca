@@ -1,3 +1,6 @@
 export * from './contracts'
 export * from './normalize'
 export * from './manual'
+export * from './discovery'
+export * from './platform/macos'
+export * from './platform/windows'
