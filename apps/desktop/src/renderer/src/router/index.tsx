@@ -2,6 +2,7 @@ import { AboutMe } from '@renderer/pages/main/about-me'
 import { Dashboard } from '@renderer/pages/main/dashboard'
 import { Dictionary } from '@renderer/pages/main/dictionary'
 import { Brocas } from '@renderer/pages/main/brocas'
+import { Instructions } from '@renderer/pages/main/instructions'
 import { Providers } from '@renderer/pages/main/providers'
 import { MainRoot } from '@renderer/pages/main/main-root'
 import { Skills } from '@renderer/pages/main/skills'
@@ -16,6 +17,7 @@ export const router = createHashRouter([
       { index: true, Component: Dashboard },
       { path: 'providers', Component: Providers },
       { path: 'brocas', Component: Brocas },
+      { path: 'instructions', Component: Instructions },
       { path: 'dictionary', Component: Dictionary },
       { path: 'skills', Component: Skills },
       { path: 'about-me', Component: AboutMe }
