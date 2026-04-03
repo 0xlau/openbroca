@@ -7,8 +7,31 @@ import { createPersistedStore } from './create-persisted-store'
 
 export type { InstructionActivationApp, InstructionRule, InstructionsSettings } from '../../../shared/instructions'
 
-export const instructionsStore = createPersistedStore<InstructionsSettings>({
+const instructionsStoreBase = createPersistedStore<InstructionsSettings>({
   key: 'instructions',
   defaults: defaultInstructionsSettings,
   normalize: normalizeInstructionsSettings
 })
+
+const baseReplace = instructionsStoreBase.getState().replace
+
+async function updateInstructionsSettingsSafely(partial: Partial<InstructionsSettings>): Promise<void> {
+  const current = instructionsStoreBase.getState().data
+  const next = normalizeInstructionsSettings({
+    ...current,
+    ...partial
+  })
+
+  await baseReplace(next)
+}
+
+async function replaceInstructionsSettingsSafely(data: InstructionsSettings): Promise<void> {
+  await baseReplace(normalizeInstructionsSettings(data))
+}
+
+instructionsStoreBase.setState({
+  update: updateInstructionsSettingsSafely,
+  replace: replaceInstructionsSettingsSafely
+})
+
+export const instructionsStore = instructionsStoreBase
