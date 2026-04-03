@@ -6,6 +6,7 @@ import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import { ASRProviderRegistry } from '@openbroca/providers/asr'
 import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
 import type { Context } from '../trpc/context'
+import { llmRegistry as desktopLlmRegistry } from '../providers'
 import { providersRouter } from '../trpc/routers/providers'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
@@ -172,8 +173,9 @@ describe('providersRouter', () => {
   })
 
   test('listModels resolves openrouter from manual apiKey provider settings', async () => {
-    const llmRegistry = new LLMProviderRegistry()
-    llmRegistry.register(openrouterDescriptor)
+    expect(desktopLlmRegistry.listDescriptors().some((d) => d.id === openrouterDescriptor.id)).toBe(
+      true
+    )
 
     const store = new MemoryStore()
     store.set('providers', {
@@ -203,11 +205,13 @@ describe('providersRouter', () => {
 
     const caller = providersRouter.createCaller({
       store,
-      llmRegistry,
+      llmRegistry: desktopLlmRegistry,
       oauthService
     } as unknown as Context)
 
     const models = await caller.listModels({ providerId: 'openrouter' })
-    expect(models[0]?.id).toBeTruthy()
+    expect(models).toEqual([
+      { id: 'openai/gpt-4.1-mini', name: 'openai/gpt-4.1-mini', contextWindow: 128_000 }
+    ])
   })
 })

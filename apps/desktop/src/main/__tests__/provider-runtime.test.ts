@@ -5,6 +5,7 @@ import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import type { CompletionChunk } from '@openbroca/providers/llm'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
+import { llmRegistry as desktopLlmRegistry } from '../providers'
 import {
   getActiveASRProviderId,
   getActiveLLMSelection,
@@ -411,11 +412,12 @@ describe('provider runtime resolution', () => {
       providers: {}
     })
 
-    const llmRegistry = new LLMProviderRegistry()
-    llmRegistry.register(openrouterDescriptor)
+    expect(desktopLlmRegistry.listDescriptors().some((d) => d.id === openrouterDescriptor.id)).toBe(
+      true
+    )
 
     const selection = await resolveActiveLLMSelection({
-      llmRegistry,
+      llmRegistry: desktopLlmRegistry,
       oauthService,
       store
     })
