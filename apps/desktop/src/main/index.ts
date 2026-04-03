@@ -17,16 +17,19 @@ import { shortcutManager } from './shortcut-manager'
 import { RtAudioCaptureSource } from '@openbroca/audio-capture'
 import { ListeningSessionManager } from './listening-session'
 import { HistoryRepository } from './history-repository'
+import { createInstructionMatcher } from './instructions/matcher'
 import { RecordingStorage } from './recording-storage'
 import { PostRecordingPipeline } from './post-recording-pipeline'
 import {
   resolveActiveASRProvider,
   resolveActiveLLMSelection
 } from './providers/runtime'
+import { createAutoEnterService } from './send-key/auto-enter'
 import { AppIdentityService } from './app-identity/service'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
+import { normalizeInstructionsSettings } from '../shared/instructions'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 
@@ -45,24 +48,6 @@ const oauthService = new OAuthService({
 })
 const historyRepository = new HistoryRepository(store)
 const recordingStorage = new RecordingStorage()
-const postRecordingPipeline = new PostRecordingPipeline({
-  historyRepository,
-  recordingStorage,
-  resolveActiveASRProvider: () =>
-    resolveActiveASRProvider({
-      asrRegistry,
-      store
-    }),
-  resolveActiveLLMSelection: () =>
-    resolveActiveLLMSelection({
-      llmRegistry,
-      oauthService,
-      store
-    })
-})
-const listeningSession = new ListeningSessionManager(captureSource, {
-  onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
-})
 const discoveryClient =
   process.platform === 'darwin'
     ? createDiscoveryClient({
@@ -83,6 +68,31 @@ const appIdentityService = new AppIdentityService({
     const icon = await app.getFileIcon(filePath)
     return icon.isEmpty() ? undefined : icon.toDataURL()
   }
+})
+const resolveMatchedInstruction = createInstructionMatcher({
+  getInstructions: () => normalizeInstructionsSettings(store.get('instructions')),
+  getFrontmostApp: () => appIdentityService.getFrontmostApp()
+})
+const autoEnterService = createAutoEnterService()
+const postRecordingPipeline = new PostRecordingPipeline({
+  historyRepository,
+  recordingStorage,
+  resolveActiveASRProvider: () =>
+    resolveActiveASRProvider({
+      asrRegistry,
+      store
+    }),
+  resolveActiveLLMSelection: () =>
+    resolveActiveLLMSelection({
+      llmRegistry,
+      oauthService,
+      store
+    }),
+  resolveMatchedInstruction,
+  autoEnterService
+})
+const listeningSession = new ListeningSessionManager(captureSource, {
+  onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
 })
 
 app.whenReady().then(() => {

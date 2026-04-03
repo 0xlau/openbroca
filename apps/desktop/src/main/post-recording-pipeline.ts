@@ -3,7 +3,9 @@ import type { CompletionRequest } from '@openbroca/providers/llm'
 import type { CapturedRecording } from './recording-types'
 import { buildRecognitionInput } from './audio-resampler'
 import type { HistoryRepository } from './history-repository'
+import type { MatchedInstructionRule } from './instructions/matcher'
 import type { RecordingStorage } from './recording-storage'
+import type { AutoEnterService } from './send-key/auto-enter'
 
 const cleanupPrompt =
   'Clean up the dictated transcript into polished final text without changing intent.'
@@ -18,6 +20,8 @@ export class PostRecordingPipeline {
         provider: import('@openbroca/providers/llm').LLMProvider
         model: string
       }>
+      resolveMatchedInstruction?: () => Promise<MatchedInstructionRule | null>
+      autoEnterService?: AutoEnterService
     }
   ) {}
 
@@ -166,9 +170,51 @@ export class PostRecordingPipeline {
       return
     }
 
+    let matchedInstruction: MatchedInstructionRule | null = null
+    if (this.deps.resolveMatchedInstruction) {
+      try {
+        matchedInstruction = await this.deps.resolveMatchedInstruction()
+        console.debug('[voice-debug] matched instruction resolved', {
+          ruleId: matchedInstruction?.ruleId ?? null,
+          autoEnter: matchedInstruction?.autoEnter ?? false
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.debug('[voice-debug] matched instruction resolution failed', {
+          message
+        })
+      }
+    }
+    const matchedInstructionDebug = matchedInstruction
+      ? {
+          ruleId: matchedInstruction.ruleId,
+          name: matchedInstruction.name,
+          autoEnter: matchedInstruction.autoEnter,
+          customInstructions: matchedInstruction.customInstructions
+        }
+      : null
+
     let llmProvider: import('@openbroca/providers/llm').LLMProvider
     let llmModel = ''
     let llmRequest: CompletionRequest | undefined
+    const buildLLMRequestDebug = (): Record<string, unknown> | undefined => {
+      if (llmRequest) {
+        return {
+          model: llmRequest.model,
+          messages: llmRequest.messages,
+          matchedInstruction: matchedInstructionDebug
+        }
+      }
+
+      if (llmModel || matchedInstructionDebug) {
+        return {
+          ...(llmModel ? { model: llmModel } : {}),
+          matchedInstruction: matchedInstructionDebug
+        }
+      }
+
+      return undefined
+    }
     try {
       pushTimeline('llm', 'started')
       const llmSelection = await this.deps.resolveActiveLLMSelection()
@@ -197,6 +243,7 @@ export class PostRecordingPipeline {
           asrSegments,
           asrRequest,
           asrResponseSummary: { segmentCount: asrSegments.length },
+          llmRequest: buildLLMRequestDebug(),
           errors: [...errors],
           timeline: [...timeline]
         }
@@ -205,12 +252,17 @@ export class PostRecordingPipeline {
     }
 
     try {
+      const customInstructions = matchedInstruction?.customInstructions.trim()
+      const systemPrompt = customInstructions
+        ? `${cleanupPrompt}\n\nMatched app instructions:\n${customInstructions}`
+        : cleanupPrompt
+
       llmRequest = {
         model: llmModel,
         messages: [
           {
             role: 'system',
-            content: cleanupPrompt
+            content: systemPrompt
           },
           {
             role: 'user',
@@ -227,12 +279,50 @@ export class PostRecordingPipeline {
         contentLength: result.content.length
       })
       pushTimeline('llm', 'completed')
+
+      const autoEnterRequested = matchedInstruction?.autoEnter === true
+      let autoEnterSummary: Record<string, unknown> = {
+        requested: autoEnterRequested,
+        triggered: false
+      }
+      if (autoEnterRequested) {
+        if (this.deps.autoEnterService) {
+          try {
+            await this.deps.autoEnterService.triggerAutoEnter()
+            autoEnterSummary = {
+              requested: true,
+              triggered: true
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            autoEnterSummary = {
+              requested: true,
+              triggered: false,
+              failureMessage: message
+            }
+            console.debug('[voice-debug] auto enter trigger failed', {
+              message
+            })
+          }
+        } else {
+          autoEnterSummary = {
+            requested: true,
+            triggered: false,
+            skipped: 'service-unavailable'
+          }
+        }
+      }
+
       this.deps.historyRepository.update(record.id, {
         status: 'completed',
         finalText: result.content,
         debug: {
-          llmRequest: { model: llmModel, messages: llmRequest.messages },
-          llmResponseSummary: { finishReason: result.finishReason },
+          llmRequest: buildLLMRequestDebug(),
+          llmResponseSummary: {
+            finishReason: result.finishReason,
+            matchedInstruction: matchedInstructionDebug,
+            autoEnter: autoEnterSummary
+          },
           tokenUsage: result.usage,
           timeline: [...timeline]
         }
@@ -254,11 +344,7 @@ export class PostRecordingPipeline {
           asrSegments,
           asrRequest,
           asrResponseSummary: { segmentCount: asrSegments.length },
-          llmRequest: llmRequest
-            ? { model: llmRequest.model, messages: llmRequest.messages }
-            : llmModel
-              ? { model: llmModel }
-              : undefined,
+          llmRequest: buildLLMRequestDebug(),
           errors: [...errors],
           timeline: [...timeline]
         }
