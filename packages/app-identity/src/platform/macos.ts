@@ -1,12 +1,21 @@
 import { readdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { activeWindow } from 'get-windows'
+import { activeWindow, openWindows } from 'get-windows'
 import type { RawAppIdentity } from '../contracts'
 
 export async function listMacApps(): Promise<RawAppIdentity[]> {
   const roots = ['/Applications', path.join(os.homedir(), 'Applications')]
-  const results: RawAppIdentity[] = []
+  const runningApps: RawAppIdentity[] = (await openWindows())
+    .filter((item): item is (typeof item & { owner: NonNullable<typeof item.owner> }) => Boolean(item.owner?.path))
+    .map((item) => ({
+      displayName: item.owner.name ?? item.title ?? item.owner.path,
+      platform: 'macos',
+      bundleId: item.platform === 'macos' ? item.owner.bundleId : undefined,
+      path: item.owner.path,
+      source: 'detected'
+    }))
+  const results: RawAppIdentity[] = [...runningApps]
 
   for (const root of roots) {
     try {

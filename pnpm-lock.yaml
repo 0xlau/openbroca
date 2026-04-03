@@ -50,6 +50,9 @@ importers:
       '@hugeicons/react':
         specifier: ^1.1.6
         version: 1.1.6(react@19.2.4)
+      '@openbroca/app-identity':
+        specifier: workspace:*
+        version: link:../../packages/app-identity
       '@openbroca/audio-capture':
         specifier: workspace:*
         version: link:../../packages/audio-capture
