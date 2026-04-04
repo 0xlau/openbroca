@@ -13,7 +13,7 @@ The immediate product goal is:
 - each instruction can bind multiple activation apps
 - each bound app can belong to only one instruction across the whole app
 - each instruction stores `Custom instructions`
-- each instruction stores an `Auto enter` switch that triggers automatic send behavior when that instruction matches the current frontmost app
+- each instruction stores an `Auto enter` mode that controls automatic send behavior when that instruction matches the current frontmost app
 
 The engineering goal is to split this work into two layers with clear ownership:
 
@@ -60,7 +60,7 @@ The desktop app will provide:
 - uniqueness validation for activation apps
 - the `/instructions` page and its dialogs or forms
 - runtime instruction matching
-- wiring of `customInstructions` and `autoEnter` into the desktop send flow
+- wiring of `customInstructions` and `autoEnterMode` into the desktop send flow
 
 This intentionally keeps product-specific rule semantics out of shared packages.
 
@@ -75,7 +75,7 @@ This intentionally keeps product-specific rule semantics out of shared packages.
 `InstructionRule` stays in `apps/desktop` because:
 
 - its meaning depends on desktop behavior
-- `autoEnter` is a desktop send semantic, not a generic domain concept
+- `autoEnterMode` is a desktop send semantic, not a generic domain concept
 - the uniqueness rule that one app can only belong to one instruction is a product rule for this app
 
 This split avoids a weak shared abstraction that would only mirror current desktop behavior.
@@ -184,7 +184,7 @@ type InstructionRule = {
   name: string
   activationApps: InstructionActivationApp[]
   customInstructions: string
-  autoEnter: boolean
+  autoEnterMode: 'off' | 'enter' | 'mod-enter'
   createdAt: string
   updatedAt: string
 }
@@ -210,7 +210,14 @@ The desktop app will enforce these invariants:
 - `activationApps` may contain multiple apps
 - an app id may only appear in one rule across the entire store
 - `customInstructions` may be empty and is stored as an empty string when omitted
-- `autoEnter` is stored per rule and only affects behavior when that rule matches
+- `autoEnterMode` is stored per rule and only affects behavior when that rule matches
+
+### Migration
+
+The persisted rule schema needs a compatibility migration for the previous boolean model:
+
+- `autoEnter: true` migrates to `autoEnterMode: 'enter'`
+- `autoEnter: false` or missing migrates to `autoEnterMode: 'off'`
 
 ### Persistence Strategy
 
@@ -255,13 +262,14 @@ Recommended direction:
 - a responsive grid container for rule cards
 - each instruction rendered as a card
 - card actions for edit and delete
-- shadcn-based UI primitives for cards, dialogs, form controls, badges, and switches
+- shadcn-based UI primitives for cards, dialogs, form controls, badges, popovers, and switches
+- implementation must use the component wrappers already exposed from `packages/ui`
 
 Each instruction card should show:
 
 - `name`
 - number of bound apps
-- `autoEnter` state
+- `autoEnter` mode state
 - a short preview of `customInstructions`
 
 Each card should support:
@@ -277,15 +285,32 @@ The create and edit experience will include:
 - `Activation apps`
 - `Custom instructions`
 - `Auto enter`
+- `Auto enter send key`
 
-The `Auto enter` field should use the provided product meaning:
+The `Auto enter` controls should use the provided product meaning:
 
 - `Simulates pressing a send key after processing.`
+
+Recommended storage model:
+
+- `off`
+- `enter`
+- `mod-enter`
+
+Recommended UI model:
+
+- one `Switch` that enables or disables auto enter
+- one `Select` shown or enabled only when auto enter is on
+- `Enter`
+- `Cmd/Ctrl + Enter`
+
+The UI may present this as two controls, but the persisted data model should store a single enum value to avoid contradictory state.
 
 ### Activation Apps Selector
 
 The app selector should support:
 
+- a trigger-driven `Popover` interaction instead of an always-expanded list
 - searching detected apps
 - choosing multiple apps
 - showing icon, display name, and secondary identity text
@@ -295,6 +320,13 @@ The app selector should support:
 Apps already assigned to another instruction must be disabled for selection and explained in the UI.
 
 When editing a rule, apps already bound to that same rule remain selectable.
+
+All activation-app-related UI should display app icons when available, including:
+
+- popover list rows
+- selected app chips
+- instruction card summaries
+- manual app selections once added
 
 ### Manual App Entry
 
@@ -323,7 +355,7 @@ At runtime the desktop app will:
 1. resolve the current frontmost app through the shared package
 2. compare the returned `id` against all instruction `activationApps`
 3. select the unique matching rule, if any
-4. pass that rule's `customInstructions` and `autoEnter` into the send pipeline
+4. pass that rule's `customInstructions` and `autoEnterMode` into the send pipeline
 
 Because app ownership is globally unique, runtime matching should resolve to zero or one rule.
 
@@ -336,7 +368,7 @@ type MatchedInstruction = {
   ruleId: string
   name: string
   customInstructions: string
-  autoEnter: boolean
+  autoEnterMode: 'off' | 'enter' | 'mod-enter'
 } | null
 ```
 
@@ -385,7 +417,7 @@ Add tests for:
 - editing a rule
 - preventing selection of apps owned by another rule
 - deleting a rule
-- displaying `autoEnter`
+- displaying `autoEnterMode`
 
 ### Runtime Tests
 
@@ -393,7 +425,7 @@ Add tests for:
 
 - frontmost app resolves no match
 - frontmost app resolves a matching rule
-- matched rule returns `customInstructions` and `autoEnter`
+- matched rule returns `customInstructions` and `autoEnterMode`
 - lookup failures fall back safely
 
 ## Implementation Notes
@@ -409,7 +441,7 @@ The following product choices are now explicit:
 - one instruction can bind multiple apps
 - one app can belong to only one instruction
 - `name` is required on every instruction
-- `autoEnter` is evaluated per matched instruction
+- `autoEnterMode` is evaluated per matched instruction
 - users should primarily choose from detected apps and use manual entry as a fallback
 - app identity discovery belongs in `packages`
 - instruction rules belong in `apps/desktop`
