@@ -275,9 +275,13 @@ vi.mock('@openbroca/ui', () => ({
   }: React.ComponentProps<'button'> & { asChild?: boolean }) => {
     const context = React.useContext(PopoverContext)
     if (asChild && React.isValidElement(children)) {
-      const child = children as React.ReactElement<{ onClick?: React.MouseEventHandler }>
+      const child = children as React.ReactElement<{
+        onClick?: React.MouseEventHandler
+        'data-popover-trigger-owner'?: string
+      }>
       return React.cloneElement(child, {
         ...props,
+        'data-popover-trigger-owner': 'true',
         onClick: (event) => {
           child.props.onClick?.(event)
           context?.setOpen((current) => !current)
@@ -437,7 +441,7 @@ describe('Instructions', () => {
     })
   })
 
-  test('renders activation apps label row with Select apps trigger and no manual action', async () => {
+  test('renders activation apps label row with button-owned Select apps trigger and no manual action', async () => {
     const { Instructions } = await import('../instructions')
 
     render(<Instructions />)
@@ -445,7 +449,8 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
 
     expect(screen.getByText('Activation apps')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Select apps' })).toBeTruthy()
+    const selectAppsButton = screen.getByRole('button', { name: 'Select apps' })
+    expect(selectAppsButton.getAttribute('data-popover-trigger-owner')).toBe('true')
     expect(screen.queryByRole('button', { name: 'Add manual app' })).toBeNull()
   })
 

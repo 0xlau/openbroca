@@ -87,14 +87,6 @@ export function InstructionEditorDialog({
   const canSubmit = Boolean(draft.name.trim()) && draft.activationApps.length > 0 && !isSubmitting
   const autoEnterEnabled = draft.autoEnterMode !== 'off'
   const selectedSendKeyMode = autoEnterEnabled ? draft.autoEnterMode : lastActionableAutoEnterMode
-  const activationAppsTrigger = (
-    <div className="flex items-center justify-between gap-3">
-      <FieldLabel>Activation apps</FieldLabel>
-      <Button type="button" size="xs" variant="outline" className="shrink-0">
-        Select apps
-      </Button>
-    </div>
-  )
 
   const dialogTitle = mode === 'create' ? 'Create instruction' : 'Edit instruction'
   const submitLabel = mode === 'create' ? 'Create instruction' : 'Save changes'
@@ -149,7 +141,6 @@ export function InstructionEditorDialog({
                     value={draft.activationApps}
                     detectedApps={detectedApps}
                     ownedAppNamesById={ownedAppNamesById}
-                    trigger={activationAppsTrigger}
                     onChange={(activationApps) =>
                       setDraft((current) => ({
                         ...current,

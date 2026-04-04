@@ -19,7 +19,6 @@ interface ActivationAppPickerProps {
   value: InstructionActivationApp[]
   detectedApps: AppIdentity[]
   ownedAppNamesById: Record<string, string>
-  trigger: React.ReactElement
   onChange: (apps: InstructionActivationApp[]) => void
 }
 
@@ -61,7 +60,6 @@ export function ActivationAppPicker({
   value,
   detectedApps,
   ownedAppNamesById,
-  trigger,
   onChange
 }: ActivationAppPickerProps) {
   const [isPickerOpen, setIsPickerOpen] = React.useState(false)
@@ -99,83 +97,90 @@ export function ActivationAppPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      <Popover open={isPickerOpen} onOpenChange={handlePickerOpenChange}>
-        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-        <PopoverContent
-          align="start"
-          data-testid="activation-app-popover"
-          className="w-80 max-h-[min(50vh,360px)] overflow-y-auto p-2"
-        >
-          <Command className="rounded-xl border border-border/60 bg-transparent">
-            <CommandInput
-              value={searchTerm}
-              onValueChange={setSearchTerm}
-              placeholder="Search apps"
-              className="h-8"
-            />
-            <CommandList>
-              <CommandEmpty>No apps found.</CommandEmpty>
-              <CommandGroup heading="Detected apps">
-                {filteredApps.map((app) => {
-                  const ownerName = ownedAppNamesById[app.id]
-                  const isOwnedByOtherRule = Boolean(ownerName)
-                  const isSelected = selectedIds.has(app.id)
-                  const addButtonLabel = isOwnedByOtherRule
-                    ? `Add ${app.displayName} (owned by ${ownerName})`
-                    : `Add ${app.displayName}`
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium">Activation apps</p>
+        <Popover open={isPickerOpen} onOpenChange={handlePickerOpenChange}>
+          <PopoverTrigger asChild>
+            <Button type="button" size="xs" variant="outline" className="shrink-0">
+              Select apps
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            data-testid="activation-app-popover"
+            className="w-80 max-h-[min(50vh,360px)] overflow-y-auto p-2"
+          >
+            <Command className="rounded-xl border border-border/60 bg-transparent">
+              <CommandInput
+                value={searchTerm}
+                onValueChange={setSearchTerm}
+                placeholder="Search apps"
+                className="h-8"
+              />
+              <CommandList>
+                <CommandEmpty>No apps found.</CommandEmpty>
+                <CommandGroup heading="Detected apps">
+                  {filteredApps.map((app) => {
+                    const ownerName = ownedAppNamesById[app.id]
+                    const isOwnedByOtherRule = Boolean(ownerName)
+                    const isSelected = selectedIds.has(app.id)
+                    const addButtonLabel = isOwnedByOtherRule
+                      ? `Add ${app.displayName} (owned by ${ownerName})`
+                      : `Add ${app.displayName}`
 
-                  return (
-                    <CommandItem
-                      key={app.id}
-                      value={toSearchText(app)}
-                      disabled={isOwnedByOtherRule || isSelected}
-                      onSelect={() => {
-                        if (isOwnedByOtherRule || isSelected) {
-                          return
-                        }
-                        addApp(app)
-                      }}
-                      className="items-start gap-3 py-2.5"
-                    >
-                      <ActivationAppIcon
-                        app={app}
-                        placeholderTestId={`activation-app-icon-placeholder-${app.id}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{app.displayName}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {isOwnedByOtherRule
-                            ? `Owned by ${ownerName}`
-                            : isSelected
-                              ? 'Already selected'
-                              : getSecondaryIdentity(app)}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="outline"
+                    return (
+                      <CommandItem
+                        key={app.id}
+                        value={toSearchText(app)}
                         disabled={isOwnedByOtherRule || isSelected}
-                        aria-label={addButtonLabel}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
+                        onSelect={() => {
                           if (isOwnedByOtherRule || isSelected) {
                             return
                           }
                           addApp(app)
                         }}
+                        className="items-start gap-3 py-2.5"
                       >
-                        {isSelected ? 'Added' : 'Add'}
-                      </Button>
-                    </CommandItem>
-                  )
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+                        <ActivationAppIcon
+                          app={app}
+                          placeholderTestId={`activation-app-icon-placeholder-${app.id}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{app.displayName}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {isOwnedByOtherRule
+                              ? `Owned by ${ownerName}`
+                              : isSelected
+                                ? 'Already selected'
+                                : getSecondaryIdentity(app)}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          disabled={isOwnedByOtherRule || isSelected}
+                          aria-label={addButtonLabel}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            if (isOwnedByOtherRule || isSelected) {
+                              return
+                            }
+                            addApp(app)
+                          }}
+                        >
+                          {isSelected ? 'Added' : 'Add'}
+                        </Button>
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {value.length > 0 ? (
