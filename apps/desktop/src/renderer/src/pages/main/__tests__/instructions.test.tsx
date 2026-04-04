@@ -88,7 +88,7 @@ vi.mock('@openbroca/ui', () => ({
   CardContent: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
   CardFooter: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
   CardAction: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
-  Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Command: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
   CommandInput: ({
     value,
     onValueChange,
@@ -484,10 +484,11 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
 
     const popover = screen.getByTestId('activation-app-popover')
+    const command = screen.getByTestId('activation-app-popover-command')
     const scrollRegion = screen.getByTestId('activation-app-popover-scroll')
     expect(popover.className).toContain('w-80')
-    expect(popover.className).toContain('max-h-[min(50vh,360px)]')
-    expect(scrollRegion.className).toContain('max-h-[280px]')
+    expect(command.className).toContain('max-h-[min(50vh,360px)]')
+    expect(scrollRegion.className).toContain('flex-1')
     expect(scrollRegion.className).toContain('overflow-y-auto')
   })
 

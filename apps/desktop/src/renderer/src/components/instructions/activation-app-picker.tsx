@@ -126,23 +126,26 @@ export function ActivationAppPicker({
               Select apps
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            data-testid="activation-app-popover"
-            className="w-80 max-h-[min(50vh,360px)] p-2"
+        <PopoverContent
+          align="start"
+          data-testid="activation-app-popover"
+          className="w-80 p-2"
+        >
+          <Command
+            data-testid="activation-app-popover-command"
+            className="max-h-[min(50vh,360px)] rounded-xl border border-border/60 bg-transparent"
           >
-            <Command className="rounded-xl border border-border/60 bg-transparent">
-              <CommandInput
-                value={searchTerm}
-                onValueChange={setSearchTerm}
-                placeholder="Search apps"
-                className="h-8"
-              />
-              <div
-                data-testid="activation-app-popover-scroll"
-                className="max-h-[280px] overflow-y-auto"
-              >
-                <CommandList>
+            <CommandInput
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+              placeholder="Search apps"
+              className="h-8"
+            />
+            <div
+              data-testid="activation-app-popover-scroll"
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
+              <CommandList>
                   <CommandEmpty>No apps found.</CommandEmpty>
                   <CommandGroup heading="Detected apps">
                     {filteredApps.map((app) => {
