@@ -8,13 +8,15 @@ type ExecFile = (
 ) => void
 
 export interface AutoEnterService {
-  triggerAutoEnter: (mode: AutoEnterMode) => Promise<void>
+  triggerAutoEnter: (mode: ActionableAutoEnterMode) => Promise<void>
 }
 
 interface CreateAutoEnterServiceDeps {
   platform?: NodeJS.Platform
   execFile?: ExecFile
 }
+
+export type ActionableAutoEnterMode = Exclude<AutoEnterMode, 'off'>
 
 function runExecFile(execFile: ExecFile, file: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -35,10 +37,6 @@ export function createAutoEnterService(deps: CreateAutoEnterServiceDeps = {}): A
   if (platform === 'darwin') {
     return {
       triggerAutoEnter: (mode) => {
-        if (mode === 'off') {
-          return Promise.resolve()
-        }
-
         const command =
           mode === 'mod-enter'
             ? 'tell application "System Events" to keystroke return using command down'
@@ -52,10 +50,6 @@ export function createAutoEnterService(deps: CreateAutoEnterServiceDeps = {}): A
   if (platform === 'win32') {
     return {
       triggerAutoEnter: (mode) => {
-        if (mode === 'off') {
-          return Promise.resolve()
-        }
-
         const keys = mode === 'mod-enter' ? '^{ENTER}' : '{ENTER}'
         return runExecFile(execFile, 'powershell.exe', [
           '-NoProfile',

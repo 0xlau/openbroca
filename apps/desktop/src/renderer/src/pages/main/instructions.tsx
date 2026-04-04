@@ -63,6 +63,22 @@ function toSortedDetectedApps(apps: AppIdentity[] | undefined): AppIdentity[] {
   return [...apps].sort((left, right) => left.displayName.localeCompare(right.displayName))
 }
 
+function resolveAutoEnterModeForSave(
+  value: InstructionEditorValue,
+  existingRule: InstructionRule | null
+): 'off' | 'enter' | 'mod-enter' {
+  if (!value.autoEnter) {
+    return 'off'
+  }
+
+  // Compatibility bridge: preserve actionable legacy mode until UI supports enum edits.
+  if (existingRule?.autoEnterMode && existingRule.autoEnterMode !== 'off') {
+    return existingRule.autoEnterMode
+  }
+
+  return 'enter'
+}
+
 function cloneRulesSnapshot(rules: InstructionRule[]): InstructionRule[] {
   return rules.map((rule) => ({
     ...rule,
@@ -97,12 +113,14 @@ export const Instructions: React.FC = () => {
     setPageErrorMessage(null)
 
     const editingRuleId = editorState.rule?.id ?? null
+    const autoEnterMode = resolveAutoEnterModeForSave(value, editorState.rule)
     const nextRule: InstructionRule = {
       id: editingRuleId ?? createRuleId(),
       name: value.name,
       activationApps: value.activationApps,
       customInstructions: value.customInstructions,
-      autoEnter: value.autoEnter
+      autoEnterMode,
+      autoEnter: autoEnterMode !== 'off'
     }
     const previousRules = cloneRulesSnapshot(instructionsStore.getState().data.rules)
 

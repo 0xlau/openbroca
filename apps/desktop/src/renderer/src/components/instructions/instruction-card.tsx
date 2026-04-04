@@ -11,6 +11,8 @@ interface InstructionCardProps {
 export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: InstructionCardProps) {
   const appCountLabel = `${rule.activationApps.length} ${rule.activationApps.length === 1 ? 'app' : 'apps'}`
   const instructionPreview = rule.customInstructions.trim() || 'No custom instructions.'
+  // Compatibility bridge until the card is fully enum-driven.
+  const autoEnterEnabled = rule.autoEnterMode ? rule.autoEnterMode !== 'off' : (rule.autoEnter ?? false)
 
   return (
     <Card className="h-full gap-4" size="sm">
@@ -43,8 +45,8 @@ export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: In
       <CardContent className="flex flex-1 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{appCountLabel}</Badge>
-          <Badge variant={rule.autoEnter ? 'default' : 'outline'}>
-            {rule.autoEnter ? 'Auto enter on' : 'Auto enter off'}
+          <Badge variant={autoEnterEnabled ? 'default' : 'outline'}>
+            {autoEnterEnabled ? 'Auto enter on' : 'Auto enter off'}
           </Badge>
         </div>
 

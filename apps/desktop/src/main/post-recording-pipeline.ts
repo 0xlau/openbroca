@@ -291,7 +291,7 @@ export class PostRecordingPipeline {
         requested: autoEnterRequested,
         triggered: false
       }
-      if (autoEnterRequested) {
+      if (autoEnterMode !== 'off') {
         if (this.deps.autoEnterService) {
           try {
             await this.deps.autoEnterService.triggerAutoEnter(autoEnterMode)

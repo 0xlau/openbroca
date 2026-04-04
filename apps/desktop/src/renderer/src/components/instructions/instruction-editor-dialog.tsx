@@ -39,12 +39,25 @@ interface InstructionEditorDialogProps {
   onSubmit: (value: InstructionEditorValue) => Promise<void>
 }
 
+function isAutoEnterEnabled(rule: InstructionRule | null): boolean {
+  if (!rule) {
+    return false
+  }
+
+  // Compatibility bridge until the editor is fully enum-driven.
+  if (rule.autoEnterMode) {
+    return rule.autoEnterMode !== 'off'
+  }
+
+  return rule.autoEnter ?? false
+}
+
 function toDraft(rule: InstructionRule | null): InstructionEditorValue {
   return {
     name: rule?.name ?? '',
     activationApps: rule?.activationApps ?? [],
     customInstructions: rule?.customInstructions ?? '',
-    autoEnter: rule?.autoEnter ?? false
+    autoEnter: isAutoEnterEnabled(rule)
   }
 }
 
