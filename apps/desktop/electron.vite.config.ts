@@ -28,12 +28,14 @@ export default defineConfig({
       // Workspace packages must be bundled so Vite plugins (e.g. svgRawPlugin)
       // can process their imports before Node.js sees them.
       externalizeDeps: {
-        exclude: ['@openbroca/providers', '@openbroca/audio-capture']
+        exclude: ['@openbroca/providers', '@openbroca/audio-capture', '@openbroca/app-identity']
       },
       rollupOptions: {
         // audify is a native addon (.node file) — must stay external even though
         // its parent @openbroca/audio-capture is bundled.
-        external: ['audify']
+        // get-windows also ships native-install machinery we should leave to
+        // Node resolution instead of bundling into the Electron main build.
+        external: ['audify', 'get-windows']
       }
     },
     plugins: [svgRawPlugin]

@@ -1,12 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import {
-  createDiscoveryClient,
-  getMacFrontmostApp,
-  getWindowsFrontmostApp,
-  listMacApps,
-  listWindowsApps
-} from '@openbroca/app-identity'
+import { createDiscoveryClient } from '@openbroca/app-identity/discovery'
+import { getMacFrontmostApp, listMacApps } from '@openbroca/app-identity/platform/macos'
+import { getWindowsFrontmostApp, listWindowsApps } from '@openbroca/app-identity/platform/windows'
 import { appTrpcRouter } from './trpc/router'
 import { createContext } from './trpc/context'
 import { registerTrpcIpcHandler } from './trpc/ipc-handler'
