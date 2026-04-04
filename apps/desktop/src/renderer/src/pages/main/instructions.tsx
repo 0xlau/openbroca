@@ -39,7 +39,10 @@ function createRuleId(): string {
   return `instruction-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function buildOwnedAppNamesById(rules: InstructionRule[], excludedRuleId: string | null): Record<string, string> {
+function buildOwnedAppNamesById(
+  rules: InstructionRule[],
+  excludedRuleId: string | null
+): Record<string, string> {
   const mapping: Record<string, string> = {}
 
   for (const rule of rules) {
@@ -162,7 +165,7 @@ export const Instructions: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           <TypographyH3 className="text-left">Instructions</TypographyH3>
@@ -191,50 +194,56 @@ export const Instructions: React.FC = () => {
       {!isHydrated ? (
         <TypographyMuted>Loading instructions...</TypographyMuted>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="instructions-grid">
-          {data.rules.length > 0 ? (
-            data.rules.map((rule) => (
-              <InstructionCard
-                key={rule.id}
-                rule={rule}
-                disabled={isPersisting}
-                onEdit={() => {
-                  setEditorErrorMessage(null)
-                  setPageErrorMessage(null)
-                  setEditorState({ open: true, rule })
-                }}
-                onDelete={() => handleDelete(rule.id)}
-              />
-            ))
-          ) : (
-            <Card className="md:col-span-2 xl:col-span-3">
-              <CardContent>
-                <Empty className="border border-dashed border-border/70 p-10">
-                  <EmptyHeader>
-                    <EmptyTitle>No instructions yet</EmptyTitle>
-                    <EmptyDescription>
-                      Add your first rule to bind custom instructions to one or more activation apps.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <EmptyContent>
-                    <Button
-                      type="button"
-                      disabled={isPersisting}
-                      onClick={() => {
-                        setEditorErrorMessage(null)
-                        setPageErrorMessage(null)
-                        setDraftRules(cloneRulesSnapshot(data.rules))
-                        setEditorState({ open: true, rule: null })
-                      }}
-                    >
-                      Create instruction
-                    </Button>
-                  </EmptyContent>
-                </Empty>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        <section className="flex flex-1 flex-col">
+          <div
+            className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+            data-testid="instructions-grid"
+          >
+            {data.rules.length > 0 ? (
+              data.rules.map((rule) => (
+                <InstructionCard
+                  key={rule.id}
+                  rule={rule}
+                  disabled={isPersisting}
+                  onEdit={() => {
+                    setEditorErrorMessage(null)
+                    setPageErrorMessage(null)
+                    setEditorState({ open: true, rule })
+                  }}
+                  onDelete={() => handleDelete(rule.id)}
+                />
+              ))
+            ) : (
+              <Card className="md:col-span-2 xl:col-span-3">
+                <CardContent className="flex flex-1">
+                  <Empty className="min-h-90 flex-1 border border-dashed border-border/70 p-10">
+                    <EmptyHeader>
+                      <EmptyTitle>No instructions yet</EmptyTitle>
+                      <EmptyDescription>
+                        Add your first rule to bind custom instructions to one or more activation
+                        apps.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                      <Button
+                        type="button"
+                        disabled={isPersisting}
+                        onClick={() => {
+                          setEditorErrorMessage(null)
+                          setPageErrorMessage(null)
+                          setDraftRules(cloneRulesSnapshot(data.rules))
+                          setEditorState({ open: true, rule: null })
+                        }}
+                      >
+                        Create instruction
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </section>
       )}
 
       <InstructionEditorDialog

@@ -80,15 +80,27 @@ vi.mock('@openbroca/ui', () => ({
     </button>
   ),
   Card: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
-  CardHeader: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
-  CardTitle: ({ children, ...props }: React.ComponentProps<'div'>) => <h3 {...props}>{children}</h3>,
+  CardHeader: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
+  CardTitle: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <h3 {...props}>{children}</h3>
+  ),
   CardDescription: ({ children, ...props }: React.ComponentProps<'div'>) => (
     <p {...props}>{children}</p>
   ),
-  CardContent: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
-  CardFooter: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
-  CardAction: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
-  Command: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
+  CardContent: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
+  CardFooter: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
+  CardAction: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
+  Command: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
   CommandInput: ({
     value,
     onValueChange,
@@ -160,16 +172,28 @@ vi.mock('@openbroca/ui', () => ({
   ),
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
     open ? <div data-testid="dialog-root">{children}</div> : null,
-  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogContent: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div data-slot="dialog-content" {...props}>
+      {children}
+    </div>
+  ),
   DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  Empty: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  EmptyContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  EmptyDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  EmptyHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  EmptyTitle: ({ children }: { children: React.ReactNode }) => <h3>{children}</h3>,
+  Empty: ({ children, ...props }: React.ComponentProps<'div'>) => <div {...props}>{children}</div>,
+  EmptyContent: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
+  EmptyDescription: ({ children, ...props }: React.ComponentProps<'p'>) => (
+    <p {...props}>{children}</p>
+  ),
+  EmptyHeader: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div {...props}>{children}</div>
+  ),
+  EmptyTitle: ({ children, ...props }: React.ComponentProps<'h3'>) => (
+    <h3 {...props}>{children}</h3>
+  ),
   FieldGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Field: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   FieldContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -316,9 +340,17 @@ vi.mock('@openbroca/ui', () => ({
       </button>
     )
   },
-  PopoverContent: ({ children, ...props }: React.ComponentProps<'div'>) => {
+  PopoverContent: ({
+    children,
+    portalContainer,
+    ...props
+  }: React.ComponentProps<'div'> & { portalContainer?: HTMLElement | null }) => {
     const context = React.useContext(PopoverContext)
-    return context?.open ? <div {...props}>{children}</div> : null
+    return context?.open ? (
+      <div data-portal-container={portalContainer ? 'set' : 'unset'} {...props}>
+        {children}
+      </div>
+    ) : null
   },
   Switch: ({
     id,
@@ -406,6 +438,19 @@ describe('Instructions', () => {
     ).toBeTruthy()
   })
 
+  test('uses the same full-height empty layout as dictionary', async () => {
+    const { Instructions } = await import('../instructions')
+
+    const { container } = render(<Instructions />)
+
+    expect(container.firstElementChild?.className).toContain('min-h-full')
+    expect(container.firstElementChild?.className).toContain('flex-1')
+
+    const emptyState = screen.getByText('No instructions yet').parentElement?.parentElement
+    expect(emptyState?.className).toContain('min-h-90')
+    expect(emptyState?.className).toContain('flex-1')
+  })
+
   test('creates a new instruction rule', async () => {
     const { Instructions } = await import('../instructions')
 
@@ -475,7 +520,7 @@ describe('Instructions', () => {
     expect(screen.queryByRole('button', { name: 'Add manual app' })).toBeNull()
   })
 
-  test('uses a compact activation app popover container', async () => {
+  test('uses a div-based activation app popover panel with its own scroll region', async () => {
     const { Instructions } = await import('../instructions')
 
     render(<Instructions />)
@@ -484,12 +529,29 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
 
     const popover = screen.getByTestId('activation-app-popover')
-    const command = screen.getByTestId('activation-app-popover-command')
+    const panel = screen.getByTestId('activation-app-popover-panel')
     const scrollRegion = screen.getByTestId('activation-app-popover-scroll')
     expect(popover.className).toContain('w-80')
-    expect(command.className).toContain('max-h-[min(50vh,360px)]')
+    expect(popover.getAttribute('data-portal-container')).toBe('set')
+    expect(screen.queryByTestId('activation-app-popover-command')).toBeNull()
+    expect(panel.className).toContain('max-h-[min(50vh,360px)]')
+    expect(panel.className).toContain('flex')
+    expect(panel.className).toContain('flex-col')
     expect(scrollRegion.className).toContain('flex-1')
     expect(scrollRegion.className).toContain('overflow-y-auto')
+    expect(commandItemSpy).not.toHaveBeenCalled()
+  })
+
+  test('keeps instruction dialog content unclipped for nested popovers', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+
+    const dialogContent = document.querySelector('[data-slot="dialog-content"]')
+    expect(dialogContent?.className).not.toContain('overflow-hidden')
+    expect(dialogContent?.className).toContain('max-h-[85vh]')
   })
 
   test('edits and deletes an existing instruction', async () => {
@@ -599,11 +661,15 @@ describe('Instructions', () => {
 
     expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
     expect(screen.getByAltText('Arc icon')).toBeTruthy()
-    expect(screen.getByTestId('activation-app-icon-placeholder-com.todesktop.230313mzl4w4u92')).toBeTruthy()
+    expect(
+      screen.getByTestId('activation-app-icon-placeholder-com.todesktop.230313mzl4w4u92')
+    ).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
     expect(screen.getByRole('button', { name: 'Remove Arc' })).toBeTruthy()
-    expect(screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')).toBeTruthy()
+    expect(
+      screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')
+    ).toBeTruthy()
     expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
@@ -620,14 +686,14 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
 
-    expect(screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')).toBeTruthy()
+    expect(
+      screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')
+    ).toBeTruthy()
 
     const removeButton = screen.getByRole('button', { name: 'Remove Arc' })
     expect(removeButton.textContent).toBe('')
     expect(screen.getByTestId('selected-app-remove-icon-company.thebrowser.Browser')).toBeTruthy()
-    expect(
-      removeButton.parentElement?.querySelector('img[alt="Arc icon"]')
-    ).toBeTruthy()
+    expect(removeButton.parentElement?.querySelector('img[alt="Arc icon"]')).toBeTruthy()
   })
 
   test('rolls back optimistic delete when persistence fails', async () => {

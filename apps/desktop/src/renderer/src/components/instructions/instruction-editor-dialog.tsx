@@ -95,7 +95,7 @@ export function InstructionEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] sm:max-w-lg flex-col overflow-hidden p-0">
+      <DialogContent className="flex max-h-[85vh] sm:max-w-lg flex-col p-0">
         <form
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={async (event) => {

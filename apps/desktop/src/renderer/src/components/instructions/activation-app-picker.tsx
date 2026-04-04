@@ -11,12 +11,8 @@ import {
   AlertDialogTitle,
   Badge,
   Button,
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+  cn,
+  Input,
   Popover,
   PopoverContent,
   PopoverTrigger
@@ -43,8 +39,10 @@ function toSearchText(app: InstructionActivationApp): string {
 
 function ActivationAppIcon({
   app,
-  placeholderTestId
+  placeholderTestId,
+  className
 }: {
+  className?: string
   app: InstructionActivationApp
   placeholderTestId: string
 }) {
@@ -53,7 +51,7 @@ function ActivationAppIcon({
       <img
         src={app.iconDataUrl}
         alt={`${app.displayName} icon`}
-        className="h-4 w-4 shrink-0 rounded-sm object-cover"
+        className={cn('size-4 shrink-0 rounded-sm object-cover', className)}
       />
     )
   }
@@ -74,11 +72,18 @@ export function ActivationAppPicker({
   onTransferApp,
   onChange
 }: ActivationAppPickerProps) {
+  const pickerRef = React.useRef<HTMLDivElement>(null)
   const [isPickerOpen, setIsPickerOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState('')
-  const [pendingTransferApp, setPendingTransferApp] = React.useState<InstructionActivationApp | null>(
-    null
-  )
+  const [pendingTransferApp, setPendingTransferApp] =
+    React.useState<InstructionActivationApp | null>(null)
+  const [portalContainer, setPortalContainer] = React.useState<HTMLElement | null>(null)
+
+  React.useLayoutEffect(() => {
+    setPortalContainer(
+      (pickerRef.current?.closest('[data-slot="dialog-content"]') as HTMLElement | null) ?? null
+    )
+  }, [])
 
   const selectedIds = React.useMemo(() => new Set(value.map((app) => app.id)), [value])
 
@@ -93,6 +98,18 @@ export function ActivationAppPicker({
 
   function removeApp(appId: string) {
     onChange(value.filter((app) => app.id !== appId))
+  }
+
+  function handleRowKeyDown(
+    event: React.KeyboardEvent<HTMLDivElement>,
+    app: InstructionActivationApp
+  ) {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return
+    }
+
+    event.preventDefault()
+    toggleApp(app)
   }
 
   function toggleApp(app: InstructionActivationApp) {
@@ -117,7 +134,7 @@ export function ActivationAppPicker({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={pickerRef} className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">Activation apps</p>
         <Popover open={isPickerOpen} onOpenChange={handlePickerOpenChange}>
@@ -126,70 +143,80 @@ export function ActivationAppPicker({
               Select apps
             </Button>
           </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          data-testid="activation-app-popover"
-          className="w-80 p-2"
-        >
-          <Command
-            data-testid="activation-app-popover-command"
-            className="max-h-[min(50vh,360px)] rounded-xl border border-border/60 bg-transparent"
+          <PopoverContent
+            align="start"
+            portalContainer={portalContainer}
+            data-testid="activation-app-popover"
+            className="w-80 p-2"
           >
-            <CommandInput
-              value={searchTerm}
-              onValueChange={setSearchTerm}
-              placeholder="Search apps"
-              className="h-8"
-            />
             <div
-              data-testid="activation-app-popover-scroll"
-              className="min-h-0 flex-1 overflow-y-auto"
+              data-testid="activation-app-popover-panel"
+              className="flex max-h-[min(50vh,360px)] min-h-0 flex-col overflow-hidden rounded-xl bg-transparent"
             >
-              <CommandList>
-                  <CommandEmpty>No apps found.</CommandEmpty>
-                  <CommandGroup heading="Detected apps">
-                    {filteredApps.map((app) => {
-                      const ownerName = ownedAppNamesById[app.id]
-                      const isOwnedByOtherRule = Boolean(ownerName)
-                      const isSelected = selectedIds.has(app.id)
-
-                      return (
-                        <CommandItem
-                          key={app.id}
-                          data-testid={`activation-app-row-${app.id}`}
-                          value={toSearchText(app)}
-                          onSelect={() => toggleApp(app)}
-                          className="items-start gap-3 py-2.5"
-                        >
-                          <ActivationAppIcon
-                            app={app}
-                            placeholderTestId={`activation-app-icon-placeholder-${app.id}`}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{app.displayName}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {isOwnedByOtherRule
-                                ? `Used by ${ownerName}`
-                                : isSelected
-                                  ? 'Selected'
-                                  : getSecondaryIdentity(app)}
-                            </p>
-                          </div>
-                          {isSelected ? (
-                            <HugeiconsIcon
-                              icon={Tick02Icon}
-                              strokeWidth={2}
-                              className="size-4 shrink-0"
-                              data-testid={`activation-app-selected-icon-${app.id}`}
-                            />
-                          ) : null}
-                        </CommandItem>
-                      )
-                    })}
-                  </CommandGroup>
-                </CommandList>
+              <div className="p-1 pb-0">
+                <Input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search apps"
+                  className="h-8"
+                />
               </div>
-            </Command>
+              <div
+                data-testid="activation-app-popover-scroll"
+                className="min-h-0 flex-1 overflow-y-auto"
+              >
+                <div className="p-1">
+                  {filteredApps.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">No apps found.</p>
+                  ) : (
+                    <div>
+                      <p className="px-3 py-2 text-xs font-medium text-muted-foreground">
+                        Detected apps
+                      </p>
+                      {filteredApps.map((app) => {
+                        const ownerName = ownedAppNamesById[app.id]
+                        const isOwnedByOtherRule = Boolean(ownerName)
+                        const isSelected = selectedIds.has(app.id)
+
+                        return (
+                          <div
+                            key={app.id}
+                            role="button"
+                            tabIndex={0}
+                            data-testid={`activation-app-row-${app.id}`}
+                            onClick={() => toggleApp(app)}
+                            onKeyDown={(event) => handleRowKeyDown(event, app)}
+                            className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm outline-hidden transition-colors hover:bg-muted focus-visible:bg-muted"
+                          >
+                            <ActivationAppIcon
+                              className="size-6"
+                              app={app}
+                              placeholderTestId={`activation-app-icon-placeholder-${app.id}`}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{app.displayName}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {isOwnedByOtherRule
+                                  ? `Used by ${ownerName}`
+                                  : getSecondaryIdentity(app)}
+                              </p>
+                            </div>
+                            {isSelected ? (
+                              <HugeiconsIcon
+                                icon={Tick02Icon}
+                                strokeWidth={2}
+                                className="size-4 shrink-0"
+                                data-testid={`activation-app-selected-icon-${app.id}`}
+                              />
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </PopoverContent>
         </Popover>
       </div>
@@ -197,23 +224,24 @@ export function ActivationAppPicker({
       <div className="flex flex-wrap gap-2">
         {value.length > 0 ? (
           value.map((app) => (
-            <Badge key={app.id} variant="outline" className="h-auto items-center gap-1 py-1.5 pr-1">
-              <ActivationAppIcon app={app} placeholderTestId={`selected-app-icon-placeholder-${app.id}`} />
+            <Badge
+              key={app.id}
+              variant="outline"
+              className="h-auto items-center cursor-pointer"
+              onClick={() => removeApp(app.id)}
+            >
+              <ActivationAppIcon
+                app={app}
+                placeholderTestId={`selected-app-icon-placeholder-${app.id}`}
+              />
               <span>{app.displayName}</span>
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                aria-label={`Remove ${app.displayName}`}
-                onClick={() => removeApp(app.id)}
-              >
-                <HugeiconsIcon
-                  icon={Cancel01Icon}
-                  strokeWidth={2}
-                  className="size-3.5"
-                  data-testid={`selected-app-remove-icon-${app.id}`}
-                />
-              </Button>
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                strokeWidth={2}
+                className="size-3.5"
+                data-testid={`selected-app-remove-icon-${app.id}`}
+                data-icon="inline-end"
+              />
             </Badge>
           ))
         ) : (
