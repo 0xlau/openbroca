@@ -311,40 +311,32 @@ The UI may present this as two controls, but the persisted data model should sto
 The app selector should support:
 
 - a trigger-driven `Popover` interaction instead of an always-expanded list
+- a small `Select apps` trigger button placed on the same row as the `Activation apps` field label, aligned to the right
 - searching detected apps
 - choosing multiple apps
 - showing icon, display name, and secondary identity text
 - showing when an app is already owned by another instruction
-- manual app entry
 
 Apps already assigned to another instruction must be disabled for selection and explained in the UI.
 
 When editing a rule, apps already bound to that same rule remain selectable.
+
+The popover should stay intentionally compact rather than reading like a full dialog:
+
+- width around `320px`
+- max height around `min(50vh, 360px)`
+- search input anchored at the top
+- app list scrolls inside the popover body
 
 All activation-app-related UI should display app icons when available, including:
 
 - popover list rows
 - selected app chips
 - instruction card summaries
-- manual app selections once added
 
-### Manual App Entry
+A small empty-state line below the field is acceptable when nothing is selected, for example:
 
-Manual entry exists as an advanced fallback, not the primary path.
-
-Recommended fields:
-
-- `Display name`
-- `Platform`
-- `Stable ID`
-
-Optional advanced fields:
-
-- `bundleId`
-- `aumid`
-- `path`
-
-Manual entries are normalized into the same activation app shape as detected entries so the runtime matcher only has one comparison model.
+- `No activation apps selected yet.`
 
 ## Runtime Matching Design
 
