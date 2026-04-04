@@ -61,7 +61,9 @@ vi.mock('@renderer/trpc', () => ({
 }))
 
 vi.mock('@hugeicons/react', () => ({
-  HugeiconsIcon: () => null
+  HugeiconsIcon: ({ ...props }: Record<string, unknown>) => (
+    <span data-testid={String(props['data-testid'] ?? 'hugeicon')} />
+  )
 }))
 
 vi.mock('@openbroca/ui', () => ({
@@ -109,14 +111,15 @@ vi.mock('@openbroca/ui', () => ({
     className,
     value,
     disabled,
-    onSelect
+    onSelect,
+    ...props
   }: {
     children: React.ReactNode
     className?: string
     value?: string
     disabled?: boolean
     onSelect?: (value: string) => void
-  }) => {
+  } & React.ComponentProps<'div'>) => {
     commandItemSpy({ value, disabled })
 
     return (
@@ -124,6 +127,7 @@ vi.mock('@openbroca/ui', () => ({
         className={className}
         data-value={value}
         data-disabled={disabled}
+        {...props}
         onClick={() => {
           if (disabled) {
             return
@@ -137,6 +141,23 @@ vi.mock('@openbroca/ui', () => ({
   },
   CommandEmpty: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
   CommandSeparator: () => <hr />,
+  AlertDialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
+    open ? <div data-testid="alert-dialog-root">{children}</div> : null,
+  AlertDialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  AlertDialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  AlertDialogAction: ({ children, onClick, ...props }: React.ComponentProps<'button'>) => (
+    <button type="button" onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
+  AlertDialogCancel: ({ children, onClick, ...props }: React.ComponentProps<'button'>) => (
+    <button type="button" onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
     open ? <div data-testid="dialog-root">{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -393,7 +414,7 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Writing focus' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
+    fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
     fireEvent.change(screen.getByLabelText('Custom instructions'), {
       target: { value: 'Use reader-friendly style.' }
     })
@@ -423,7 +444,7 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Terminal flow' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
+    fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
     fireEvent.click(screen.getByRole('switch', { name: 'Auto enter' }))
     fireEvent.click(screen.getByRole('combobox', { name: 'Send key' }))
     fireEvent.click(screen.getByRole('button', { name: 'Cmd/Ctrl + Enter' }))
@@ -511,7 +532,7 @@ describe('Instructions', () => {
     expect(afterDelete.rules).toHaveLength(0)
   })
 
-  test('disables apps owned by another rule and still allows selecting other detected apps', async () => {
+  test('opens transfer confirmation for occupied rows and moves ownership on save', async () => {
     instructionsStoreMock = createInstructionsStore({
       rules: [
         {
@@ -530,16 +551,15 @@ describe('Instructions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Cursor transfer' } })
 
-    expect(
-      (screen.getByRole('button', { name: 'Add Cursor (owned by Coding focus)' }) as HTMLButtonElement)
-        .disabled
-    ).toBe(true)
+    fireEvent.click(screen.getByTestId('activation-app-row-com.todesktop.230313mzl4w4u92'))
+    expect(screen.getByTestId('alert-dialog-root')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
-    expect(screen.getByRole('button', { name: 'Remove Arc' })).toBeTruthy()
-
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Arc writing' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer app' }))
+    expect(screen.queryByTestId('alert-dialog-root')).toBeNull()
+    expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove Cursor' })).toBeTruthy()
     const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
     fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
 
@@ -547,55 +567,65 @@ describe('Instructions', () => {
       expect(instructionsStoreMock.getState().replace).toHaveBeenCalledTimes(1)
     })
 
-    expect(
-      commandItemSpy.mock.calls.some(
-        ([input]) => input.value?.includes('cursor') && input.disabled === true
-      )
-    ).toBe(true)
-
     const nextSettings = vi.mocked(instructionsStoreMock.getState().replace).mock.calls[0]?.[0]
     expect(nextSettings.rules).toHaveLength(2)
+    expect(nextSettings.rules[0]).toMatchObject({
+      id: 'rule-coding',
+      activationApps: []
+    })
     expect(nextSettings.rules[1]).toMatchObject({
-      name: 'Arc writing',
+      name: 'Cursor transfer',
       activationApps: [
         expect.objectContaining({
-          id: 'company.thebrowser.Browser',
-          displayName: 'Arc',
+          id: 'com.todesktop.230313mzl4w4u92',
+          displayName: 'Cursor',
           source: 'detected'
         })
       ]
     })
   })
 
-  test('opens activation app popover and renders app icon states', async () => {
+  test('toggles activation app row selection without closing popover', async () => {
     const { Instructions } = await import('../instructions')
 
     render(<Instructions />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
 
-    expect(screen.queryByRole('button', { name: 'Add Arc' })).toBeNull()
+    expect(screen.queryByTestId('activation-app-popover')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
 
-    expect(screen.getByRole('button', { name: 'Add Arc' })).toBeTruthy()
+    expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
     expect(screen.getByAltText('Arc icon')).toBeTruthy()
     expect(screen.getByTestId('activation-app-icon-placeholder-com.todesktop.230313mzl4w4u92')).toBeTruthy()
 
-    fireEvent.change(screen.getByLabelText('Search apps'), { target: { value: 'arc' } })
-    expect((screen.getByLabelText('Search apps') as HTMLInputElement).value).toBe('arc')
-    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
-    expect(screen.queryByRole('button', { name: 'Add Arc' })).toBeNull()
+    fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
+    expect(screen.getByRole('button', { name: 'Remove Arc' })).toBeTruthy()
+    expect(screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')).toBeTruthy()
+    expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
-    expect((screen.getByLabelText('Search apps') as HTMLInputElement).value).toBe('')
-    fireEvent.click(screen.getByText('Arc'))
+    fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
+    expect(screen.queryByRole('button', { name: 'Remove Arc' })).toBeNull()
+    expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
+  })
 
-    expect(screen.getByRole('button', { name: 'Remove Arc' }).parentElement?.textContent).toContain('Arc')
+  test('uses icon affordances for selected rows and selected chips', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
+    fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
+
+    expect(screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')).toBeTruthy()
+
+    const removeButton = screen.getByRole('button', { name: 'Remove Arc' })
+    expect(removeButton.textContent).toBe('')
+    expect(screen.getByTestId('selected-app-remove-icon-company.thebrowser.Browser')).toBeTruthy()
     expect(
-      screen
-        .getByRole('button', { name: 'Remove Arc' })
-        .parentElement?.querySelector('img[alt="Arc icon"]')
+      removeButton.parentElement?.querySelector('img[alt="Arc icon"]')
     ).toBeTruthy()
   })
 

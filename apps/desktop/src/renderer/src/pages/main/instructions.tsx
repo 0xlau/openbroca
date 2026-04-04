@@ -73,6 +73,7 @@ function cloneRulesSnapshot(rules: InstructionRule[]): InstructionRule[] {
 export const Instructions: React.FC = () => {
   const { data, isHydrated, replace } = useStore(instructionsStore)
   const [editorState, setEditorState] = React.useState<EditorState>(INITIAL_EDITOR_STATE)
+  const [draftRules, setDraftRules] = React.useState<InstructionRule[] | null>(null)
   const [isPersisting, setIsPersisting] = React.useState(false)
   const [editorErrorMessage, setEditorErrorMessage] = React.useState<string | null>(null)
   const [pageErrorMessage, setPageErrorMessage] = React.useState<string | null>(null)
@@ -81,8 +82,8 @@ export const Instructions: React.FC = () => {
   const detectedApps = React.useMemo(() => toSortedDetectedApps(detectedAppsRaw), [detectedAppsRaw])
 
   const ownedAppNamesById = React.useMemo(
-    () => buildOwnedAppNamesById(data.rules, editorState.rule?.id ?? null),
-    [data.rules, editorState.rule?.id]
+    () => buildOwnedAppNamesById(draftRules ?? data.rules, editorState.rule?.id ?? null),
+    [data.rules, draftRules, editorState.rule?.id]
   )
 
   const mode = editorState.rule ? 'edit' : 'create'
@@ -104,7 +105,7 @@ export const Instructions: React.FC = () => {
       customInstructions: value.customInstructions,
       autoEnterMode: value.autoEnterMode
     }
-    const previousRules = cloneRulesSnapshot(instructionsStore.getState().data.rules)
+    const previousRules = cloneRulesSnapshot(draftRules ?? instructionsStore.getState().data.rules)
 
     try {
       const nextRules = editingRuleId
@@ -112,6 +113,7 @@ export const Instructions: React.FC = () => {
         : [...previousRules, nextRule]
 
       await replace({ rules: nextRules })
+      setDraftRules(null)
       setEditorState(INITIAL_EDITOR_STATE)
     } catch (error) {
       instructionsStore.setState((state) => ({
@@ -121,6 +123,7 @@ export const Instructions: React.FC = () => {
           rules: previousRules
         }
       }))
+      setDraftRules(previousRules)
       setEditorErrorMessage(
         error instanceof Error ? error.message : 'Failed to save instruction. Please try again.'
       )
@@ -175,6 +178,7 @@ export const Instructions: React.FC = () => {
           onClick={() => {
             setEditorErrorMessage(null)
             setPageErrorMessage(null)
+            setDraftRules(cloneRulesSnapshot(data.rules))
             setEditorState({ open: true, rule: null })
           }}
         >
@@ -219,6 +223,7 @@ export const Instructions: React.FC = () => {
                       onClick={() => {
                         setEditorErrorMessage(null)
                         setPageErrorMessage(null)
+                        setDraftRules(cloneRulesSnapshot(data.rules))
                         setEditorState({ open: true, rule: null })
                       }}
                     >
@@ -246,8 +251,39 @@ export const Instructions: React.FC = () => {
           }
           setEditorState((current) => (open ? current : INITIAL_EDITOR_STATE))
           if (!open) {
+            setDraftRules(null)
             setEditorErrorMessage(null)
           }
+        }}
+        onTransferApp={(app) => {
+          setDraftRules((current) => {
+            const baseRules = cloneRulesSnapshot(current ?? data.rules)
+            const currentRuleId = editorState.rule?.id
+
+            if (!currentRuleId) {
+              return baseRules.map((candidate) => ({
+                ...candidate,
+                activationApps: candidate.activationApps.filter((item) => item.id !== app.id)
+              }))
+            }
+
+            return baseRules.map((candidate) => {
+              if (candidate.id === currentRuleId) {
+                return {
+                  ...candidate,
+                  activationApps: [
+                    ...candidate.activationApps.filter((item) => item.id !== app.id),
+                    app
+                  ]
+                }
+              }
+
+              return {
+                ...candidate,
+                activationApps: candidate.activationApps.filter((item) => item.id !== app.id)
+              }
+            })
+          })
         }}
         onSubmit={handleSave}
       />
