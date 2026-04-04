@@ -14,17 +14,24 @@ import {
   FieldGroup,
   FieldLabel,
   Input,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Switch,
   Textarea
 } from '@openbroca/ui'
 import type { InstructionActivationApp, InstructionRule } from '@renderer/stores/instructions-store'
+import type { AutoEnterMode } from '../../../../shared/instructions'
 import { ActivationAppPicker } from './activation-app-picker'
 
 export interface InstructionEditorValue {
   name: string
   activationApps: InstructionActivationApp[]
   customInstructions: string
-  autoEnter: boolean
+  autoEnterMode: AutoEnterMode
 }
 
 interface InstructionEditorDialogProps {
@@ -39,26 +46,19 @@ interface InstructionEditorDialogProps {
   onSubmit: (value: InstructionEditorValue) => Promise<void>
 }
 
-function isAutoEnterEnabled(rule: InstructionRule | null): boolean {
-  if (!rule) {
-    return false
-  }
-
-  // Compatibility bridge until the editor is fully enum-driven.
-  if (rule.autoEnterMode) {
-    return rule.autoEnterMode !== 'off'
-  }
-
-  return rule.autoEnter ?? false
-}
+type ActionableAutoEnterMode = Exclude<AutoEnterMode, 'off'>
 
 function toDraft(rule: InstructionRule | null): InstructionEditorValue {
   return {
     name: rule?.name ?? '',
     activationApps: rule?.activationApps ?? [],
     customInstructions: rule?.customInstructions ?? '',
-    autoEnter: isAutoEnterEnabled(rule)
+    autoEnterMode: rule?.autoEnterMode ?? 'off'
   }
+}
+
+function toActionableAutoEnterMode(mode: AutoEnterMode | undefined): ActionableAutoEnterMode {
+  return mode === 'mod-enter' ? 'mod-enter' : 'enter'
 }
 
 export function InstructionEditorDialog({
@@ -73,15 +73,20 @@ export function InstructionEditorDialog({
   onSubmit
 }: InstructionEditorDialogProps) {
   const [draft, setDraft] = React.useState<InstructionEditorValue>(() => toDraft(rule))
+  const [lastActionableAutoEnterMode, setLastActionableAutoEnterMode] =
+    React.useState<ActionableAutoEnterMode>(() => toActionableAutoEnterMode(rule?.autoEnterMode))
 
   React.useEffect(() => {
     if (!open) {
       return
     }
     setDraft(toDraft(rule))
+    setLastActionableAutoEnterMode(toActionableAutoEnterMode(rule?.autoEnterMode))
   }, [open, rule])
 
   const canSubmit = Boolean(draft.name.trim()) && draft.activationApps.length > 0 && !isSubmitting
+  const autoEnterEnabled = draft.autoEnterMode !== 'off'
+  const selectedSendKeyMode = autoEnterEnabled ? draft.autoEnterMode : lastActionableAutoEnterMode
 
   const dialogTitle = mode === 'create' ? 'Create instruction' : 'Edit instruction'
   const submitLabel = mode === 'create' ? 'Create instruction' : 'Save changes'
@@ -174,17 +179,62 @@ export function InstructionEditorDialog({
                 <FieldContent>
                   <Switch
                     id="instruction-rule-auto-enter"
-                    checked={draft.autoEnter}
-                    onCheckedChange={(autoEnter) =>
+                    checked={autoEnterEnabled}
+                    onCheckedChange={(checked) => {
+                      if (!checked) {
+                        setDraft((current) => {
+                          if (current.autoEnterMode !== 'off') {
+                            setLastActionableAutoEnterMode(current.autoEnterMode)
+                          }
+
+                          return {
+                            ...current,
+                            autoEnterMode: 'off'
+                          }
+                        })
+                        return
+                      }
+
                       setDraft((current) => ({
                         ...current,
-                        autoEnter
+                        autoEnterMode:
+                          current.autoEnterMode === 'off'
+                            ? lastActionableAutoEnterMode
+                            : current.autoEnterMode
                       }))
-                    }
+                    }}
                   />
                   <FieldDescription>
                     Simulates pressing a send key after processing.
                   </FieldDescription>
+                </FieldContent>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="instruction-rule-send-key">Send key</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={selectedSendKeyMode}
+                    onValueChange={(nextValue) => {
+                      const nextMode = nextValue as ActionableAutoEnterMode
+                      setLastActionableAutoEnterMode(nextMode)
+                      setDraft((current) => ({
+                        ...current,
+                        autoEnterMode: current.autoEnterMode === 'off' ? 'off' : nextMode
+                      }))
+                    }}
+                  >
+                    <SelectTrigger id="instruction-rule-send-key" disabled={!autoEnterEnabled}>
+                      <SelectValue placeholder="Select a send key" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="enter">Enter</SelectItem>
+                        <SelectItem value="mod-enter">Cmd/Ctrl + Enter</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>Used when auto enter is enabled.</FieldDescription>
                 </FieldContent>
               </Field>
             </FieldGroup>

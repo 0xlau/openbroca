@@ -190,10 +190,21 @@ vi.mock('@openbroca/ui', () => ({
       </SelectContext.Provider>
     )
   },
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => {
+  SelectTrigger: ({ children, onClick, disabled, ...props }: React.ComponentProps<'button'>) => {
     const context = React.useContext(SelectContext)
     return (
-      <button type="button" role="combobox" onClick={() => context?.setOpen((current) => !current)}>
+      <button
+        type="button"
+        role="combobox"
+        disabled={disabled}
+        onClick={(event) => {
+          onClick?.(event)
+          if (!disabled) {
+            context?.setOpen((current) => !current)
+          }
+        }}
+        {...props}
+      >
         {children}
       </button>
     )
@@ -344,7 +355,7 @@ describe('Instructions', () => {
           name: 'Coding focus',
           activationApps: [detectedApps[0]],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         }
       ]
     })
@@ -388,7 +399,33 @@ describe('Instructions', () => {
       name: 'Writing focus',
       activationApps: [expect.objectContaining({ id: 'company.thebrowser.Browser' })],
       customInstructions: 'Use reader-friendly style.',
-      autoEnter: true
+      autoEnterMode: 'enter'
+    })
+  })
+
+  test('creates a new instruction rule with auto-enter send key mode', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Terminal flow' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Auto enter' }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Send key' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cmd/Ctrl + Enter' }))
+    const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
+    fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(instructionsStoreMock.getState().replace).toHaveBeenCalledTimes(1)
+    })
+
+    const nextSettings = vi.mocked(instructionsStoreMock.getState().replace).mock.calls[0]?.[0]
+    expect(nextSettings.rules[0]).toMatchObject({
+      name: 'Terminal flow',
+      autoEnterMode: 'mod-enter'
     })
   })
 
@@ -400,7 +437,7 @@ describe('Instructions', () => {
           name: 'Coding focus',
           activationApps: [detectedApps[0]],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         }
       ]
     })
@@ -441,7 +478,7 @@ describe('Instructions', () => {
           name: 'Coding focus',
           activationApps: [detectedApps[0]],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         }
       ]
     })
@@ -460,7 +497,7 @@ describe('Instructions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add manual app' }))
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Terminal' } })
-    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Platform' }))
     fireEvent.click(screen.getByRole('button', { name: 'macOS' }))
     fireEvent.change(screen.getByLabelText('Stable ID'), { target: { value: 'manual.terminal' } })
     fireEvent.change(screen.getByLabelText('Path'), { target: { value: '/Applications/Terminal.app' } })
@@ -536,7 +573,7 @@ describe('Instructions', () => {
           name: 'Coding focus',
           activationApps: [detectedApps[0]],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         }
       ]
     })
