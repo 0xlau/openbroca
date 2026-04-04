@@ -74,4 +74,33 @@ describe('AppIdentityService', () => {
       })
     )
   })
+
+  test('prefers bundle icon resolution for mac apps before generic file icons', async () => {
+    const resolveBundleIconDataUrl = vi.fn().mockResolvedValue('data:image/png;base64,bundle')
+    const resolveIconDataUrl = vi.fn().mockResolvedValue('data:image/png;base64,generic')
+    const service = new AppIdentityService({
+      listApps: vi.fn().mockResolvedValue([
+        {
+          id: 'cursor',
+          displayName: 'Cursor',
+          platform: 'macos',
+          path: '/Applications/Cursor.app',
+          source: 'detected'
+        }
+      ]),
+      getFrontmostApp: vi.fn().mockResolvedValue(null),
+      resolveBundleIconDataUrl,
+      resolveIconDataUrl
+    })
+
+    await expect(service.listApps()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'cursor',
+        iconDataUrl: 'data:image/png;base64,bundle'
+      })
+    ])
+
+    expect(resolveBundleIconDataUrl).toHaveBeenCalledWith('/Applications/Cursor.app')
+    expect(resolveIconDataUrl).not.toHaveBeenCalled()
+  })
 })

@@ -1,4 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
+import { execFile as nodeExecFile } from 'node:child_process'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createDiscoveryClient } from '@openbroca/app-identity/discovery'
 import { getMacFrontmostApp, listMacApps } from '@openbroca/app-identity/platform/macos'
@@ -28,10 +32,109 @@ import { secureStorage } from './auth/secure-storage'
 import { normalizeInstructionsSettings } from '../shared/instructions'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
+const macBundleIconCache = new Map<string, Promise<string | undefined>>()
 
 function getAccelerator(): string {
   const shortcuts = store.get('shortcuts') as { floatingWindowAccelerator?: string } | undefined
   return shortcuts?.floatingWindowAccelerator ?? DEFAULT_ACCELERATOR
+}
+
+function deriveMacBundlePath(filePath?: string): string | undefined {
+  if (!filePath) {
+    return undefined
+  }
+
+  if (filePath.endsWith('.app')) {
+    return filePath
+  }
+
+  const markerIndex = filePath.indexOf('.app/')
+  if (markerIndex >= 0) {
+    return filePath.slice(0, markerIndex + 4)
+  }
+
+  return undefined
+}
+
+async function readMacBundleIconFileName(bundlePath: string): Promise<string | undefined> {
+  const infoPlistPath = join(bundlePath, 'Contents', 'Info.plist')
+
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      nodeExecFile(
+        '/usr/libexec/PlistBuddy',
+        ['-c', 'Print :CFBundleIconFile', infoPlistPath],
+        (error, rawStdout) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve((rawStdout ?? '').trim())
+        }
+      )
+    })
+
+    return stdout || undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function resolveMacBundleIconDataUrl(filePath?: string): Promise<string | undefined> {
+  const bundlePath = deriveMacBundlePath(filePath)
+  if (!bundlePath) {
+    return undefined
+  }
+
+  const cached = macBundleIconCache.get(bundlePath)
+  if (cached) {
+    return cached
+  }
+
+  const pending = (async () => {
+    const iconFileName = await readMacBundleIconFileName(bundlePath)
+    if (!iconFileName) {
+      return undefined
+    }
+
+    const iconPath = join(
+      bundlePath,
+      'Contents',
+      'Resources',
+      iconFileName.endsWith('.icns') ? iconFileName : `${iconFileName}.icns`
+    )
+
+    try {
+      await access(iconPath)
+    } catch {
+      return undefined
+    }
+
+    const tempDir = await mkdtemp(join(tmpdir(), 'openbroca-app-icon-'))
+    const outputPath = join(tempDir, 'icon.png')
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        nodeExecFile('/usr/bin/sips', ['-s', 'format', 'png', iconPath, '--out', outputPath], (error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        })
+      })
+
+      const png = await readFile(outputPath)
+      return `data:image/png;base64,${png.toString('base64')}`
+    } catch {
+      return undefined
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })()
+
+  macBundleIconCache.set(bundlePath, pending)
+  return pending
 }
 
 const captureSource = new RtAudioCaptureSource()
@@ -64,6 +167,8 @@ const discoveryClient =
 const appIdentityService = new AppIdentityService({
   listApps: () => discoveryClient.listApps(),
   getFrontmostApp: () => discoveryClient.getFrontmostApp(),
+  resolveBundleIconDataUrl:
+    process.platform === 'darwin' ? (filePath) => resolveMacBundleIconDataUrl(filePath) : undefined,
   resolveIconDataUrl: async (filePath) => {
     if (!filePath) return undefined
     const icon = await app.getFileIcon(filePath)
