@@ -1,4 +1,5 @@
 import { execFile as nodeExecFile, type ExecFileException } from 'node:child_process'
+import type { AutoEnterMode } from '../../shared/instructions'
 
 type ExecFile = (
   file: string,
@@ -7,7 +8,7 @@ type ExecFile = (
 ) => void
 
 export interface AutoEnterService {
-  triggerAutoEnter: () => Promise<void>
+  triggerAutoEnter: (mode: AutoEnterMode) => Promise<void>
 }
 
 interface CreateAutoEnterServiceDeps {
@@ -33,22 +34,38 @@ export function createAutoEnterService(deps: CreateAutoEnterServiceDeps = {}): A
 
   if (platform === 'darwin') {
     return {
-      triggerAutoEnter: () =>
-        runExecFile(execFile, 'osascript', ['-e', 'tell application "System Events" to key code 36'])
+      triggerAutoEnter: (mode) => {
+        if (mode === 'off') {
+          return Promise.resolve()
+        }
+
+        const command =
+          mode === 'mod-enter'
+            ? 'tell application "System Events" to keystroke return using command down'
+            : 'tell application "System Events" to key code 36'
+
+        return runExecFile(execFile, 'osascript', ['-e', command])
+      }
     }
   }
 
   if (platform === 'win32') {
     return {
-      triggerAutoEnter: () =>
-        runExecFile(execFile, 'powershell.exe', [
+      triggerAutoEnter: (mode) => {
+        if (mode === 'off') {
+          return Promise.resolve()
+        }
+
+        const keys = mode === 'mod-enter' ? '^{ENTER}' : '{ENTER}'
+        return runExecFile(execFile, 'powershell.exe', [
           '-NoProfile',
           '-NonInteractive',
           '-ExecutionPolicy',
           'Bypass',
           '-Command',
-          '$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys("{ENTER}")'
+          `$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys("${keys}")`
         ])
+      }
     }
   }
 

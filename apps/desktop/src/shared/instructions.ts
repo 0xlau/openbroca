@@ -1,13 +1,14 @@
 import type { AppIdentity } from '@openbroca/app-identity'
 
 export type InstructionActivationApp = AppIdentity
+export type AutoEnterMode = 'off' | 'enter' | 'mod-enter'
 
 export interface InstructionRule {
   id: string
   name: string
   activationApps: InstructionActivationApp[]
   customInstructions: string
-  autoEnter: boolean
+  autoEnterMode: AutoEnterMode
 }
 
 export interface InstructionsSettings {
@@ -20,6 +21,15 @@ export const defaultInstructionsSettings: InstructionsSettings = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeAutoEnterMode(rawRule: Record<string, unknown>): AutoEnterMode {
+  const rawAutoEnterMode = rawRule.autoEnterMode
+  if (rawAutoEnterMode === 'off' || rawAutoEnterMode === 'enter' || rawAutoEnterMode === 'mod-enter') {
+    return rawAutoEnterMode
+  }
+
+  return rawRule.autoEnter === true ? 'enter' : 'off'
 }
 
 export function normalizeInstructionsSettings(raw: unknown): InstructionsSettings {
@@ -65,7 +75,7 @@ export function normalizeInstructionsSettings(raw: unknown): InstructionsSetting
       name,
       activationApps,
       customInstructions: typeof rawRule.customInstructions === 'string' ? rawRule.customInstructions : '',
-      autoEnter: Boolean(rawRule.autoEnter)
+      autoEnterMode: normalizeAutoEnterMode(rawRule)
     })
   }
 

@@ -126,7 +126,7 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: 'Use short chat-style replies.',
-        autoEnter: true
+        autoEnterMode: 'enter'
       }),
       autoEnterService: {
         triggerAutoEnter
@@ -156,7 +156,7 @@ describe('PostRecordingPipeline', () => {
           llmRequest: expect.objectContaining({
             matchedInstruction: expect.objectContaining({
               ruleId: 'rule-chat',
-              autoEnter: true
+              autoEnterMode: 'enter'
             })
           })
         })
@@ -164,7 +164,70 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
-  test('does not trigger auto enter when matched instruction has autoEnter disabled', async () => {
+  test('triggers auto enter with mod-enter mode when matched instruction mode is mod-enter', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-auto-enter-mod-enter' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/auto-enter-mod-enter.wav',
+        fileName: 'auto-enter-mod-enter.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnterMode: 'mod-enter'
+      }),
+      autoEnterService: {
+        triggerAutoEnter
+      }
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(triggerAutoEnter).toHaveBeenCalledWith('mod-enter')
+  })
+
+  test('does not trigger auto enter when matched instruction mode is off', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-auto-enter-disabled' })),
       update: vi.fn()
@@ -209,7 +272,7 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: 'Use short chat-style replies.',
-        autoEnter: false
+        autoEnterMode: 'off'
       }),
       autoEnterService: {
         triggerAutoEnter
@@ -325,7 +388,7 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-snapshot',
         name: 'Snapshot Rule',
         customInstructions: 'Use snapshot instruction.',
-        autoEnter: false
+        autoEnterMode: 'off'
       }
     })
 
@@ -399,7 +462,7 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: 'Use short chat-style replies.',
-        autoEnter: true
+        autoEnterMode: 'enter'
       }),
       autoEnterService: {
         triggerAutoEnter

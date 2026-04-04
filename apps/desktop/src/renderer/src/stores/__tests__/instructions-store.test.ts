@@ -49,7 +49,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 42,
-          autoEnter: 'truthy'
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -69,7 +69,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
-          autoEnter: 0
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -92,7 +92,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: '',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -106,7 +106,51 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
+          autoEnterMode: 'off'
+        }
+      ]
+    })
+  })
+
+  test('migrates legacy autoEnter booleans to autoEnterMode during hydration', async () => {
+    storeGetQueryMock.mockResolvedValueOnce({
+      rules: [
+        {
+          id: 'rule-legacy-true',
+          name: ' Legacy True ',
+          activationApps: [],
+          customInstructions: '',
+          autoEnter: true
+        },
+        {
+          id: 'rule-legacy-false',
+          name: ' Legacy False ',
+          activationApps: [],
+          customInstructions: '',
           autoEnter: false
+        }
+      ]
+    })
+    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const { instructionsStore } = await import('../instructions-store')
+    await instructionsStore.getState().hydrate()
+
+    expect(instructionsStore.getState().data).toEqual({
+      rules: [
+        {
+          id: 'rule-legacy-true',
+          name: 'Legacy True',
+          activationApps: [],
+          customInstructions: '',
+          autoEnterMode: 'enter'
+        },
+        {
+          id: 'rule-legacy-false',
+          name: 'Legacy False',
+          activationApps: [],
+          customInstructions: '',
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -134,7 +178,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Prefer concise language',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -154,7 +198,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -173,7 +217,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Prefer concise language',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -187,7 +231,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -207,7 +251,7 @@ describe('instructionsStore', () => {
               }
             ],
             customInstructions: 'Prefer concise language',
-            autoEnter: true
+            autoEnterMode: 'enter'
           },
           {
             id: 'rule-writing',
@@ -221,7 +265,7 @@ describe('instructionsStore', () => {
               }
             ],
             customInstructions: 'Summarize clearly',
-            autoEnter: false
+            autoEnterMode: 'off'
           }
         ]
       }
@@ -250,7 +294,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Prefer concise language',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -270,7 +314,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -289,7 +333,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Prefer concise language',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -303,7 +347,7 @@ describe('instructionsStore', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -323,7 +367,7 @@ describe('instructionsStore', () => {
               }
             ],
             customInstructions: 'Prefer concise language',
-            autoEnter: true
+            autoEnterMode: 'enter'
           },
           {
             id: 'rule-writing',
@@ -337,7 +381,7 @@ describe('instructionsStore', () => {
               }
             ],
             customInstructions: 'Summarize clearly',
-            autoEnter: false
+            autoEnterMode: 'off'
           }
         ]
       }
