@@ -387,7 +387,7 @@ describe('Instructions', () => {
     render(<Instructions />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Writing focus' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
     fireEvent.change(screen.getByLabelText('Custom instructions'), {
@@ -417,7 +417,7 @@ describe('Instructions', () => {
     render(<Instructions />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Terminal flow' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Auto enter' }))
@@ -435,6 +435,32 @@ describe('Instructions', () => {
       name: 'Terminal flow',
       autoEnterMode: 'mod-enter'
     })
+  })
+
+  test('renders activation apps label row with Select apps trigger and no manual action', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+
+    expect(screen.getByText('Activation apps')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Select apps' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Add manual app' })).toBeNull()
+  })
+
+  test('uses a compact activation app popover container', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
+
+    const popover = screen.getByTestId('activation-app-popover')
+    expect(popover.className).toContain('w-80')
+    expect(popover.className).toContain('max-h-[min(50vh,360px)]')
+    expect(popover.className).toContain('overflow-y-auto')
   })
 
   test('edits and deletes an existing instruction', async () => {
@@ -478,7 +504,7 @@ describe('Instructions', () => {
     expect(afterDelete.rules).toHaveLength(0)
   })
 
-  test('disables apps owned by another rule and allows manual app entry', async () => {
+  test('disables apps owned by another rule and still allows selecting other detected apps', async () => {
     instructionsStoreMock = createInstructionsStore({
       rules: [
         {
@@ -496,24 +522,17 @@ describe('Instructions', () => {
     render(<Instructions />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
 
     expect(
       (screen.getByRole('button', { name: 'Add Cursor (owned by Coding focus)' }) as HTMLButtonElement)
         .disabled
     ).toBe(true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add manual app' }))
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Terminal' } })
-    fireEvent.click(screen.getByRole('combobox', { name: 'Platform' }))
-    fireEvent.click(screen.getByRole('button', { name: 'macOS' }))
-    fireEvent.change(screen.getByLabelText('Stable ID'), { target: { value: 'manual.terminal' } })
-    fireEvent.change(screen.getByLabelText('Path'), { target: { value: '/Applications/Terminal.app' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save app' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
+    expect(screen.getByRole('button', { name: 'Remove Arc' })).toBeTruthy()
 
-    expect(screen.getByText('Terminal')).toBeTruthy()
-
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Terminal writing' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Arc writing' } })
     const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
     fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
 
@@ -530,12 +549,12 @@ describe('Instructions', () => {
     const nextSettings = vi.mocked(instructionsStoreMock.getState().replace).mock.calls[0]?.[0]
     expect(nextSettings.rules).toHaveLength(2)
     expect(nextSettings.rules[1]).toMatchObject({
-      name: 'Terminal writing',
+      name: 'Arc writing',
       activationApps: [
         expect.objectContaining({
-          id: 'manual.terminal',
-          displayName: 'Terminal',
-          source: 'manual'
+          id: 'company.thebrowser.Browser',
+          displayName: 'Arc',
+          source: 'detected'
         })
       ]
     })
@@ -550,7 +569,7 @@ describe('Instructions', () => {
 
     expect(screen.queryByRole('button', { name: 'Add Arc' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
 
     expect(screen.getByRole('button', { name: 'Add Arc' })).toBeTruthy()
     expect(screen.getByAltText('Arc icon')).toBeTruthy()
@@ -558,10 +577,10 @@ describe('Instructions', () => {
 
     fireEvent.change(screen.getByLabelText('Search apps'), { target: { value: 'arc' } })
     expect((screen.getByLabelText('Search apps') as HTMLInputElement).value).toBe('arc')
-    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     expect(screen.queryByRole('button', { name: 'Add Arc' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
     expect((screen.getByLabelText('Search apps') as HTMLInputElement).value).toBe('')
     fireEvent.click(screen.getByText('Arc'))
 

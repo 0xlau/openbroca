@@ -14,12 +14,12 @@ import {
   PopoverTrigger
 } from '@openbroca/ui'
 import type { InstructionActivationApp } from '@renderer/stores/instructions-store'
-import { ManualAppDialog } from './manual-app-dialog'
 
 interface ActivationAppPickerProps {
   value: InstructionActivationApp[]
   detectedApps: AppIdentity[]
   ownedAppNamesById: Record<string, string>
+  trigger: React.ReactElement
   onChange: (apps: InstructionActivationApp[]) => void
 }
 
@@ -61,12 +61,11 @@ export function ActivationAppPicker({
   value,
   detectedApps,
   ownedAppNamesById,
+  trigger,
   onChange
 }: ActivationAppPickerProps) {
   const [isPickerOpen, setIsPickerOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState('')
-  const [isManualDialogOpen, setIsManualDialogOpen] = React.useState(false)
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
 
   const selectedIds = React.useMemo(() => new Set(value.map((app) => app.id)), [value])
 
@@ -85,22 +84,10 @@ export function ActivationAppPicker({
     }
 
     onChange([...value, app])
-    setErrorMessage(null)
   }
 
   function removeApp(appId: string) {
     onChange(value.filter((app) => app.id !== appId))
-  }
-
-  function addManualApp(app: InstructionActivationApp) {
-    const ownerName = ownedAppNamesById[app.id]
-    if (ownerName) {
-      setErrorMessage(`"${app.displayName}" is already owned by "${ownerName}".`)
-      return
-    }
-
-    addApp(app)
-    setIsManualDialogOpen(false)
   }
 
   function handlePickerOpenChange(nextOpen: boolean) {
@@ -112,36 +99,14 @@ export function ActivationAppPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        {value.length > 0 ? (
-          value.map((app) => (
-            <Badge key={app.id} variant="outline" className="h-auto items-center gap-1 py-1.5 pr-1">
-              <ActivationAppIcon app={app} placeholderTestId={`selected-app-icon-placeholder-${app.id}`} />
-              <span>{app.displayName}</span>
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                aria-label={`Remove ${app.displayName}`}
-                onClick={() => removeApp(app.id)}
-              >
-                Remove
-              </Button>
-            </Badge>
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">No activation apps selected yet.</p>
-        )}
-      </div>
-
       <Popover open={isPickerOpen} onOpenChange={handlePickerOpenChange}>
-        <PopoverTrigger asChild>
-          <Button type="button" size="sm" variant="outline">
-            Select activation apps
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-[min(30rem,calc(100vw-2rem))] p-2">
-          <Command className="rounded-xl border border-border/60 bg-transparent p-2">
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+        <PopoverContent
+          align="start"
+          data-testid="activation-app-popover"
+          className="w-80 max-h-[min(50vh,360px)] overflow-y-auto p-2"
+        >
+          <Command className="rounded-xl border border-border/60 bg-transparent">
             <CommandInput
               value={searchTerm}
               onValueChange={setSearchTerm}
@@ -212,22 +177,29 @@ export function ActivationAppPicker({
         </PopoverContent>
       </Popover>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Apps already owned by another instruction are disabled.
-        </p>
-        <Button type="button" size="sm" variant="outline" onClick={() => setIsManualDialogOpen(true)}>
-          Add manual app
-        </Button>
+      <div className="flex flex-wrap gap-2">
+        {value.length > 0 ? (
+          value.map((app) => (
+            <Badge key={app.id} variant="outline" className="h-auto items-center gap-1 py-1.5 pr-1">
+              <ActivationAppIcon app={app} placeholderTestId={`selected-app-icon-placeholder-${app.id}`} />
+              <span>{app.displayName}</span>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                aria-label={`Remove ${app.displayName}`}
+                onClick={() => removeApp(app.id)}
+              >
+                Remove
+              </Button>
+            </Badge>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">No activation apps selected yet.</p>
+        )}
       </div>
 
-      {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
-
-      <ManualAppDialog
-        open={isManualDialogOpen}
-        onOpenChange={setIsManualDialogOpen}
-        onAddApp={addManualApp}
-      />
+      <p className="text-xs text-muted-foreground">Apps already owned by another instruction are disabled.</p>
     </div>
   )
 }
