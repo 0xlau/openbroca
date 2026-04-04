@@ -94,103 +94,105 @@ export function ManualAppDialog({ open, onOpenChange, onAddApp }: ManualAppDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
-          <DialogHeader>
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden p-0 sm:max-w-lg">
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+          <DialogHeader className="shrink-0 px-6 pt-6">
             <DialogTitle>Add manual app</DialogTitle>
             <DialogDescription>
               Use manual entry when the app is not listed in detected apps.
             </DialogDescription>
           </DialogHeader>
 
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="manual-app-display-name">Display name</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="manual-app-display-name"
-                  value={draft.displayName}
-                  onChange={(event) => setDraftValue('displayName', event.target.value)}
-                  placeholder="Terminal"
-                />
-              </FieldContent>
-            </Field>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="manual-app-display-name">Display name</FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="manual-app-display-name"
+                    value={draft.displayName}
+                    onChange={(event) => setDraftValue('displayName', event.target.value)}
+                    placeholder="Terminal"
+                  />
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="manual-app-platform">Platform</FieldLabel>
-              <FieldContent>
-                <Select
-                  value={draft.platform}
-                  onValueChange={(value) => setDraftValue('platform', value as AppPlatform)}
-                >
-                  <SelectTrigger id="manual-app-platform">
-                    <SelectValue placeholder="Select a platform" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="macos">macOS</SelectItem>
-                      <SelectItem value="windows">Windows</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </FieldContent>
-            </Field>
+              <Field>
+                <FieldLabel htmlFor="manual-app-platform">Platform</FieldLabel>
+                <FieldContent>
+                  <Select
+                    value={draft.platform}
+                    onValueChange={(value) => setDraftValue('platform', value as AppPlatform)}
+                  >
+                    <SelectTrigger id="manual-app-platform">
+                      <SelectValue placeholder="Select a platform" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="macos">macOS</SelectItem>
+                        <SelectItem value="windows">Windows</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="manual-app-stable-id">Stable ID</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="manual-app-stable-id"
-                  value={draft.stableId}
-                  onChange={(event) => setDraftValue('stableId', event.target.value)}
-                  placeholder="manual.terminal"
-                />
-                <FieldDescription>
-                  Use the same stable ID every time so this rule stays matched.
-                </FieldDescription>
-              </FieldContent>
-            </Field>
+              <Field>
+                <FieldLabel htmlFor="manual-app-stable-id">Stable ID</FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="manual-app-stable-id"
+                    value={draft.stableId}
+                    onChange={(event) => setDraftValue('stableId', event.target.value)}
+                    placeholder="manual.terminal"
+                  />
+                  <FieldDescription>
+                    Use the same stable ID every time so this rule stays matched.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="manual-app-bundle-id">Bundle ID</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="manual-app-bundle-id"
-                  value={draft.bundleId}
-                  onChange={(event) => setDraftValue('bundleId', event.target.value)}
-                  placeholder="com.apple.Terminal"
-                />
-              </FieldContent>
-            </Field>
+              <Field>
+                <FieldLabel htmlFor="manual-app-bundle-id">Bundle ID</FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="manual-app-bundle-id"
+                    value={draft.bundleId}
+                    onChange={(event) => setDraftValue('bundleId', event.target.value)}
+                    placeholder="com.apple.Terminal"
+                  />
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="manual-app-aumid">AUMID</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="manual-app-aumid"
-                  value={draft.aumid}
-                  onChange={(event) => setDraftValue('aumid', event.target.value)}
-                  placeholder="Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
-                />
-              </FieldContent>
-            </Field>
+              <Field>
+                <FieldLabel htmlFor="manual-app-aumid">AUMID</FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="manual-app-aumid"
+                    value={draft.aumid}
+                    onChange={(event) => setDraftValue('aumid', event.target.value)}
+                    placeholder="Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
+                  />
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="manual-app-path">Path</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="manual-app-path"
-                  value={draft.path}
-                  onChange={(event) => setDraftValue('path', event.target.value)}
-                  placeholder="/Applications/Terminal.app"
-                />
-              </FieldContent>
-            </Field>
-          </FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="manual-app-path">Path</FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="manual-app-path"
+                    value={draft.path}
+                    onChange={(event) => setDraftValue('path', event.target.value)}
+                    placeholder="/Applications/Terminal.app"
+                  />
+                </FieldContent>
+              </Field>
+            </FieldGroup>
 
-          {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+            {errorMessage ? <p className="mt-4 text-sm text-destructive">{errorMessage}</p> : null}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t px-6 py-4">
             <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

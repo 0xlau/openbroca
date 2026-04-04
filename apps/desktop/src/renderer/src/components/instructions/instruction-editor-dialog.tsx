@@ -75,9 +75,9 @@ export function InstructionEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="flex max-h-[85vh] sm:max-w-lg flex-col overflow-hidden p-0">
         <form
-          className="flex flex-col gap-5"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={async (event) => {
             event.preventDefault()
             if (!canSubmit) {
@@ -91,89 +91,95 @@ export function InstructionEditorDialog({
             })
           }}
         >
-          <DialogHeader>
+          <DialogHeader className="shrink-0 px-6 pt-6">
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>
               Choose activation apps and instructions for when this rule should apply.
             </DialogDescription>
           </DialogHeader>
 
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="instruction-rule-name">Name</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="instruction-rule-name"
-                  value={draft.name}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      name: event.target.value
-                    }))
-                  }
-                  placeholder="Coding focus"
-                />
-              </FieldContent>
-            </Field>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="instruction-rule-name">Name</FieldLabel>
+                <FieldContent>
+                  <Input
+                    id="instruction-rule-name"
+                    value={draft.name}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        name: event.target.value
+                      }))
+                    }
+                    placeholder="Coding focus"
+                  />
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel>Activation apps</FieldLabel>
-              <FieldContent>
-                <ActivationAppPicker
-                  value={draft.activationApps}
-                  detectedApps={detectedApps}
-                  ownedAppNamesById={ownedAppNamesById}
-                  onChange={(activationApps) =>
-                    setDraft((current) => ({
-                      ...current,
-                      activationApps
-                    }))
-                  }
-                />
-                <FieldDescription>
-                  Add one or more apps that should activate this instruction rule.
-                </FieldDescription>
-              </FieldContent>
-            </Field>
+              <Field>
+                <FieldLabel>Activation apps</FieldLabel>
+                <FieldContent>
+                  <ActivationAppPicker
+                    value={draft.activationApps}
+                    detectedApps={detectedApps}
+                    ownedAppNamesById={ownedAppNamesById}
+                    onChange={(activationApps) =>
+                      setDraft((current) => ({
+                        ...current,
+                        activationApps
+                      }))
+                    }
+                  />
+                  <FieldDescription>
+                    Add one or more apps that should activate this instruction rule.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="instruction-rule-custom-instructions">Custom instructions</FieldLabel>
-              <FieldContent>
-                <Textarea
-                  id="instruction-rule-custom-instructions"
-                  value={draft.customInstructions}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      customInstructions: event.target.value
-                    }))
-                  }
-                  placeholder="Prefer concise technical language."
-                />
-              </FieldContent>
-            </Field>
+              <Field>
+                <FieldLabel htmlFor="instruction-rule-custom-instructions">
+                  Custom instructions
+                </FieldLabel>
+                <FieldContent>
+                  <Textarea
+                    id="instruction-rule-custom-instructions"
+                    value={draft.customInstructions}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        customInstructions: event.target.value
+                      }))
+                    }
+                    placeholder="Prefer concise technical language."
+                  />
+                </FieldContent>
+              </Field>
 
-            <Field orientation="horizontal">
-              <FieldLabel htmlFor="instruction-rule-auto-enter">Auto enter</FieldLabel>
-              <FieldContent>
-                <Switch
-                  id="instruction-rule-auto-enter"
-                  checked={draft.autoEnter}
-                  onCheckedChange={(autoEnter) =>
-                    setDraft((current) => ({
-                      ...current,
-                      autoEnter
-                    }))
-                  }
-                />
-                <FieldDescription>Simulates pressing a send key after processing.</FieldDescription>
-              </FieldContent>
-            </Field>
-          </FieldGroup>
+              <Field orientation="horizontal">
+                <FieldLabel htmlFor="instruction-rule-auto-enter">Auto enter</FieldLabel>
+                <FieldContent>
+                  <Switch
+                    id="instruction-rule-auto-enter"
+                    checked={draft.autoEnter}
+                    onCheckedChange={(autoEnter) =>
+                      setDraft((current) => ({
+                        ...current,
+                        autoEnter
+                      }))
+                    }
+                  />
+                  <FieldDescription>
+                    Simulates pressing a send key after processing.
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
+            </FieldGroup>
 
-          {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+            {errorMessage ? <p className="mt-4 text-sm text-destructive">{errorMessage}</p> : null}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t px-6 py-4">
             <Button
               type="button"
               variant="ghost"
