@@ -103,6 +103,13 @@ export function ActivationAppPicker({
     setIsManualDialogOpen(false)
   }
 
+  function handlePickerOpenChange(nextOpen: boolean) {
+    setIsPickerOpen(nextOpen)
+    if (!nextOpen) {
+      setSearchTerm('')
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
@@ -127,7 +134,7 @@ export function ActivationAppPicker({
         )}
       </div>
 
-      <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+      <Popover open={isPickerOpen} onOpenChange={handlePickerOpenChange}>
         <PopoverTrigger asChild>
           <Button type="button" size="sm" variant="outline">
             Select activation apps

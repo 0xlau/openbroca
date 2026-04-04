@@ -108,17 +108,29 @@ vi.mock('@openbroca/ui', () => ({
     children,
     className,
     value,
-    disabled
+    disabled,
+    onSelect
   }: {
     children: React.ReactNode
     className?: string
     value?: string
     disabled?: boolean
+    onSelect?: (value: string) => void
   }) => {
     commandItemSpy({ value, disabled })
 
     return (
-      <div className={className} data-value={value} data-disabled={disabled}>
+      <div
+        className={className}
+        data-value={value}
+        data-disabled={disabled}
+        onClick={() => {
+          if (disabled) {
+            return
+          }
+          onSelect?.(value ?? '')
+        }}
+      >
         {children}
       </div>
     )
@@ -499,7 +511,14 @@ describe('Instructions', () => {
     expect(screen.getByAltText('Arc icon')).toBeTruthy()
     expect(screen.getByTestId('activation-app-icon-placeholder-com.todesktop.230313mzl4w4u92')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
+    fireEvent.change(screen.getByLabelText('Search apps'), { target: { value: 'arc' } })
+    expect((screen.getByLabelText('Search apps') as HTMLInputElement).value).toBe('arc')
+    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    expect(screen.queryByRole('button', { name: 'Add Arc' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+    expect((screen.getByLabelText('Search apps') as HTMLInputElement).value).toBe('')
+    fireEvent.click(screen.getByText('Arc'))
 
     expect(screen.getByRole('button', { name: 'Remove Arc' }).parentElement?.textContent).toContain('Arc')
     expect(
