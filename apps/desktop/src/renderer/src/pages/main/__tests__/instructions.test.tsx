@@ -36,6 +36,10 @@ const SelectContext = React.createContext<{
   value?: string
   setValue: (value: string) => void
 } | null>(null)
+const PopoverContext = React.createContext<{
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+} | null>(null)
 
 vi.mock('@renderer/stores/instructions-store', () => ({
   get instructionsStore() {
@@ -205,6 +209,69 @@ vi.mock('@openbroca/ui', () => ({
       </button>
     )
   },
+  Popover: ({
+    open,
+    defaultOpen,
+    onOpenChange,
+    children
+  }: {
+    open?: boolean
+    defaultOpen?: boolean
+    onOpenChange?: (open: boolean) => void
+    children: React.ReactNode
+  }) => {
+    const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false)
+    const isControlled = open !== undefined
+    const currentOpen = isControlled ? open : internalOpen
+
+    return (
+      <PopoverContext.Provider
+        value={{
+          open: currentOpen,
+          setOpen: (nextValue) => {
+            const resolvedValue =
+              typeof nextValue === 'function'
+                ? (nextValue as (current: boolean) => boolean)(currentOpen)
+                : nextValue
+
+            if (!isControlled) {
+              setInternalOpen(resolvedValue)
+            }
+            onOpenChange?.(resolvedValue)
+          }
+        }}
+      >
+        {children}
+      </PopoverContext.Provider>
+    )
+  },
+  PopoverTrigger: ({
+    asChild,
+    children,
+    ...props
+  }: React.ComponentProps<'button'> & { asChild?: boolean }) => {
+    const context = React.useContext(PopoverContext)
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<{ onClick?: React.MouseEventHandler }>
+      return React.cloneElement(child, {
+        ...props,
+        onClick: (event) => {
+          child.props.onClick?.(event)
+          context?.setOpen((current) => !current)
+        }
+      })
+    }
+
+    return (
+      <button type="button" {...props} onClick={() => context?.setOpen((current) => !current)}>
+        {children}
+      </button>
+    )
+  },
+  PopoverContent: ({ children, ...props }: React.ComponentProps<'div'>) => {
+    const context = React.useContext(PopoverContext)
+    return context?.open ? <div {...props}>{children}</div> : null
+  },
   Switch: ({
     id,
     checked,
@@ -251,6 +318,7 @@ describe('Instructions', () => {
         displayName: 'Arc',
         platform: 'macos',
         bundleId: 'company.thebrowser.Browser',
+        iconDataUrl: 'data:image/png;base64,ZmFrZQ==',
         source: 'detected'
       }
     ]
@@ -277,6 +345,9 @@ describe('Instructions', () => {
     expect(screen.getByText('Coding focus')).toBeTruthy()
     expect(screen.getByText('Auto enter on')).toBeTruthy()
     expect(screen.getByTestId('instructions-grid')).toBeTruthy()
+    expect(
+      screen.getByTestId('instruction-card-app-icon-placeholder-com.todesktop.230313mzl4w4u92')
+    ).toBeTruthy()
   })
 
   test('creates a new instruction rule', async () => {
@@ -285,6 +356,7 @@ describe('Instructions', () => {
     render(<Instructions />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Writing focus' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
     fireEvent.change(screen.getByLabelText('Custom instructions'), {
@@ -367,6 +439,7 @@ describe('Instructions', () => {
     render(<Instructions />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
 
     expect(
       (screen.getByRole('button', { name: 'Add Cursor (owned by Coding focus)' }) as HTMLButtonElement)
@@ -409,6 +482,31 @@ describe('Instructions', () => {
         })
       ]
     })
+  })
+
+  test('opens activation app popover and renders app icon states', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+
+    expect(screen.queryByRole('button', { name: 'Add Arc' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select activation apps' }))
+
+    expect(screen.getByRole('button', { name: 'Add Arc' })).toBeTruthy()
+    expect(screen.getByAltText('Arc icon')).toBeTruthy()
+    expect(screen.getByTestId('activation-app-icon-placeholder-com.todesktop.230313mzl4w4u92')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Arc' }))
+
+    expect(screen.getByRole('button', { name: 'Remove Arc' }).parentElement?.textContent).toContain('Arc')
+    expect(
+      screen
+        .getByRole('button', { name: 'Remove Arc' })
+        .parentElement?.querySelector('img[alt="Arc icon"]')
+    ).toBeTruthy()
   })
 
   test('rolls back optimistic delete when persistence fails', async () => {

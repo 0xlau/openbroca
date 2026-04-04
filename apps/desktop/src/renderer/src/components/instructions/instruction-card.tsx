@@ -8,6 +8,30 @@ interface InstructionCardProps {
   onDelete: () => void | Promise<void>
 }
 
+function InstructionCardAppIcon({
+  app
+}: {
+  app: InstructionRule['activationApps'][number]
+}) {
+  if (app.iconDataUrl) {
+    return (
+      <img
+        src={app.iconDataUrl}
+        alt={`${app.displayName} icon`}
+        className="h-4 w-4 shrink-0 rounded-sm object-cover"
+      />
+    )
+  }
+
+  return (
+    <span
+      className="h-4 w-4 shrink-0 rounded-sm bg-muted"
+      data-testid={`instruction-card-app-icon-placeholder-${app.id}`}
+      aria-hidden="true"
+    />
+  )
+}
+
 export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: InstructionCardProps) {
   const appCountLabel = `${rule.activationApps.length} ${rule.activationApps.length === 1 ? 'app' : 'apps'}`
   const instructionPreview = rule.customInstructions.trim() || 'No custom instructions.'
@@ -53,7 +77,8 @@ export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: In
         {rule.activationApps.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {rule.activationApps.map((app) => (
-              <Badge key={app.id} variant="outline">
+              <Badge key={app.id} variant="outline" className="items-center gap-1">
+                <InstructionCardAppIcon app={app} />
                 {app.displayName}
               </Badge>
             ))}

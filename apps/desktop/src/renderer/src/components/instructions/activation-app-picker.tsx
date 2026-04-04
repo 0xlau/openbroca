@@ -8,7 +8,10 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList
+  CommandList,
+  Popover,
+  PopoverContent,
+  PopoverTrigger
 } from '@openbroca/ui'
 import type { InstructionActivationApp } from '@renderer/stores/instructions-store'
 import { ManualAppDialog } from './manual-app-dialog'
@@ -28,12 +31,39 @@ function toSearchText(app: InstructionActivationApp): string {
   return `${app.displayName} ${app.id} ${app.bundleId ?? ''} ${app.aumid ?? ''} ${app.path ?? ''}`.toLowerCase()
 }
 
+function ActivationAppIcon({
+  app,
+  placeholderTestId
+}: {
+  app: InstructionActivationApp
+  placeholderTestId: string
+}) {
+  if (app.iconDataUrl) {
+    return (
+      <img
+        src={app.iconDataUrl}
+        alt={`${app.displayName} icon`}
+        className="h-4 w-4 shrink-0 rounded-sm object-cover"
+      />
+    )
+  }
+
+  return (
+    <span
+      className="h-4 w-4 shrink-0 rounded-sm bg-muted"
+      data-testid={placeholderTestId}
+      aria-hidden="true"
+    />
+  )
+}
+
 export function ActivationAppPicker({
   value,
   detectedApps,
   ownedAppNamesById,
   onChange
 }: ActivationAppPickerProps) {
+  const [isPickerOpen, setIsPickerOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState('')
   const [isManualDialogOpen, setIsManualDialogOpen] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
@@ -78,8 +108,9 @@ export function ActivationAppPicker({
       <div className="flex flex-wrap gap-2">
         {value.length > 0 ? (
           value.map((app) => (
-            <Badge key={app.id} variant="outline" className="h-auto py-1.5">
-              <span className="mr-1">{app.displayName}</span>
+            <Badge key={app.id} variant="outline" className="h-auto items-center gap-1 py-1.5 pr-1">
+              <ActivationAppIcon app={app} placeholderTestId={`selected-app-icon-placeholder-${app.id}`} />
+              <span>{app.displayName}</span>
               <Button
                 type="button"
                 size="xs"
@@ -96,70 +127,83 @@ export function ActivationAppPicker({
         )}
       </div>
 
-      <Command className="rounded-xl border border-border/60 bg-transparent p-2">
-        <CommandInput
-          value={searchTerm}
-          onValueChange={setSearchTerm}
-          placeholder="Search apps"
-          className="h-8"
-        />
-        <CommandList>
-          <CommandEmpty>No apps found.</CommandEmpty>
-          <CommandGroup heading="Detected apps">
-            {filteredApps.map((app) => {
-              const ownerName = ownedAppNamesById[app.id]
-              const isOwnedByOtherRule = Boolean(ownerName)
-              const isSelected = selectedIds.has(app.id)
-              const addButtonLabel = isOwnedByOtherRule
-                ? `Add ${app.displayName} (owned by ${ownerName})`
-                : `Add ${app.displayName}`
+      <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" size="sm" variant="outline">
+            Select activation apps
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[min(30rem,calc(100vw-2rem))] p-2">
+          <Command className="rounded-xl border border-border/60 bg-transparent p-2">
+            <CommandInput
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+              placeholder="Search apps"
+              className="h-8"
+            />
+            <CommandList>
+              <CommandEmpty>No apps found.</CommandEmpty>
+              <CommandGroup heading="Detected apps">
+                {filteredApps.map((app) => {
+                  const ownerName = ownedAppNamesById[app.id]
+                  const isOwnedByOtherRule = Boolean(ownerName)
+                  const isSelected = selectedIds.has(app.id)
+                  const addButtonLabel = isOwnedByOtherRule
+                    ? `Add ${app.displayName} (owned by ${ownerName})`
+                    : `Add ${app.displayName}`
 
-              return (
-                <CommandItem
-                  key={app.id}
-                  value={toSearchText(app)}
-                  disabled={isOwnedByOtherRule || isSelected}
-                  onSelect={() => {
-                    if (isOwnedByOtherRule || isSelected) {
-                      return
-                    }
-                    addApp(app)
-                  }}
-                  className="items-start gap-3 py-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{app.displayName}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {isOwnedByOtherRule
-                        ? `Owned by ${ownerName}`
-                        : isSelected
-                          ? 'Already selected'
-                          : getSecondaryIdentity(app)}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    disabled={isOwnedByOtherRule || isSelected}
-                    aria-label={addButtonLabel}
-                    onClick={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      if (isOwnedByOtherRule || isSelected) {
-                        return
-                      }
-                      addApp(app)
-                    }}
-                  >
-                    {isSelected ? 'Added' : 'Add'}
-                  </Button>
-                </CommandItem>
-              )
-            })}
-          </CommandGroup>
-        </CommandList>
-      </Command>
+                  return (
+                    <CommandItem
+                      key={app.id}
+                      value={toSearchText(app)}
+                      disabled={isOwnedByOtherRule || isSelected}
+                      onSelect={() => {
+                        if (isOwnedByOtherRule || isSelected) {
+                          return
+                        }
+                        addApp(app)
+                      }}
+                      className="items-start gap-3 py-2.5"
+                    >
+                      <ActivationAppIcon
+                        app={app}
+                        placeholderTestId={`activation-app-icon-placeholder-${app.id}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{app.displayName}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {isOwnedByOtherRule
+                            ? `Owned by ${ownerName}`
+                            : isSelected
+                              ? 'Already selected'
+                              : getSecondaryIdentity(app)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={isOwnedByOtherRule || isSelected}
+                        aria-label={addButtonLabel}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          if (isOwnedByOtherRule || isSelected) {
+                            return
+                          }
+                          addApp(app)
+                        }}
+                      >
+                        {isSelected ? 'Added' : 'Add'}
+                      </Button>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
