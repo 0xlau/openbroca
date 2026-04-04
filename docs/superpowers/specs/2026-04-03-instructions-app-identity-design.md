@@ -317,7 +317,17 @@ The app selector should support:
 - showing icon, display name, and secondary identity text
 - showing when an app is already owned by another instruction
 
-Apps already assigned to another instruction must be disabled for selection and explained in the UI.
+Default row interaction should be:
+
+- unowned and unselected app: click row to select
+- unowned and selected app: click row to unselect
+- app owned by another instruction: click row to open an `AlertDialog` confirming transfer of ownership
+
+For apps owned by another instruction:
+
+- the row should explain which instruction currently owns it
+- the row should not show the selected check icon
+- confirming the `AlertDialog` should remove that app from the previous instruction and add it to the instruction currently being edited
 
 When editing a rule, apps already bound to that same rule remain selectable.
 
@@ -326,13 +336,17 @@ The popover should stay intentionally compact rather than reading like a full di
 - width around `320px`
 - max height around `min(50vh, 360px)`
 - search input anchored at the top
-- app list scrolls inside the popover body
+- app list scrolls inside a dedicated popover body container rather than relying only on the command list element
 
 All activation-app-related UI should display app icons when available, including:
 
 - popover list rows
 - selected app chips
 - instruction card summaries
+
+Selected items in the popover list should use a check icon rather than an `Add` button.
+
+Selected activation-app chips should use a close icon for removal rather than a text `Remove` action.
 
 A small empty-state line below the field is acceptable when nothing is selected, for example:
 
