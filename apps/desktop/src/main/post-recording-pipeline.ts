@@ -1,6 +1,5 @@
 import type { TranscriptionSegment } from '@openbroca/providers/asr'
 import type { CompletionRequest } from '@openbroca/providers/llm'
-import type { AutoEnterMode } from '../shared/instructions'
 import type { CapturedRecording } from './recording-types'
 import { buildRecognitionInput } from './audio-resampler'
 import type { HistoryRepository } from './history-repository'
@@ -10,15 +9,6 @@ import type { AutoEnterService } from './send-key/auto-enter'
 
 const cleanupPrompt =
   'Clean up the dictated transcript into polished final text without changing intent.'
-
-function resolveAutoEnterMode(matchedInstruction: MatchedInstructionRule | null): AutoEnterMode {
-  const rawMode = (matchedInstruction as { autoEnterMode?: unknown } | null)?.autoEnterMode
-  if (rawMode === 'off' || rawMode === 'enter' || rawMode === 'mod-enter') {
-    return rawMode
-  }
-
-  return matchedInstruction?.autoEnter === true ? 'enter' : 'off'
-}
 
 export class PostRecordingPipeline {
   constructor(
@@ -188,10 +178,9 @@ export class PostRecordingPipeline {
         matchedInstruction = await this.deps.resolveMatchedInstruction(
           recording.frontmostAppSnapshot ?? null
         )
-        const autoEnterMode = resolveAutoEnterMode(matchedInstruction)
         console.debug('[voice-debug] matched instruction resolved', {
           ruleId: matchedInstruction?.ruleId ?? null,
-          autoEnterMode
+          autoEnterMode: matchedInstruction?.autoEnterMode ?? 'off'
         })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -204,7 +193,7 @@ export class PostRecordingPipeline {
       ? {
           ruleId: matchedInstruction.ruleId,
           name: matchedInstruction.name,
-          autoEnterMode: resolveAutoEnterMode(matchedInstruction),
+          autoEnterMode: matchedInstruction.autoEnterMode,
           customInstructions: matchedInstruction.customInstructions
         }
       : null
@@ -295,7 +284,7 @@ export class PostRecordingPipeline {
       })
       pushTimeline('llm', 'completed')
 
-      const autoEnterMode = resolveAutoEnterMode(matchedInstruction)
+      const autoEnterMode = matchedInstruction?.autoEnterMode ?? 'off'
       const autoEnterRequested = autoEnterMode !== 'off'
       let autoEnterSummary: Record<string, unknown> = {
         mode: autoEnterMode,

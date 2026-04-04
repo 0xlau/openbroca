@@ -19,7 +19,7 @@ describe('createInstructionMatcher', () => {
             }
           ],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -33,7 +33,7 @@ describe('createInstructionMatcher', () => {
             }
           ],
           customInstructions: 'Use reader-friendly style.',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     }
@@ -54,7 +54,7 @@ describe('createInstructionMatcher', () => {
       ruleId: 'rule-coding',
       name: 'Coding',
       customInstructions: 'Prefer concise technical language.',
-      autoEnter: true
+      autoEnterMode: 'enter'
     })
   })
 
@@ -73,7 +73,7 @@ describe('createInstructionMatcher', () => {
             }
           ],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         },
         {
           id: 'rule-writing',
@@ -87,7 +87,7 @@ describe('createInstructionMatcher', () => {
             }
           ],
           customInstructions: 'Use reader-friendly style.',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     })
@@ -108,7 +108,7 @@ describe('createInstructionMatcher', () => {
       ruleId: 'rule-coding',
       name: 'Coding',
       customInstructions: 'Prefer concise technical language.',
-      autoEnter: true
+      autoEnterMode: 'enter'
     })
   })
 
@@ -144,7 +144,7 @@ describe('createInstructionMatcher', () => {
             }
           ],
           customInstructions: 'Prefer concise technical language.',
-          autoEnter: true
+          autoEnterMode: 'enter'
         }
       ]
     }
@@ -166,7 +166,7 @@ describe('createInstructionMatcher', () => {
       ruleId: 'rule-coding',
       name: 'Coding',
       customInstructions: 'Prefer concise technical language.',
-      autoEnter: true
+      autoEnterMode: 'enter'
     })
   })
 })

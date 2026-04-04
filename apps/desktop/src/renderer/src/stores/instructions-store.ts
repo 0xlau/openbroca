@@ -1,11 +1,24 @@
-import type { InstructionsSettings } from '../../../shared/instructions'
+import type {
+  AutoEnterMode,
+  InstructionActivationApp,
+  InstructionRule as SharedInstructionRule
+} from '../../../shared/instructions'
 import {
   defaultInstructionsSettings,
   normalizeInstructionsSettings
 } from '../../../shared/instructions'
 import { createPersistedStore } from './create-persisted-store'
 
-export type { InstructionActivationApp, InstructionRule, InstructionsSettings } from '../../../shared/instructions'
+export type InstructionRule = Omit<SharedInstructionRule, 'autoEnterMode'> & {
+  autoEnterMode?: AutoEnterMode
+  autoEnter?: boolean
+}
+
+export interface InstructionsSettings {
+  rules: InstructionRule[]
+}
+
+export type { InstructionActivationApp }
 
 const instructionsStoreBase = createPersistedStore<InstructionsSettings>({
   key: 'instructions',

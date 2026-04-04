@@ -8,7 +8,8 @@ export interface InstructionRule {
   name: string
   activationApps: InstructionActivationApp[]
   customInstructions: string
-  autoEnterMode: AutoEnterMode
+  autoEnterMode?: AutoEnterMode
+  autoEnter?: boolean
 }
 
 export interface InstructionsSettings {

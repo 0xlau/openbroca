@@ -1,5 +1,5 @@
 import type { AppIdentity } from '@openbroca/app-identity'
-import type { InstructionsSettings } from '../../shared/instructions'
+import type { AutoEnterMode, InstructionsSettings } from '../../shared/instructions'
 
 interface InstructionMatcherDeps {
   getInstructions: () => InstructionsSettings
@@ -10,7 +10,7 @@ export interface MatchedInstructionRule {
   ruleId: string
   name: string
   customInstructions: string
-  autoEnter: boolean
+  autoEnterMode: AutoEnterMode
 }
 
 function appIdentityMatches(ruleApp: AppIdentity, frontmostApp: AppIdentity): boolean {
@@ -56,7 +56,7 @@ export function createInstructionMatcher(
       ruleId: match.id,
       name: match.name,
       customInstructions: match.customInstructions,
-      autoEnter: match.autoEnter
+      autoEnterMode: match.autoEnterMode ?? 'off'
     }
   }
 }
