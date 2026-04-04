@@ -356,6 +356,13 @@ describe('Instructions', () => {
           activationApps: [detectedApps[0]],
           customInstructions: 'Prefer concise technical language.',
           autoEnterMode: 'enter'
+        },
+        {
+          id: 'rule-writing',
+          name: 'Writing focus',
+          activationApps: [detectedApps[1]],
+          customInstructions: 'Use reader-friendly style.',
+          autoEnterMode: 'mod-enter'
         }
       ]
     })
@@ -366,7 +373,8 @@ describe('Instructions', () => {
 
     expect(screen.getByRole('heading', { name: 'Instructions' })).toBeTruthy()
     expect(screen.getByText('Coding focus')).toBeTruthy()
-    expect(screen.getByText('Auto enter on')).toBeTruthy()
+    expect(screen.getByText('Auto enter Enter')).toBeTruthy()
+    expect(screen.getByText('Auto enter Cmd/Ctrl + Enter')).toBeTruthy()
     expect(screen.getByTestId('instructions-grid')).toBeTruthy()
     expect(
       screen.getByTestId('instruction-card-app-icon-placeholder-com.todesktop.230313mzl4w4u92')

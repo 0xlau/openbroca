@@ -1,5 +1,6 @@
 import { Badge, Button, Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from '@openbroca/ui'
 import type { InstructionRule } from '@renderer/stores/instructions-store'
+import type { AutoEnterMode } from '../../../../shared/instructions'
 
 interface InstructionCardProps {
   rule: InstructionRule
@@ -35,8 +36,14 @@ function InstructionCardAppIcon({
 export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: InstructionCardProps) {
   const appCountLabel = `${rule.activationApps.length} ${rule.activationApps.length === 1 ? 'app' : 'apps'}`
   const instructionPreview = rule.customInstructions.trim() || 'No custom instructions.'
-  // Compatibility bridge until the card is fully enum-driven.
-  const autoEnterEnabled = rule.autoEnterMode ? rule.autoEnterMode !== 'off' : (rule.autoEnter ?? false)
+  const autoEnterMode: AutoEnterMode = rule.autoEnterMode ?? (rule.autoEnter ? 'enter' : 'off')
+  const autoEnterBadgeLabel =
+    autoEnterMode === 'off'
+      ? 'Auto enter Off'
+      : autoEnterMode === 'mod-enter'
+        ? 'Auto enter Cmd/Ctrl + Enter'
+        : 'Auto enter Enter'
+  const autoEnterEnabled = autoEnterMode !== 'off'
 
   return (
     <Card className="h-full gap-4" size="sm">
@@ -69,9 +76,7 @@ export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: In
       <CardContent className="flex flex-1 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{appCountLabel}</Badge>
-          <Badge variant={autoEnterEnabled ? 'default' : 'outline'}>
-            {autoEnterEnabled ? 'Auto enter on' : 'Auto enter off'}
-          </Badge>
+          <Badge variant={autoEnterEnabled ? 'default' : 'outline'}>{autoEnterBadgeLabel}</Badge>
         </div>
 
         {rule.activationApps.length > 0 ? (

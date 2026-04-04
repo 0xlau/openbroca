@@ -81,7 +81,7 @@ describe('storeRouter', () => {
             }
           ],
           customInstructions: 'Stay concise',
-          autoEnter: true
+          autoEnterMode: 'enter'
         }
       ]
     })
@@ -172,7 +172,7 @@ describe('storeRouter', () => {
             }
           ],
           customInstructions: '',
-          autoEnter: true
+          autoEnterMode: 'off'
         },
         {
           id: 'rule-writing',
@@ -186,7 +186,7 @@ describe('storeRouter', () => {
             }
           ],
           customInstructions: 'Summarize clearly',
-          autoEnter: false
+          autoEnterMode: 'off'
         }
       ]
     })
