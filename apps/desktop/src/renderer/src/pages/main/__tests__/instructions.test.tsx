@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createStore } from 'zustand'
 import React from 'react'
 import type { AppIdentity } from '@openbroca/app-identity'
@@ -67,6 +67,7 @@ vi.mock('@hugeicons/react', () => ({
 }))
 
 vi.mock('@openbroca/ui', () => ({
+  cn: (...inputs: Array<string | false | null | undefined>) => inputs.filter(Boolean).join(' '),
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
@@ -505,6 +506,24 @@ describe('Instructions', () => {
       name: 'Terminal flow',
       autoEnterMode: 'mod-enter'
     })
+  })
+
+  test('renders auto enter switch and send key select in one controls row', async () => {
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+
+    expect(screen.getByLabelText('Auto enter')).toBeTruthy()
+    expect(
+      screen.getByText('Simulates pressing a send key after processing.')
+    ).toBeTruthy()
+    expect(screen.queryByText('Send key')).toBeNull()
+
+    const controls = screen.getByTestId('instruction-auto-enter-controls')
+    expect(within(controls).getByRole('switch', { name: 'Auto enter' })).toBeTruthy()
+    expect(within(controls).getByRole('combobox', { name: 'Send key' })).toBeTruthy()
   })
 
   test('renders activation apps label row with button-owned Select apps trigger and no manual action', async () => {

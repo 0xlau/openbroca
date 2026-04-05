@@ -173,9 +173,17 @@ export function InstructionEditorDialog({
                 </FieldContent>
               </Field>
 
-              <Field orientation="horizontal">
-                <FieldLabel htmlFor="instruction-rule-auto-enter">Auto enter</FieldLabel>
-                <FieldContent>
+              <Field orientation="horizontal" className="items-start">
+                <div className="flex flex-1 flex-col gap-1">
+                  <FieldLabel htmlFor="instruction-rule-auto-enter">Auto enter</FieldLabel>
+                  <FieldDescription className="text-xs">
+                    Simulates pressing a send key after processing.
+                  </FieldDescription>
+                </div>
+                <div
+                  data-testid="instruction-auto-enter-controls"
+                  className="flex shrink-0 items-center gap-3 self-center"
+                >
                   <Switch
                     id="instruction-rule-auto-enter"
                     checked={autoEnterEnabled}
@@ -203,15 +211,6 @@ export function InstructionEditorDialog({
                       }))
                     }}
                   />
-                  <FieldDescription>
-                    Simulates pressing a send key after processing.
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="instruction-rule-send-key">Send key</FieldLabel>
-                <FieldContent>
                   <Select
                     value={selectedSendKeyMode}
                     onValueChange={(nextValue) => {
@@ -223,7 +222,13 @@ export function InstructionEditorDialog({
                       }))
                     }}
                   >
-                    <SelectTrigger id="instruction-rule-send-key" disabled={!autoEnterEnabled}>
+                    <SelectTrigger
+                      size="sm"
+                      id="instruction-rule-send-key"
+                      aria-label="Send key"
+                      disabled={!autoEnterEnabled}
+                      className="w-44"
+                    >
                       <SelectValue placeholder="Select a send key" />
                     </SelectTrigger>
                     <SelectContent>
@@ -233,8 +238,7 @@ export function InstructionEditorDialog({
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  <FieldDescription>Used when auto enter is enabled.</FieldDescription>
-                </FieldContent>
+                </div>
               </Field>
             </FieldGroup>
 
