@@ -12,6 +12,9 @@ import {
   Badge,
   Button,
   cn,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
   Input,
   Popover,
   PopoverContent,
@@ -245,13 +248,13 @@ export function ActivationAppPicker({
             </Badge>
           ))
         ) : (
-          <p className="text-sm text-muted-foreground">No activation apps selected yet.</p>
+          <Empty className="flex-1 rounded-xl border border-dashed border-foreground/15 bg-muted/20">
+            <EmptyHeader>
+              <EmptyDescription>No activation apps selected yet.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        Apps already owned by another instruction can be transferred.
-      </p>
 
       <AlertDialog
         open={Boolean(pendingTransferApp)}

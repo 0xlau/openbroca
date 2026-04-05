@@ -151,9 +151,6 @@ export function InstructionEditorDialog({
                       }))
                     }
                   />
-                  <FieldDescription>
-                    Add one or more apps that should activate this instruction rule.
-                  </FieldDescription>
                 </FieldContent>
               </Field>
 
