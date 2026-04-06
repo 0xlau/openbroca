@@ -115,8 +115,21 @@ describe('ASRProviderRegistry', () => {
 
     it('preserves settings metadata on registered asr descriptors', () => {
       const registry = new ASRProviderRegistry()
+      const settingsSchema = {
+        parse: (data: unknown) => {
+          const parsed = data as { language?: string }
+          return { language: parsed.language ?? 'en' }
+        }
+      }
+      const getSetupStatus = () => ({
+        status: 'ready',
+        canActivate: true,
+        blockingReasons: []
+      })
+
       registry.register({
         ...makeCloudDescriptor('settings-asr'),
+        settingsSchema,
         settingsItems: [
           {
             key: 'language',
@@ -126,14 +139,12 @@ describe('ASRProviderRegistry', () => {
             options: [{ label: 'English', value: 'en' }]
           }
         ],
-        getSetupStatus: () => ({
-          status: 'ready',
-          canActivate: true,
-          blockingReasons: []
-        })
+        getSetupStatus
       })
 
-      expect(registry.listDescriptors()[0]).toMatchObject({
+      const [descriptor] = registry.listDescriptors()
+
+      expect(descriptor).toMatchObject({
         id: 'settings-asr',
         settingsItems: [
           expect.objectContaining({
@@ -142,6 +153,8 @@ describe('ASRProviderRegistry', () => {
           })
         ]
       })
+      expect(descriptor.settingsSchema).toBe(settingsSchema)
+      expect(descriptor.getSetupStatus).toBe(getSetupStatus)
     })
   })
 

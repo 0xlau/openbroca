@@ -79,8 +79,23 @@ describe('LLMProviderRegistry', () => {
 
     it('preserves settings metadata on registered llm descriptors', () => {
       const registry = new LLMProviderRegistry()
+      interface SettingsContext { model?: string }
+
+      const settingsSchema = {
+        parse: (data: unknown): SettingsContext => {
+          const parsed = data as Partial<SettingsContext>
+          return { model: parsed.model ?? 'default' }
+        }
+      }
+      const getSetupStatus = () => ({
+        status: 'configured',
+        canActivate: false,
+        blockingReasons: ['Model is required']
+      })
+
       registry.register(
         makeDescriptor('settings-llm', {
+          settingsSchema,
           settingsItems: [
             {
               key: 'model',
@@ -89,15 +104,13 @@ describe('LLMProviderRegistry', () => {
               description: 'Choose the runtime model'
             }
           ],
-          getSetupStatus: () => ({
-            status: 'configured',
-            canActivate: false,
-            blockingReasons: ['Model is required']
-          })
+          getSetupStatus
         })
       )
 
-      expect(registry.listDescriptors()[0]).toMatchObject({
+      const [descriptor] = registry.listDescriptors()
+
+      expect(descriptor).toMatchObject({
         id: 'settings-llm',
         settingsItems: [
           expect.objectContaining({
@@ -106,6 +119,9 @@ describe('LLMProviderRegistry', () => {
           })
         ]
       })
+
+      expect(descriptor.settingsSchema).toBe(settingsSchema)
+      expect(descriptor.getSetupStatus).toBe(getSetupStatus)
     })
 
   })
