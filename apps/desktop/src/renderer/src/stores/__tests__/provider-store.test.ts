@@ -482,6 +482,79 @@ describe('providerStore', () => {
     void watchCallbacks
   })
 
+  test('update nested-merges providerSettings per provider id', async () => {
+    const mutateMock = vi.fn().mockResolvedValue(undefined)
+    const watchCallbacks: Array<(newValue: unknown) => void> = []
+
+    storeGetQueryMock.mockResolvedValueOnce(null)
+    storeWatchSubscribeMock.mockImplementation((_input, handlers) => {
+      watchCallbacks.push(handlers.onData)
+      return { unsubscribe: vi.fn() }
+    })
+
+    const { trpcClient } = await import('../../trpc/client')
+    vi.mocked(trpcClient.store.set.mutate).mockImplementation(mutateMock)
+
+    const { providerStore } = await import('../provider-store')
+    await providerStore.getState().replace({
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      providerSettings: {
+        openai: { model: 'gpt-5.2-codex', baseUrl: 'https://example.invalid' }
+      },
+      activeProviders: {
+        llm: 'openai'
+      }
+    })
+
+    await providerStore.getState().update({
+      providerSettings: {
+        openai: { model: 'gpt-5.2' }
+      }
+    })
+
+    expect(providerStore.getState().data).toEqual({
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      providerSettings: {
+        openai: { model: 'gpt-5.2', baseUrl: 'https://example.invalid' }
+      },
+      activeProviders: {
+        llm: 'openai'
+      }
+    })
+    expect(mutateMock).toHaveBeenCalledWith({
+      key: 'providers',
+      value: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'token' }
+          }
+        },
+        providerSettings: {
+          openai: { model: 'gpt-5.2', baseUrl: 'https://example.invalid' }
+        },
+        activeProviders: {
+          llm: 'openai'
+        }
+      }
+    })
+
+    void watchCallbacks
+  })
+
   test('update does not drop providerSettings when activeProviders.llm changes', async () => {
     const mutateMock = vi.fn().mockResolvedValue(undefined)
     const watchCallbacks: Array<(newValue: unknown) => void> = []

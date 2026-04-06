@@ -18,6 +18,35 @@ export type {
   ProviderSettings
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function mergeProviderSettings(
+  current: ProviderSettings['providerSettings'],
+  partial: ProviderSettings['providerSettings'] | undefined
+): ProviderSettings['providerSettings'] {
+  if (!partial) {
+    return current
+  }
+
+  let next: ProviderSettings['providerSettings'] | null = null
+  for (const [providerId, partialSettings] of Object.entries(partial)) {
+    if (!next) {
+      next = { ...current }
+    }
+
+    const existing = current[providerId]
+    if (isRecord(existing) && isRecord(partialSettings)) {
+      next[providerId] = { ...existing, ...partialSettings }
+    } else {
+      next[providerId] = partialSettings
+    }
+  }
+
+  return next ?? current
+}
+
 const providerStoreBase = createPersistedStore<ProviderSettings>({
   key: 'providers',
   defaults: defaultProviderSettings,
@@ -30,6 +59,7 @@ async function updateProviderSettingsSafely(partial: Partial<ProviderSettings>):
     ...current.activeProviders,
     ...(partial.activeProviders ?? {})
   }
+  const nextProviderSettings = mergeProviderSettings(current.providerSettings, partial.providerSettings)
 
   const next = normalizeProviderSettings({
     ...current,
@@ -39,8 +69,7 @@ async function updateProviderSettingsSafely(partial: Partial<ProviderSettings>):
       ...(partial.providers ?? {})
     },
     providerSettings: {
-      ...current.providerSettings,
-      ...(partial.providerSettings ?? {})
+      ...nextProviderSettings
     },
     activeProviders: nextActiveProviders
   })

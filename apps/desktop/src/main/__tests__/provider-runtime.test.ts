@@ -263,14 +263,11 @@ describe('provider runtime resolution', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-4.1' }
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {
-        llm: 'gpt-4.1'
       }
     })
 
@@ -287,14 +284,11 @@ describe('provider runtime resolution', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-4.1' }
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {
-        llm: 'gpt-4.1'
       }
     })
 
@@ -316,8 +310,7 @@ describe('provider runtime resolution', () => {
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {}
+      }
     })
 
     expect(getActiveLLMSelection(store)).toBeUndefined()
@@ -332,13 +325,9 @@ describe('provider runtime resolution', () => {
           connectionType: 'oauth'
         }
       },
-      providerModels: {
-        'openai-codex': { model: 'gpt-5.2-codex' }
-      },
       activeProviders: {
         llm: 'openai-codex'
-      },
-      activeModels: {}
+      }
     })
 
     await expect(resolveActiveLLMModel({ store })).rejects.toThrowError(
@@ -395,14 +384,11 @@ describe('provider runtime resolution', () => {
           }
         }
       },
-      providerModels: {
+      providerSettings: {
         openrouter: { model: 'openai/gpt-4.1-mini' }
       },
       activeProviders: {
         llm: 'openrouter'
-      },
-      activeModels: {
-        llm: 'openai/gpt-4.1-mini'
       }
     })
 

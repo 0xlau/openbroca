@@ -114,6 +114,9 @@ describe('OAuthService', () => {
           }
         }
       },
+      providerSettings: {
+        deepgram: { model: 'nova-3' }
+      },
       activeProviders: {
         llm: 'openai-codex',
         asr: 'deepgram'
@@ -151,7 +154,9 @@ describe('OAuthService', () => {
       activeProviders: {
         asr: 'deepgram'
       },
-      providerSettings: {}
+      providerSettings: {
+        deepgram: { model: 'nova-3' }
+      }
     })
   })
 

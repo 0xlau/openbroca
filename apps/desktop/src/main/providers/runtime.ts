@@ -40,14 +40,29 @@ export function getActiveASRProviderId(store: StoreLike): string | undefined {
   return getNormalizedProviderSettings(store).activeProviders.asr
 }
 
+function normalizeModel(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const model = value.trim()
+  return model ? model : undefined
+}
+
 export function getActiveLLMModel(store: StoreLike): string | undefined {
-  return getNormalizedProviderSettings(store).activeModels.llm
+  const settings = getNormalizedProviderSettings(store)
+  const providerId = settings.activeProviders.llm
+  if (!providerId) {
+    return undefined
+  }
+  const providerSettings = settings.providerSettings[providerId]
+  return providerSettings ? normalizeModel(providerSettings.model) : undefined
 }
 
 export function getActiveLLMSelection(store: StoreLike): ActiveLLMSelection | undefined {
   const settings = getNormalizedProviderSettings(store)
   const providerId = settings.activeProviders.llm
-  const model = settings.activeModels.llm
+  const providerSettings = providerId ? settings.providerSettings[providerId] : undefined
+  const model = providerSettings ? normalizeModel(providerSettings.model) : undefined
 
   if (!providerId || !model) {
     return undefined
