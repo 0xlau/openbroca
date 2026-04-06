@@ -42,4 +42,32 @@ describe('openaiCodexDescriptor', () => {
       }
     }).rejects.toThrow(ConfigurationError)
   })
+
+  it('declares a model settings item and setup status readiness independent of oauth', () => {
+    expect(openaiCodexDescriptor.settingsItems).toEqual([
+      expect.objectContaining({
+        key: 'model',
+        type: 'model-select',
+        label: 'Model',
+        required: true,
+        dataSource: 'llm-models'
+      })
+    ])
+
+    const missing = openaiCodexDescriptor.getSetupStatus?.({ settings: {} })
+    expect(missing).toEqual(
+      expect.objectContaining({
+        status: 'configured',
+        canActivate: false
+      })
+    )
+
+    const ready = openaiCodexDescriptor.getSetupStatus?.({ settings: { model: 'codex-mini' } })
+    expect(ready).toEqual(
+      expect.objectContaining({
+        status: 'ready',
+        canActivate: true
+      })
+    )
+  })
 })

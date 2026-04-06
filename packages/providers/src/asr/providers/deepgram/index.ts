@@ -7,13 +7,38 @@ const configSchema = z.object({
   apiKey: z.string().min(1, 'API key is required')
 })
 
-export const deepgramDescriptor: ASRProviderDescriptor<DeepgramConfig> = {
+const settingsSchema = z.object({
+  language: z.string().trim().min(1).optional()
+})
+
+type DeepgramSettings = z.infer<typeof settingsSchema>
+
+export const deepgramDescriptor: ASRProviderDescriptor<DeepgramConfig, DeepgramSettings> = {
   id: 'deepgram',
   displayName: 'Deepgram',
   description: 'Real-time speech recognition via the Deepgram Nova API',
   icon: providerIcons.deepgram,
   kind: 'cloud',
   configSchema,
+  settingsSchema,
+  settingsItems: [
+    {
+      key: 'language',
+      type: 'select',
+      label: 'Language',
+      description: 'Default language used when the runtime does not override it.',
+      options: [
+        { label: 'English (en)', value: 'en' },
+        { label: 'Chinese (zh)', value: 'zh' }
+      ]
+    }
+  ],
+  getSetupStatus: () => ({
+    status: 'ready',
+    canActivate: true,
+    summary: 'Ready to use.',
+    blockingReasons: []
+  }),
   capabilities: { streaming: true },
   connectionOptions: [
     {

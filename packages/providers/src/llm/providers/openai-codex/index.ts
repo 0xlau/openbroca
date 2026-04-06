@@ -10,12 +10,49 @@ const configSchema = z.object({
   originator: z.string().min(1).optional()
 })
 
-export const openaiCodexDescriptor: LLMProviderDescriptor<OpenAICodexConfig> = {
+const settingsSchema = z.object({
+  model: z.string().trim().min(1, 'Choose a model')
+})
+
+type OpenAICodexSettings = z.infer<typeof settingsSchema>
+
+export const openaiCodexDescriptor: LLMProviderDescriptor<OpenAICodexConfig, OpenAICodexSettings> = {
   id: 'openai-codex',
   icon: providerIcons['openai-codex'],
   displayName: 'OpenAI Codex',
   description: 'OpenAI Codex via desktop OAuth',
   configSchema,
+  settingsSchema,
+  settingsItems: [
+    {
+      key: 'model',
+      type: 'model-select',
+      label: 'Model',
+      description: 'Choose the default Codex model used for completions.',
+      required: true,
+      dataSource: 'llm-models'
+    }
+  ],
+  getSetupStatus: ({ settings }) => {
+    const model = typeof settings?.model === 'string' ? settings.model.trim() : ''
+
+    if (!model) {
+      return {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+
+    return {
+      status: 'ready',
+      canActivate: true,
+      summary: 'Ready to use.',
+      blockingReasons: []
+    }
+  },
   connectionOptions: [
     {
       type: 'oauth',

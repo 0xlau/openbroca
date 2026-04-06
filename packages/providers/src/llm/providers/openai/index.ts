@@ -9,12 +9,49 @@ const configSchema = z.object({
   organization: z.string().optional()
 })
 
-export const openaiDescriptor: LLMProviderDescriptor<OpenAIConfig> = {
+const settingsSchema = z.object({
+  model: z.string().trim().min(1, 'Choose a model')
+})
+
+type OpenAISettings = z.infer<typeof settingsSchema>
+
+export const openaiDescriptor: LLMProviderDescriptor<OpenAIConfig, OpenAISettings> = {
   id: 'openai',
   displayName: 'OpenAI',
   description: 'GPT-4o, o-series, and other models via the OpenAI API',
   icon: providerIcons.openai,
   configSchema,
+  settingsSchema,
+  settingsItems: [
+    {
+      key: 'model',
+      type: 'model-select',
+      label: 'Model',
+      description: 'Choose the default OpenAI model used for chat completions.',
+      required: true,
+      dataSource: 'llm-models'
+    }
+  ],
+  getSetupStatus: ({ settings }) => {
+    const model = typeof settings?.model === 'string' ? settings.model.trim() : ''
+
+    if (!model) {
+      return {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+
+    return {
+      status: 'ready',
+      canActivate: true,
+      summary: 'Ready to use.',
+      blockingReasons: []
+    }
+  },
   capabilities: {
     streaming: true,
     nonStreaming: true,

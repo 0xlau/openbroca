@@ -7,12 +7,49 @@ const configSchema = z.object({
   apiKey: z.string().trim().min(1, 'API key is required')
 })
 
-export const openrouterDescriptor: LLMProviderDescriptor<OpenRouterConfig> = {
+const settingsSchema = z.object({
+  model: z.string().trim().min(1, 'Choose a model')
+})
+
+type OpenRouterSettings = z.infer<typeof settingsSchema>
+
+export const openrouterDescriptor: LLMProviderDescriptor<OpenRouterConfig, OpenRouterSettings> = {
   id: 'openrouter',
   displayName: 'OpenRouter',
   description: 'Access OpenRouter models and runtimes via an API key.',
   icon: providerIcons.openrouter,
   configSchema,
+  settingsSchema,
+  settingsItems: [
+    {
+      key: 'model',
+      type: 'model-select',
+      label: 'Model',
+      description: 'Choose the default OpenRouter model (for example `openai/gpt-4o-mini`).',
+      required: true,
+      dataSource: 'llm-models'
+    }
+  ],
+  getSetupStatus: ({ settings }) => {
+    const model = typeof settings?.model === 'string' ? settings.model.trim() : ''
+
+    if (!model) {
+      return {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+
+    return {
+      status: 'ready',
+      canActivate: true,
+      summary: 'Ready to use.',
+      blockingReasons: []
+    }
+  },
   capabilities: {
     streaming: true,
     nonStreaming: true,

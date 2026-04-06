@@ -66,6 +66,34 @@ describe('openaiDescriptor', () => {
     expect(provider.displayName).toBe('OpenAI')
     expect(provider.isConfigured()).toBe(true)
   })
+
+  it('declares a model settings item and setup status readiness', () => {
+    expect(openaiDescriptor.settingsItems).toEqual([
+      expect.objectContaining({
+        key: 'model',
+        type: 'model-select',
+        label: 'Model',
+        required: true,
+        dataSource: 'llm-models'
+      })
+    ])
+
+    const missing = openaiDescriptor.getSetupStatus?.({ settings: {} })
+    expect(missing).toEqual(
+      expect.objectContaining({
+        status: 'configured',
+        canActivate: false
+      })
+    )
+
+    const ready = openaiDescriptor.getSetupStatus?.({ settings: { model: 'gpt-4o-mini' } })
+    expect(ready).toEqual(
+      expect.objectContaining({
+        status: 'ready',
+        canActivate: true
+      })
+    )
+  })
 })
 
 describe('openaiCodexDescriptor', () => {

@@ -47,4 +47,32 @@ describe('openrouterDescriptor', () => {
     expect(provider.displayName).toBe('OpenRouter')
     expect(provider.isConfigured()).toBe(true)
   })
+
+  it('declares a model settings item and setup status readiness', () => {
+    expect(openrouterDescriptor.settingsItems).toEqual([
+      expect.objectContaining({
+        key: 'model',
+        type: 'model-select',
+        label: 'Model',
+        required: true,
+        dataSource: 'llm-models'
+      })
+    ])
+
+    const missing = openrouterDescriptor.getSetupStatus?.({ settings: {} })
+    expect(missing).toEqual(
+      expect.objectContaining({
+        status: 'configured',
+        canActivate: false
+      })
+    )
+
+    const ready = openrouterDescriptor.getSetupStatus?.({ settings: { model: 'openai/gpt-4o-mini' } })
+    expect(ready).toEqual(
+      expect.objectContaining({
+        status: 'ready',
+        canActivate: true
+      })
+    )
+  })
 })

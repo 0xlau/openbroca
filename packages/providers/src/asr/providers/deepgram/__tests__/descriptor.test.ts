@@ -48,4 +48,22 @@ describe('deepgramDescriptor', () => {
       expect.objectContaining({ streaming: true })
     )
   })
+
+  it('declares a language settings item and is ready by default', () => {
+    expect(deepgramDescriptor.settingsItems).toEqual([
+      expect.objectContaining({
+        key: 'language',
+        type: 'select',
+        label: 'Language'
+      })
+    ])
+
+    const status = deepgramDescriptor.getSetupStatus?.({ settings: {} })
+    expect(status).toEqual(
+      expect.objectContaining({
+        status: 'ready',
+        canActivate: true
+      })
+    )
+  })
 })
