@@ -604,6 +604,7 @@ describe('Providers page', () => {
     await renderProviders()
 
     expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('Choose a model')).toBeTruthy()
   })
 
   test('opens the unified settings dialog, shows setup summary, and saves providerSettings for openai', async () => {
@@ -834,6 +835,7 @@ describe('Providers page', () => {
 
     expect(screen.queryByRole('button', { name: 'Current' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('Choose a model')).toBeTruthy()
   })
 
   test('disables Set as active while setup status is loading for a connected llm provider', async () => {

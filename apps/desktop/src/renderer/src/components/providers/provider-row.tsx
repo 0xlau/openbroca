@@ -21,6 +21,34 @@ import {
   shouldInvertProviderIcon,
 } from './provider-types'
 
+function getSetupGuidance(
+  setupStatus:
+    | {
+        canActivate: boolean
+        summary?: string
+        blockingReasons: string[]
+        fieldErrors?: Record<string, string>
+      }
+    | undefined
+): string | undefined {
+  if (!setupStatus || setupStatus.canActivate) {
+    return undefined
+  }
+
+  const blockingReason = setupStatus.blockingReasons.find((reason) => reason.trim().length > 0)
+  if (blockingReason) {
+    return blockingReason
+  }
+
+  const fieldError = Object.values(setupStatus.fieldErrors ?? {}).find((value) => value.trim().length > 0)
+  if (fieldError) {
+    return fieldError
+  }
+
+  const summary = setupStatus.summary?.trim()
+  return summary ? summary : undefined
+}
+
 export function ProviderRow({
   section,
   provider,
@@ -62,6 +90,7 @@ export function ProviderRow({
   const canActivate = state.isConnected && setupStatus?.canActivate === true
   const isConfiguredActive = state.isActive && canActivate
   const modelSummary = section === 'llm' ? getLLMModelSummary(savedModel) : []
+  const setupGuidance = state.isConnected ? getSetupGuidance(setupStatus) : undefined
   const hasSettings = provider.settingsItems.length > 0
   const iconSrc = resolveProviderIconSrc(provider.icon)
   const shouldInvertIcon = shouldInvertProviderIcon(provider.icon)
@@ -147,6 +176,9 @@ export function ProviderRow({
               {line}
             </TypographyMuted>
           ))}
+          {setupGuidance ? (
+            <TypographyMuted className="mt-1 text-xs">{setupGuidance}</TypographyMuted>
+          ) : null}
         </div>
         {!state.isConnected && state.helperText ? (
           <Tooltip>
