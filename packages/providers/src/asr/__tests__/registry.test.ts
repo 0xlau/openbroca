@@ -144,6 +144,7 @@ describe('ASRProviderRegistry', () => {
       })
 
       const [descriptor] = registry.listDescriptors()
+      const typedDescriptor = descriptor as ASRProviderDescriptor<FakeCloudConfig, { language?: string }>
 
       expect(descriptor).toMatchObject({
         id: 'settings-asr',
@@ -154,8 +155,16 @@ describe('ASRProviderRegistry', () => {
           })
         ]
       })
-      expect(descriptor.settingsSchema).toBe(settingsSchema)
-      expect(descriptor.getSetupStatus).toBe(getSetupStatus)
+
+      const parsed = typedDescriptor.settingsSchema?.parse({ language: 'es' })
+      expect(parsed?.language).toBe('es')
+
+      const status = typedDescriptor.getSetupStatus?.({ connection: undefined, settings: {} })
+      expect(status).toEqual({
+        status: 'ready',
+        canActivate: true,
+        blockingReasons: [],
+      })
     })
   })
 

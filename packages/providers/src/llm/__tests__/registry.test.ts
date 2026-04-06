@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ProviderError } from '../../shared/errors.ts'
 import { LLMProviderRegistry } from '../registry.ts'
 import type { ProviderSetupStatus } from '../../shared/settings.ts'
+import type { ProviderSettingsItem as ExportedProviderSettingsItem } from '../../index.ts'
 import type {
   CompletionChunk,
   CompletionRequest,
@@ -94,36 +95,55 @@ describe('LLMProviderRegistry', () => {
         blockingReasons: ['Model is required'],
       })
 
-          registry.register(
-            makeDescriptor('settings-llm', {
-              settingsSchema,
-              settingsItems: [
-                {
-                  key: 'model',
-                  type: 'model-select',
-                  label: 'Model',
-                  description: 'Choose the runtime model',
-                  dataSource: 'llm-models',
-                },
-              ],
-              getSetupStatus,
-            })
-          )
+      registry.register(
+        makeDescriptor('settings-llm', {
+          settingsSchema,
+          settingsItems: [
+            {
+              key: 'model',
+              type: 'model-select',
+              label: 'Model',
+              description: 'Choose the runtime model',
+              dataSource: 'llm-models',
+            },
+          ],
+          getSetupStatus,
+        })
+      )
 
       const [descriptor] = registry.listDescriptors()
+      const typedDescriptor = descriptor as LLMProviderDescriptor<FakeConfig, SettingsContext>
 
       expect(descriptor).toMatchObject({
         id: 'settings-llm',
         settingsItems: [
           expect.objectContaining({
             key: 'model',
-            type: 'model-select'
-          })
-        ]
+            type: 'model-select',
+          }),
+        ],
       })
 
-      expect(descriptor.settingsSchema).toBe(settingsSchema)
-      expect(descriptor.getSetupStatus).toBe(getSetupStatus)
+      const parsed = typedDescriptor.settingsSchema?.parse({ model: 'runtime-model' })
+      expect(parsed?.model).toBe('runtime-model')
+
+      const status = typedDescriptor.getSetupStatus?.({ connection: undefined, settings: {} })
+      expect(status).toEqual({
+        status: 'configured',
+        canActivate: false,
+        blockingReasons: ['Model is required'],
+      })
+    })
+
+    it('uses the exported ProviderSettingsItem type from the package entrypoint', () => {
+      const exportedItem: ExportedProviderSettingsItem = {
+        key: 'export',
+        label: 'Exported',
+        description: 'Ensure the type is exported',
+        type: 'text',
+      }
+
+      expect(exportedItem.type).toBe('text')
     })
 
   })
