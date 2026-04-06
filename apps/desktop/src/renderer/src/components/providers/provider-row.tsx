@@ -59,7 +59,7 @@ export function ProviderRow({
     { providerId: provider.id, kind: section },
     { enabled: state.isConnected }
   )
-  const canActivate = state.isConnected && (setupStatus?.canActivate ?? true)
+  const canActivate = state.isConnected && setupStatus?.canActivate === true
   const isConfiguredActive = state.isActive && canActivate
   const modelSummary = section === 'llm' ? getLLMModelSummary(savedModel) : []
   const hasSettings = provider.settingsItems.length > 0

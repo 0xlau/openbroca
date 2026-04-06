@@ -41,18 +41,21 @@ export function ProviderSection({
   const sortedProviders = providers
     .map((provider, index) => {
       const savedModel = section === 'llm' ? resolveModel(providerSettings[provider.id]?.model) : undefined
+      const isConfiguredActive =
+        activeProviderId === provider.id && (section === 'llm' ? Boolean(savedModel) : true)
 
       return {
         index,
         provider,
         isActive: activeProviderId === provider.id,
+        isConfiguredActive,
         isConnected: !!settings[provider.id]?.enabled,
         savedModel
       }
     })
     .sort((left, right) => {
-      const leftRank = left.isActive ? 0 : left.isConnected ? 1 : 2
-      const rightRank = right.isActive ? 0 : right.isConnected ? 1 : 2
+      const leftRank = left.isConfiguredActive ? 0 : left.isConnected ? 1 : 2
+      const rightRank = right.isConfiguredActive ? 0 : right.isConnected ? 1 : 2
 
       if (leftRank !== rightRank) {
         return leftRank - rightRank

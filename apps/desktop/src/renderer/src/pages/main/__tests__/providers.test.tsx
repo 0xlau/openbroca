@@ -65,6 +65,11 @@ type ProviderSetupStatusFixture = {
   fieldErrors?: Record<string, string>
 }
 
+type ProviderSetupStatusQueryFixture = {
+  data?: ProviderSetupStatusFixture
+  isLoading?: boolean
+}
+
 const openAIProviderFixture: ProviderFixture = {
   id: 'openai',
   displayName: 'OpenAI',
@@ -134,7 +139,7 @@ const upsertProviderConnection = vi
 let llmProviders: ProviderFixture[] = []
 let asrProviders: ProviderFixture[] = []
 let llmModelsByProvider: Record<string, Array<{ id: string; name: string }>> = {}
-let providerSetupStatuses: Record<string, ProviderSetupStatusFixture> = {}
+let providerSetupStatusQueries: Record<string, ProviderSetupStatusQueryFixture> = {}
 let providerAuthStatus: Record<string, ProviderAuthState> = {}
 const connectProviderAuth = vi.fn<(providerId: string) => Promise<ProviderAuthState>>()
 const disconnectProviderAuth = vi.fn<(providerId: string) => Promise<ProviderAuthState>>()
@@ -172,11 +177,14 @@ vi.mock('@renderer/trpc', () => ({
         useQuery: () => ({ data: llmProviders })
       },
       getSetupStatus: {
-        useQuery: ({ providerId, kind }: { providerId: string; kind: 'llm' | 'asr' }) => ({
-          data: providerSetupStatuses[`${kind}:${providerId}`],
-          isLoading: false,
-          error: null
-        })
+        useQuery: ({ providerId, kind }: { providerId: string; kind: 'llm' | 'asr' }) => {
+          const query = providerSetupStatusQueries[`${kind}:${providerId}`]
+          return {
+            data: query?.data,
+            isLoading: query?.isLoading ?? false,
+            error: null
+          }
+        }
       },
       listModels: {
         useQuery: (
@@ -345,7 +353,7 @@ describe('Providers page', () => {
     llmProviders = []
     asrProviders = []
     llmModelsByProvider = {}
-    providerSetupStatuses = {}
+    providerSetupStatusQueries = {}
     providerAuthStatus = {}
     connectProviderAuth.mockReset()
     disconnectProviderAuth.mockReset()
@@ -521,11 +529,13 @@ describe('Providers page', () => {
         ]
       }
     ]
-    providerSetupStatuses['llm:openai'] = {
-      status: 'ready',
-      canActivate: true,
-      summary: 'Ready to use.',
-      blockingReasons: []
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'ready',
+        canActivate: true,
+        summary: 'Ready to use.',
+        blockingReasons: []
+      }
     }
 
     const connectedOpenAI: ProviderConnectionRecord = {
@@ -566,12 +576,14 @@ describe('Providers page', () => {
 
   test('disables Set as active when setup status cannot activate', async () => {
     llmProviders = [openAIProviderFixture]
-    providerSetupStatuses['llm:openai'] = {
-      status: 'configured',
-      canActivate: false,
-      summary: 'Select a model to finish setup.',
-      blockingReasons: ['Choose a model'],
-      fieldErrors: { model: 'Choose a model' }
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
     }
 
     providerStore.setState({
@@ -596,12 +608,14 @@ describe('Providers page', () => {
 
   test('opens the unified settings dialog, shows setup summary, and saves providerSettings for openai', async () => {
     llmProviders = [openAIProviderFixture]
-    providerSetupStatuses['llm:openai'] = {
-      status: 'configured',
-      canActivate: false,
-      summary: 'Select a model to finish setup.',
-      blockingReasons: ['Choose a model'],
-      fieldErrors: { model: 'Choose a model' }
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
     }
     llmModelsByProvider.openai = [
       { id: 'gpt-4.1', name: 'gpt-4.1' },
@@ -650,11 +664,13 @@ describe('Providers page', () => {
 
   test('shows a unified settings button for connected ASR providers with settings items', async () => {
     asrProviders = [deepgramProviderFixture]
-    providerSetupStatuses['asr:deepgram'] = {
-      status: 'ready',
-      canActivate: true,
-      summary: 'Ready to use.',
-      blockingReasons: []
+    providerSetupStatusQueries['asr:deepgram'] = {
+      data: {
+        status: 'ready',
+        canActivate: true,
+        summary: 'Ready to use.',
+        blockingReasons: []
+      }
     }
     const updateSettings = vi.fn().mockResolvedValue(undefined)
 
@@ -697,6 +713,14 @@ describe('Providers page', () => {
 
   test('shows Current action for an active llm provider when a saved model exists', async () => {
     llmProviders = [openAIProviderFixture]
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'ready',
+        canActivate: true,
+        summary: 'Ready to use.',
+        blockingReasons: []
+      }
+    }
     llmModelsByProvider.openai = [
       { id: 'gpt-4.1', name: 'gpt-4.1' },
       { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }
@@ -728,6 +752,14 @@ describe('Providers page', () => {
   })
 
   test('shows Current action for an active llm provider with a saved model', async () => {
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'ready',
+        canActivate: true,
+        summary: 'Ready to use.',
+        blockingReasons: []
+      }
+    }
     llmProviders = [
       {
         id: 'openai',
@@ -771,12 +803,14 @@ describe('Providers page', () => {
 
   test('disables Set as active when an llm provider is selected as active but has no saved model', async () => {
     llmProviders = [openAIProviderFixture]
-    providerSetupStatuses['llm:openai'] = {
-      status: 'configured',
-      canActivate: false,
-      summary: 'Select a model to finish setup.',
-      blockingReasons: ['Choose a model'],
-      fieldErrors: { model: 'Choose a model' }
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
     }
 
     providerStore.setState({
@@ -790,6 +824,62 @@ describe('Providers page', () => {
           }
         },
         providerSettings: {},
+        activeProviders: {
+          llm: 'openai'
+        }
+      }
+    })
+
+    await renderProviders()
+
+    expect(screen.queryByRole('button', { name: 'Current' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', true)
+  })
+
+  test('disables Set as active while setup status is loading for a connected llm provider', async () => {
+    llmProviders = [openAIProviderFixture]
+    providerSetupStatusQueries['llm:openai'] = {
+      isLoading: true
+    }
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerSettings: {
+          openai: { model: 'gpt-4.1-mini' }
+        },
+        activeProviders: {}
+      }
+    })
+
+    await renderProviders()
+
+    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', true)
+  })
+
+  test('does not show Current when setup status is missing for an active llm provider', async () => {
+    llmProviders = [openAIProviderFixture]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerSettings: {
+          openai: { model: 'gpt-4.1-mini' }
+        },
         activeProviders: {
           llm: 'openai'
         }
@@ -826,6 +916,7 @@ describe('Providers page', () => {
       status: 'connected',
       lastConnectedAt: '2026-03-28T12:00:00.000Z'
     }
+
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -1112,9 +1203,7 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-second' }
           }
         },
-        providerSettings: {
-          'active-provider': { model: 'gpt-4.1-mini' }
-        },
+        providerSettings: {},
         activeProviders: {
           llm: 'active-provider'
         }
@@ -1133,8 +1222,8 @@ describe('Providers page', () => {
       .map((element) => element.textContent)
 
     expect(providerNames).toEqual([
-      'Active Provider',
       'First Connected',
+      'Active Provider',
       'Second Connected',
       'Not Connected'
     ])
