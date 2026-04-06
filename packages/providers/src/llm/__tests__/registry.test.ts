@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProviderError } from '../../shared/errors.ts'
 import { LLMProviderRegistry } from '../registry.ts'
+import type { ProviderSetupStatus } from '../../shared/settings.ts'
 import type {
   CompletionChunk,
   CompletionRequest,
@@ -85,28 +86,29 @@ describe('LLMProviderRegistry', () => {
         parse: (data: unknown): SettingsContext => {
           const parsed = data as Partial<SettingsContext>
           return { model: parsed.model ?? 'default' }
-        }
+        },
       }
-      const getSetupStatus = () => ({
+      const getSetupStatus = (): ProviderSetupStatus => ({
         status: 'configured',
         canActivate: false,
-        blockingReasons: ['Model is required']
+        blockingReasons: ['Model is required'],
       })
 
-      registry.register(
-        makeDescriptor('settings-llm', {
-          settingsSchema,
-          settingsItems: [
-            {
-              key: 'model',
-              type: 'model-select',
-              label: 'Model',
-              description: 'Choose the runtime model'
-            }
-          ],
-          getSetupStatus
-        })
-      )
+          registry.register(
+            makeDescriptor('settings-llm', {
+              settingsSchema,
+              settingsItems: [
+                {
+                  key: 'model',
+                  type: 'model-select',
+                  label: 'Model',
+                  description: 'Choose the runtime model',
+                  dataSource: 'llm-models',
+                },
+              ],
+              getSetupStatus,
+            })
+          )
 
       const [descriptor] = registry.listDescriptors()
 

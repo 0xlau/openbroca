@@ -53,5 +53,4 @@ export interface ProviderSetupStatus {
 export interface ProviderSetupContext {
   connection?: unknown
   settings?: Record<string, unknown>
-  runtimeConfig?: unknown
 }

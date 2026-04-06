@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProviderError } from '../../shared/errors.ts'
 import { ASRProviderRegistry } from '../registry.ts'
+import type { ProviderSetupStatus } from '../../shared/settings.ts'
 import type {
   ASRProviderDescriptor,
   CloudASRProvider,
@@ -119,12 +120,12 @@ describe('ASRProviderRegistry', () => {
         parse: (data: unknown) => {
           const parsed = data as { language?: string }
           return { language: parsed.language ?? 'en' }
-        }
+        },
       }
-      const getSetupStatus = () => ({
+      const getSetupStatus = (): ProviderSetupStatus => ({
         status: 'ready',
         canActivate: true,
-        blockingReasons: []
+        blockingReasons: [],
       })
 
       registry.register({
