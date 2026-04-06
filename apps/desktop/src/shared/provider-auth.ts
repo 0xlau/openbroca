@@ -31,26 +31,16 @@ export interface ActiveProviders {
   asr?: string
 }
 
-export interface ActiveModels {
-  llm?: string
-}
-
-export interface ProviderModelSelection {
-  model: string
-}
-
 export interface ProviderSettings {
   providers: Record<string, ProviderConnectionRecord | undefined>
-  providerModels: Record<string, ProviderModelSelection | undefined>
+  providerSettings: Record<string, Record<string, unknown> | undefined>
   activeProviders: ActiveProviders
-  activeModels: ActiveModels
 }
 
 export const defaultProviderSettings: ProviderSettings = {
   providers: {},
-  providerModels: {},
-  activeProviders: {},
-  activeModels: {}
+  providerSettings: {},
+  activeProviders: {}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -62,6 +52,17 @@ function hasOwnRecord<T>(
   key: string
 ): boolean {
   return Object.prototype.hasOwnProperty.call(records, key)
+}
+
+function normalizeModel(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const model = value.trim()
+  if (!model) {
+    return null
+  }
+  return model
 }
 
 export function clearActiveProviderSelections(
@@ -91,7 +92,7 @@ export function removeProviderState(
   providerId: string
 ): ProviderSettings {
   const hadProvider = hasOwnRecord(settings.providers, providerId)
-  const hadProviderModel = hasOwnRecord(settings.providerModels, providerId)
+  const hadProviderSettings = hasOwnRecord(settings.providerSettings, providerId)
   const activeProviderRemoved =
     settings.activeProviders.llm === providerId || settings.activeProviders.asr === providerId
 
@@ -100,26 +101,21 @@ export function removeProviderState(
     delete nextProviders[providerId]
   }
 
-  const nextProviderModels = hadProviderModel ? { ...settings.providerModels } : settings.providerModels
-  if (hadProviderModel) {
-    delete nextProviderModels[providerId]
+  const nextProviderSettings = hadProviderSettings
+    ? { ...settings.providerSettings }
+    : settings.providerSettings
+  if (hadProviderSettings) {
+    delete nextProviderSettings[providerId]
   }
 
   const nextActiveProviders = activeProviderRemoved
     ? clearActiveProviderSelections(settings.activeProviders, providerId)
     : settings.activeProviders
 
-  const shouldClearActiveModel = !nextActiveProviders.llm && typeof settings.activeModels.llm === 'string'
-  const nextActiveModels = shouldClearActiveModel ? { ...settings.activeModels } : settings.activeModels
-  if (shouldClearActiveModel) {
-    delete nextActiveModels.llm
-  }
-
   return {
     providers: nextProviders,
-    providerModels: nextProviderModels,
-    activeProviders: nextActiveProviders,
-    activeModels: nextActiveModels
+    providerSettings: nextProviderSettings,
+    activeProviders: nextActiveProviders
   }
 }
 
@@ -135,16 +131,15 @@ export function normalizeProviderSettings(raw: unknown): ProviderSettings {
   const rawActiveProviders = isRecord(raw.activeProviders)
     ? (raw.activeProviders as ActiveProviders)
     : {}
+  const rawProviderSettings = isRecord(raw.providerSettings)
+    ? (raw.providerSettings as Record<string, unknown>)
+    : {}
   const rawProviderModels = isRecord(raw.providerModels)
     ? (raw.providerModels as Record<string, unknown>)
     : {}
-  const providerModels: Record<string, ProviderModelSelection | undefined> = {}
-  const rawActiveModels = isRecord(raw.activeModels)
-    ? (raw.activeModels as ActiveModels)
-    : {}
 
   const activeProviders: ActiveProviders = {}
-  const activeModels: ActiveModels = {}
+  const providerSettings: Record<string, Record<string, unknown> | undefined> = {}
 
   if (typeof rawActiveProviders.llm === 'string' && hasOwnRecord(providers, rawActiveProviders.llm)) {
     activeProviders.llm = rawActiveProviders.llm
@@ -152,24 +147,52 @@ export function normalizeProviderSettings(raw: unknown): ProviderSettings {
   if (typeof rawActiveProviders.asr === 'string' && hasOwnRecord(providers, rawActiveProviders.asr)) {
     activeProviders.asr = rawActiveProviders.asr
   }
+
+  for (const [providerId, rawSettings] of Object.entries(rawProviderSettings)) {
+    if (!hasOwnRecord(providers, providerId) || !isRecord(rawSettings)) {
+      continue
+    }
+
+    const nextSettings: Record<string, unknown> = { ...rawSettings }
+    if (Object.prototype.hasOwnProperty.call(nextSettings, 'model')) {
+      const model = normalizeModel(nextSettings.model)
+      if (model) {
+        nextSettings.model = model
+      } else {
+        delete nextSettings.model
+      }
+    }
+
+    if (Object.keys(nextSettings).length === 0) {
+      continue
+    }
+
+    providerSettings[providerId] = nextSettings
+  }
+
   for (const [providerId, selection] of Object.entries(rawProviderModels)) {
     if (!hasOwnRecord(providers, providerId) || !isRecord(selection)) {
       continue
     }
-    if (typeof selection.model !== 'string' || !selection.model.trim()) {
+
+    const model = normalizeModel(selection.model)
+    if (!model) {
       continue
     }
-    providerModels[providerId] = { model: selection.model }
-  }
-  if (activeProviders.llm && typeof rawActiveModels.llm === 'string' && rawActiveModels.llm.trim()) {
-    activeModels.llm = rawActiveModels.llm
+
+    const existing = providerSettings[providerId]
+    if (!existing) {
+      providerSettings[providerId] = { model }
+      continue
+    }
+
+    providerSettings[providerId] = { ...existing, model }
   }
 
   return {
     providers,
-    providerModels,
-    activeProviders,
-    activeModels
+    providerSettings,
+    activeProviders
   }
 }
 

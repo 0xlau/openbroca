@@ -7,9 +7,8 @@ class MemoryStore {
   private state: Record<string, unknown> = {
     providers: {
       providers: {},
-      providerModels: {},
       activeProviders: {},
-      activeModels: {}
+      providerSettings: {}
     }
   }
   private setCalls = 0
@@ -79,9 +78,8 @@ describe('OAuthService', () => {
           }
         }
       },
-      providerModels: {},
       activeProviders: {},
-      activeModels: {}
+      providerSettings: {}
     })
     expect(JSON.stringify(store.get('providers'))).not.toContain('access-token')
     expect(JSON.stringify(store.get('providers'))).not.toContain('refresh-token')
@@ -150,46 +148,21 @@ describe('OAuthService', () => {
           }
         }
       },
-      providerModels: {},
       activeProviders: {
         asr: 'deepgram'
       },
-      activeModels: {}
+      providerSettings: {}
     })
   })
 
-  test('disconnect clears active llm model and saved provider model for the removed provider', async () => {
-    const secureStorage = {
-      setSecret: vi.fn(async () => undefined),
-      getSecret: vi.fn(async () => null),
-      deleteSecret: vi.fn(async () => undefined)
-    } satisfies SecureStorage
+  test('oauth disconnect removes provider settings for the disconnected provider', async () => {
     const store = new MemoryStore()
-    store.set('providers', {
-      providers: {
-        'openai-codex': {
-          enabled: true,
-          connectionType: 'oauth',
-          account: { accountId: 'acct_codex' },
-          auth: {
-            status: 'connected',
-            lastConnectedAt: '2026-04-02T00:00:00.000Z'
-          }
-        }
-      },
-      providerModels: {
-        'openai-codex': { model: 'gpt-5.2-codex' }
-      },
-      activeProviders: {
-        llm: 'openai-codex'
-      },
-      activeModels: {
-        llm: 'gpt-5.2-codex'
-      }
-    })
-
     const service = new OAuthService({
-      secureStorage,
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => JSON.stringify({ accessToken: 'token' })),
+        deleteSecret: vi.fn(async () => undefined)
+      },
       store,
       providers: {
         'openai-codex': {
@@ -198,14 +171,31 @@ describe('OAuthService', () => {
         }
       }
     })
+    store.set('providers', {
+      providers: {
+        'openai-codex': {
+          enabled: true,
+          connectionType: 'oauth',
+          auth: {
+            status: 'connected',
+            lastConnectedAt: '2026-04-06T00:00:00.000Z'
+          }
+        }
+      },
+      providerSettings: {
+        'openai-codex': { model: 'gpt-5.2-codex' }
+      },
+      activeProviders: {
+        llm: 'openai-codex'
+      }
+    })
 
     await service.disconnect('openai-codex')
 
     expect(store.get('providers')).toEqual({
       providers: {},
-      providerModels: {},
-      activeProviders: {},
-      activeModels: {}
+      providerSettings: {},
+      activeProviders: {}
     })
   })
 
@@ -254,9 +244,8 @@ describe('OAuthService', () => {
     })
     expect(store.get('providers')).toEqual({
       providers: {},
-      providerModels: {},
       activeProviders: {},
-      activeModels: {}
+      providerSettings: {}
     })
   })
 
@@ -324,9 +313,8 @@ describe('OAuthService', () => {
     })
     expect(store.get('providers')).toEqual({
       providers: {},
-      providerModels: {},
       activeProviders: {},
-      activeModels: {}
+      providerSettings: {}
     })
     expect(store.getSetCallCount()).toBe(2)
   })
@@ -348,14 +336,11 @@ describe('OAuthService', () => {
           }
         }
       },
-      providerModels: {
+      providerSettings: {
         deepgram: { model: 'nova-3' }
       },
       activeProviders: {
         llm: 'deepgram'
-      },
-      activeModels: {
-        llm: 'nova-3'
       }
     })
     const oauthService = new OAuthService({
@@ -385,14 +370,11 @@ describe('OAuthService', () => {
           }
         }
       },
-      providerModels: {
+      providerSettings: {
         deepgram: { model: 'nova-3' }
       },
       activeProviders: {
         llm: 'deepgram'
-      },
-      activeModels: {
-        llm: 'nova-3'
       }
     })
     expect(store.getSetCallCount()).toBe(1)

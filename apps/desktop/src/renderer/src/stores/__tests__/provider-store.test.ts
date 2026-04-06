@@ -45,9 +45,8 @@ describe('providerStore', () => {
 
     expect(providerStore.getState().data).toEqual({
       providers: legacyProviders,
-      providerModels: {},
-      activeProviders: {},
-      activeModels: {}
+      providerSettings: {},
+      activeProviders: {}
     })
   })
 
@@ -70,13 +69,12 @@ describe('providerStore', () => {
 
     expect(providerStore.getState().data).toEqual({
       providers: rawStructured.providers,
-      providerModels: {},
-      activeProviders: {},
-      activeModels: {}
+      providerSettings: {},
+      activeProviders: {}
     })
   })
 
-  test('preserves structured settings and backfills missing model state as empty objects', async () => {
+  test('preserves structured settings and backfills missing providerSettings as empty object', async () => {
     storeGetQueryMock.mockResolvedValueOnce({
       providers: {
         openai: {
@@ -102,15 +100,55 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {},
+      providerSettings: {},
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {}
+      }
     })
   })
 
-  test('prunes invalid and orphaned provider model selections during normalization', async () => {
+  test('migrates providerModels into providerSettings on hydrate', async () => {
+    storeGetQueryMock.mockResolvedValueOnce({
+      providers: {
+        openrouter: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'or-key' }
+        }
+      },
+      providerModels: {
+        openrouter: { model: 'openai/gpt-4.1-mini' }
+      },
+      activeProviders: {
+        llm: 'openrouter'
+      },
+      activeModels: {
+        llm: 'openai/gpt-4.1-mini'
+      }
+    })
+    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const { providerStore } = await import('../provider-store')
+    await providerStore.getState().hydrate()
+
+    expect(providerStore.getState().data).toEqual({
+      providers: {
+        openrouter: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'or-key' }
+        }
+      },
+      providerSettings: {
+        openrouter: { model: 'openai/gpt-4.1-mini' }
+      },
+      activeProviders: {
+        llm: 'openrouter'
+      }
+    })
+  })
+
+  test('prunes invalid and orphaned provider settings during normalization', async () => {
     storeGetQueryMock.mockResolvedValueOnce({
       providers: {
         openai: {
@@ -119,7 +157,7 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' },
         orphaned: { model: 'gpt-5.2' },
         empty: { model: '   ' },
@@ -127,9 +165,6 @@ describe('providerStore', () => {
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {
-        llm: 'gpt-5.2-codex'
       }
     })
     storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
@@ -145,14 +180,11 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' }
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {
-        llm: 'gpt-5.2-codex'
       }
     })
   })
@@ -219,13 +251,12 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {},
-      activeProviders: {},
-      activeModels: {}
+      providerSettings: {},
+      activeProviders: {}
     })
   })
 
-  test('normalizes store.watch updates by pruning malformed and orphaned model state', async () => {
+  test('normalizes store.watch updates by migrating legacy providerModels into providerSettings', async () => {
     const watchCallbacks: Array<(newValue: unknown) => void> = []
 
     storeGetQueryMock.mockResolvedValueOnce(null)
@@ -266,11 +297,10 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' }
       },
-      activeProviders: {},
-      activeModels: {}
+      activeProviders: {}
     })
   })
 
@@ -296,11 +326,10 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {},
+      providerSettings: {},
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {}
+      }
     })
 
     await providerStore.getState().update({
@@ -333,8 +362,7 @@ describe('providerStore', () => {
         llm: 'openai',
         asr: 'deepgram'
       },
-      providerModels: {},
-      activeModels: {}
+      providerSettings: {}
     })
     expect(mutateMock).toHaveBeenCalledWith({
       key: 'providers',
@@ -355,15 +383,14 @@ describe('providerStore', () => {
           llm: 'openai',
           asr: 'deepgram'
         },
-        providerModels: {},
-        activeModels: {}
+        providerSettings: {}
       }
     })
 
     void watchCallbacks
   })
 
-  test('update preserves existing model state when merging provider and active provider changes', async () => {
+  test('update preserves existing providerSettings when merging provider and active provider changes', async () => {
     const mutateMock = vi.fn().mockResolvedValue(undefined)
     const watchCallbacks: Array<(newValue: unknown) => void> = []
 
@@ -385,14 +412,11 @@ describe('providerStore', () => {
           config: { apiKey: 'token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' }
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {
-        llm: 'gpt-5.2-codex'
       }
     })
 
@@ -422,15 +446,12 @@ describe('providerStore', () => {
           config: { apiKey: 'dg-token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' }
       },
       activeProviders: {
         llm: 'openai',
         asr: 'deepgram'
-      },
-      activeModels: {
-        llm: 'gpt-5.2-codex'
       }
     })
     expect(mutateMock).toHaveBeenCalledWith({
@@ -448,15 +469,12 @@ describe('providerStore', () => {
             config: { apiKey: 'dg-token' }
           }
         },
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-5.2-codex' }
         },
         activeProviders: {
           llm: 'openai',
           asr: 'deepgram'
-        },
-        activeModels: {
-          llm: 'gpt-5.2-codex'
         }
       }
     })
@@ -464,7 +482,7 @@ describe('providerStore', () => {
     void watchCallbacks
   })
 
-  test('update clears activeModels.llm when activeProviders.llm changes without a replacement active model', async () => {
+  test('update does not drop providerSettings when activeProviders.llm changes', async () => {
     const mutateMock = vi.fn().mockResolvedValue(undefined)
     const watchCallbacks: Array<(newValue: unknown) => void> = []
 
@@ -491,15 +509,12 @@ describe('providerStore', () => {
           config: { apiKey: 'custom-token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' },
         custom: { model: 'gpt-custom-1' }
       },
       activeProviders: {
         llm: 'openai'
-      },
-      activeModels: {
-        llm: 'gpt-5.2-codex'
       }
     })
 
@@ -522,14 +537,13 @@ describe('providerStore', () => {
           config: { apiKey: 'custom-token' }
         }
       },
-      providerModels: {
+      providerSettings: {
         openai: { model: 'gpt-5.2-codex' },
         custom: { model: 'gpt-custom-1' }
       },
       activeProviders: {
         llm: 'custom'
-      },
-      activeModels: {}
+      }
     })
     expect(mutateMock).toHaveBeenCalledWith({
       key: 'providers',
@@ -546,14 +560,13 @@ describe('providerStore', () => {
             config: { apiKey: 'custom-token' }
           }
         },
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-5.2-codex' },
           custom: { model: 'gpt-custom-1' }
         },
         activeProviders: {
           llm: 'custom'
-        },
-        activeModels: {}
+        }
       }
     })
 

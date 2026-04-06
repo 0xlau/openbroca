@@ -79,12 +79,12 @@ export class OAuthService {
     const nextSettings = removeProviderState(settings, providerId)
     const settingsChanged =
       nextSettings.providers !== settings.providers ||
-      nextSettings.providerModels !== settings.providerModels ||
-      nextSettings.activeProviders !== settings.activeProviders ||
-      nextSettings.activeModels !== settings.activeModels
+      nextSettings.providerSettings !== settings.providerSettings ||
+      nextSettings.activeProviders !== settings.activeProviders
     const shouldPersistRawModelCleanup =
       this.hasRawProviderModel(rawSettings, providerId) ||
-      this.hasStaleRawActiveModel(rawSettings, providerId, settings)
+      this.hasRawProviderSettings(rawSettings, providerId) ||
+      this.hasRawLegacyActiveModels(rawSettings)
     if (settingsChanged || shouldPersistRawModelCleanup) {
       this.options.store.set('providers', nextSettings)
     }
@@ -162,30 +162,16 @@ export class OAuthService {
     return Object.prototype.hasOwnProperty.call(rawSettings.providerModels, providerId)
   }
 
-  private hasStaleRawActiveModel(
-    rawSettings: unknown,
-    providerId: string,
-    normalizedSettings: ProviderSettings
-  ): boolean {
-    if (!isRecord(rawSettings) || !isRecord(rawSettings.activeModels)) {
+  private hasRawProviderSettings(rawSettings: unknown, providerId: string): boolean {
+    if (!isRecord(rawSettings) || !isRecord(rawSettings.providerSettings)) {
       return false
     }
 
-    const rawLlmModel = rawSettings.activeModels.llm
-    if (typeof rawLlmModel !== 'string' || rawLlmModel.trim().length === 0) {
-      return false
-    }
+    return Object.prototype.hasOwnProperty.call(rawSettings.providerSettings, providerId)
+  }
 
-    const rawActiveProviders = isRecord(rawSettings.activeProviders)
-      ? (rawSettings.activeProviders as Record<string, unknown>)
-      : null
-    const rawActiveLlm = rawActiveProviders?.llm
-
-    if (rawActiveLlm === providerId) {
-      return true
-    }
-
-    return typeof normalizedSettings.activeModels.llm !== 'string'
+  private hasRawLegacyActiveModels(rawSettings: unknown): boolean {
+    return isRecord(rawSettings) && isRecord(rawSettings.activeModels)
   }
 
   private getProviderRecords(): Record<string, ProviderConnectionRecord | undefined> {

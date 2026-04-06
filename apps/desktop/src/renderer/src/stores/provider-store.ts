@@ -30,24 +30,6 @@ async function updateProviderSettingsSafely(partial: Partial<ProviderSettings>):
     ...current.activeProviders,
     ...(partial.activeProviders ?? {})
   }
-  const nextActiveModels = {
-    ...current.activeModels,
-    ...(partial.activeModels ?? {})
-  }
-  const hasLlmActiveProviderUpdate =
-    partial.activeProviders !== undefined &&
-    Object.prototype.hasOwnProperty.call(partial.activeProviders, 'llm')
-  const hasLlmActiveModelUpdate =
-    partial.activeModels !== undefined &&
-    Object.prototype.hasOwnProperty.call(partial.activeModels, 'llm')
-
-  if (
-    hasLlmActiveProviderUpdate &&
-    partial.activeProviders?.llm !== current.activeProviders.llm &&
-    !hasLlmActiveModelUpdate
-  ) {
-    delete nextActiveModels.llm
-  }
 
   const next = normalizeProviderSettings({
     ...current,
@@ -56,12 +38,11 @@ async function updateProviderSettingsSafely(partial: Partial<ProviderSettings>):
       ...current.providers,
       ...(partial.providers ?? {})
     },
-    providerModels: {
-      ...current.providerModels,
-      ...(partial.providerModels ?? {})
+    providerSettings: {
+      ...current.providerSettings,
+      ...(partial.providerSettings ?? {})
     },
-    activeProviders: nextActiveProviders,
-    activeModels: nextActiveModels
+    activeProviders: nextActiveProviders
   })
 
   await providerStoreBase.getState().replace(next)
