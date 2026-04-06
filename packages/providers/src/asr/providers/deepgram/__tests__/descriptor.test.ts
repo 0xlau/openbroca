@@ -69,6 +69,8 @@ describe('deepgramDescriptor', () => {
     const withLanguage = deepgramDescriptor.settingsSchema!.parse({ language: 'zh' })
     expect(withLanguage.language).toBe('zh')
 
+    expect(() => deepgramDescriptor.settingsSchema!.parse({ language: 'fr' })).toThrow()
+
     const status = deepgramDescriptor.getSetupStatus?.({ settings: {} })
     expect(status).toEqual(
       expect.objectContaining({

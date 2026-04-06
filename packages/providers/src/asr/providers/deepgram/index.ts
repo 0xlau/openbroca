@@ -7,8 +7,10 @@ const configSchema = z.object({
   apiKey: z.string().min(1, 'API key is required')
 })
 
+const SUPPORTED_LANGUAGES = ['en', 'zh'] as const
+
 const settingsSchema = z.object({
-  language: z.string().trim().min(1).optional()
+  language: z.string().trim().pipe(z.enum(SUPPORTED_LANGUAGES)).optional()
 })
 
 type DeepgramSettings = z.infer<typeof settingsSchema>
