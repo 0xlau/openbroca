@@ -16,8 +16,9 @@ import type { ProviderViewModel } from './provider-types'
 import {
   getLLMModelSummary,
   getOAuthConnectionOption,
+  resolveProviderIconSrc,
   resolveProviderConnectionState,
-  svgToDataUri
+  shouldInvertProviderIcon,
 } from './provider-types'
 
 export function ProviderRow({
@@ -67,6 +68,8 @@ export function ProviderRow({
     normalizedSavedModel !== activeModel
   const requiresModelSelection = isLLMRow && state.isConnected && !hasSavedModel && !state.isActive
   const modelSummary = isLLMRow ? getLLMModelSummary(savedModel, activeModel) : []
+  const iconSrc = resolveProviderIconSrc(provider.icon)
+  const shouldInvertIcon = shouldInvertProviderIcon(provider.icon)
   const connectButton = (
     <Button
       variant="secondary"
@@ -121,11 +124,11 @@ export function ProviderRow({
   return (
     <>
       <div className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
-        {provider.icon ? (
+        {iconSrc ? (
           <img
-            src={svgToDataUri(provider.icon)}
+            src={iconSrc}
             alt={provider.displayName}
-            className="size-9 shrink-0 object-contain p-1"
+            className={`size-9 shrink-0 object-contain p-1 ${shouldInvertIcon ? 'dark:invert' : ''}`}
           />
         ) : (
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-foreground/10">

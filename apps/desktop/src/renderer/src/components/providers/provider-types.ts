@@ -108,6 +108,34 @@ export function svgToDataUri(svg: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
+export function resolveProviderIconSrc(icon?: string): string | undefined {
+  const value = icon?.trim()
+
+  if (!value) {
+    return undefined
+  }
+
+  if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:')) {
+    return value
+  }
+
+  return svgToDataUri(value)
+}
+
+export function shouldInvertProviderIcon(icon?: string): boolean {
+  const value = icon?.trim()
+
+  if (!value) {
+    return false
+  }
+
+  return (
+    value.startsWith('https://unpkg.com/@lobehub/icons-static-svg@latest/icons/') &&
+    value.endsWith('.svg') &&
+    !value.endsWith('-color.svg')
+  )
+}
+
 export function toProviderViewModel<T extends ProviderDescriptor>(provider: T): ProviderViewModel {
   return {
     ...provider,

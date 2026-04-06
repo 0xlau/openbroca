@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { LLMProviderDescriptor } from '../../contracts.ts'
+import { providerIcons } from '../../../shared/icons/index.ts'
 import { OpenAICodexLLMProvider, type OpenAICodexConfig } from './provider.ts'
-import icon from './icon.svg?raw'
 
 const configSchema = z.object({
   accessToken: z.string().min(1).optional(),
@@ -12,7 +12,7 @@ const configSchema = z.object({
 
 export const openaiCodexDescriptor: LLMProviderDescriptor<OpenAICodexConfig> = {
   id: 'openai-codex',
-  icon,
+  icon: providerIcons['openai-codex'],
   displayName: 'OpenAI Codex',
   description: 'OpenAI Codex via desktop OAuth',
   configSchema,

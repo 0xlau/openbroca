@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { LLMProviderDescriptor } from '../../contracts.ts'
+import { providerIcons } from '../../../shared/icons/index.ts'
 import { OpenRouterLLMProvider, type OpenRouterConfig } from './provider.ts'
 
 const configSchema = z.object({
@@ -10,6 +11,7 @@ export const openrouterDescriptor: LLMProviderDescriptor<OpenRouterConfig> = {
   id: 'openrouter',
   displayName: 'OpenRouter',
   description: 'Access OpenRouter models and runtimes via an API key.',
+  icon: providerIcons.openrouter,
   configSchema,
   capabilities: {
     streaming: true,
