@@ -1,5 +1,5 @@
 import { ConfigurationError } from '@openbroca/providers'
-import type { ASRProvider, ASRProviderRegistry } from '@openbroca/providers/asr'
+import type { ASRProvider, ASRProviderDescriptor, ASRProviderRegistry } from '@openbroca/providers/asr'
 import type { LLMProvider, LLMProviderRegistry } from '@openbroca/providers/llm'
 import type { OAuthService } from '../auth/oauth-service'
 import { normalizeProviderSettings, type ProviderConnectionRecord } from '../../shared/provider-auth'
@@ -77,21 +77,7 @@ export function getActiveLLMSelection(store: StoreLike): ActiveLLMSelection | un
 }
 
 export async function resolveActiveASRProvider(deps: ASRProviderRuntimeDeps): Promise<ASRProvider> {
-  const providerId = getActiveASRProviderId(deps.store)
-  if (!providerId) {
-    throw new ConfigurationError(
-      'provider:not-configured',
-      'Select an active ASR provider before processing a recording.'
-    )
-  }
-
-  const providers = getProviderRecords(deps.store)
-  const provider = providers[providerId]
-  if (!provider?.enabled) {
-    throw new ConfigurationError(providerId, 'Provider is not configured')
-  }
-
-  return deps.asrRegistry.resolve(providerId, provider.config ?? {})
+  return (await resolveActiveASRSelection(deps)).provider
 }
 
 export async function resolveActiveASRSelection(deps: ASRProviderRuntimeDeps): Promise<ActiveASRSelection> {
@@ -109,12 +95,40 @@ export async function resolveActiveASRSelection(deps: ASRProviderRuntimeDeps): P
     throw new ConfigurationError(providerId, 'Provider is not configured')
   }
 
-  const normalized = getNormalizedProviderSettings(deps.store)
-  const settings = normalized.providerSettings[providerId] ?? {}
+  const settings = resolveValidatedASRProviderSettings(deps, providerId)
 
   return {
     provider: deps.asrRegistry.resolve(providerId, providerRecord.config ?? {}),
     settings
+  }
+}
+
+function resolveValidatedASRProviderSettings(
+  deps: ASRProviderRuntimeDeps,
+  providerId: string
+): Record<string, unknown> {
+  const descriptor = deps.asrRegistry
+    .listDescriptors()
+    .find((entry): entry is ASRProviderDescriptor => entry.id === providerId)
+
+  // If the provider doesn't define a settings schema, don't pass through persisted settings.
+  const schema = descriptor?.settingsSchema
+  if (!schema) {
+    return {}
+  }
+
+  const normalized = getNormalizedProviderSettings(deps.store)
+  const rawSettings = normalized.providerSettings[providerId] ?? {}
+
+  try {
+    const parsed = schema.parse(rawSettings)
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return {}
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new ConfigurationError(providerId, `Provider settings are invalid: ${message}`)
   }
 }
 

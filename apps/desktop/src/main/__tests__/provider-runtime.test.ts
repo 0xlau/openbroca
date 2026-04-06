@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
+import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
 import type { CompletionChunk } from '@openbroca/providers/llm'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
@@ -14,6 +15,7 @@ import {
   getLLMProviderRuntimeConfig,
   resolveActiveLLMModel,
   resolveActiveLLMProvider,
+  resolveActiveASRSelection,
   resolveActiveLLMSelection,
   resolveLLMProvider
 } from '../providers/runtime'
@@ -423,7 +425,7 @@ describe('provider runtime resolution', () => {
         }
       },
       providerSettings: {
-        deepgram: { language: 'fr', punctuation: true }
+        deepgram: { language: ' zh ', punctuation: true }
       },
       activeProviders: {
         asr: 'deepgram'
@@ -437,11 +439,11 @@ describe('provider runtime resolution', () => {
       recognize: vi.fn()
     }
     const asrRegistry = {
-      resolve: vi.fn().mockReturnValue(asrProvider)
+      resolve: vi.fn().mockReturnValue(asrProvider),
+      listDescriptors: () => [deepgramDescriptor]
     }
 
-    const runtimeModule = (await import('../providers/runtime')) as any
-    const selection = await runtimeModule.resolveActiveASRSelection({
+    const selection = await resolveActiveASRSelection({
       asrRegistry,
       store
     })
@@ -449,7 +451,35 @@ describe('provider runtime resolution', () => {
     expect(asrRegistry.resolve).toHaveBeenCalledWith('deepgram', { apiKey: 'dg-key' })
     expect(selection).toEqual({
       provider: asrProvider,
-      settings: { language: 'fr', punctuation: true }
+      settings: { language: 'zh' }
     })
+  })
+
+  test('resolveActiveASRSelection throws configuration error when persisted asr settings are invalid', async () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        deepgram: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'dg-key' }
+        }
+      },
+      providerSettings: {
+        deepgram: { language: 'fr' }
+      },
+      activeProviders: {
+        asr: 'deepgram'
+      }
+    })
+
+    const asrRegistry = {
+      resolve: vi.fn(),
+      listDescriptors: () => [deepgramDescriptor]
+    }
+
+    await expect(resolveActiveASRSelection({ asrRegistry, store } as never)).rejects.toThrowError(
+      /\[deepgram\] Provider settings are invalid/
+    )
   })
 })

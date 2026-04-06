@@ -42,7 +42,7 @@ describe('PostRecordingPipeline', () => {
       recordingStorage: storage as never,
       resolveActiveASRSelection: vi
         .fn()
-        .mockResolvedValue({ provider: asrProvider, settings: { language: 'es' } }),
+        .mockResolvedValue({ provider: asrProvider, settings: { language: 'zh' } }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
@@ -66,7 +66,7 @@ describe('PostRecordingPipeline', () => {
         sampleRate: 16000,
         channels: 1
       }),
-      { language: 'es' }
+      { language: 'zh' }
     )
     expect(storage.save).toHaveBeenCalledTimes(1)
     expect(llmProvider.generate).toHaveBeenCalledWith(
