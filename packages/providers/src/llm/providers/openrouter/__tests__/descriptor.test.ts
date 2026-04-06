@@ -59,15 +59,33 @@ describe('openrouterDescriptor', () => {
       })
     ])
 
-    const missing = openrouterDescriptor.getSetupStatus?.({ settings: {} })
+    expect(openrouterDescriptor.settingsSchema).toBeDefined()
+    const parsed = openrouterDescriptor.settingsSchema!.parse({ model: ' openai/gpt-4o-mini ' })
+    expect(parsed.model).toBe('openai/gpt-4o-mini')
+
+    const missing = openrouterDescriptor.getSetupStatus!({ settings: {} })
     expect(missing).toEqual(
       expect.objectContaining({
         status: 'configured',
-        canActivate: false
+        canActivate: false,
+        fieldErrors: expect.objectContaining({ model: expect.any(String) }),
+        blockingReasons: expect.arrayContaining([expect.stringMatching(/choose a model/i)])
       })
     )
 
-    const ready = openrouterDescriptor.getSetupStatus?.({ settings: { model: 'openai/gpt-4o-mini' } })
+    const blank = openrouterDescriptor.getSetupStatus!({ settings: { model: '' } })
+    expect(blank).toEqual(
+      expect.objectContaining({
+        status: 'configured',
+        canActivate: false,
+        fieldErrors: expect.objectContaining({ model: expect.any(String) }),
+        blockingReasons: expect.arrayContaining([expect.stringMatching(/choose a model/i)])
+      })
+    )
+
+    const ready = openrouterDescriptor.getSetupStatus!({
+      settings: { model: 'openai/gpt-4o-mini' }
+    })
     expect(ready).toEqual(
       expect.objectContaining({
         status: 'ready',

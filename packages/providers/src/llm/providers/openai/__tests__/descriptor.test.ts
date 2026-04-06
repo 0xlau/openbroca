@@ -78,15 +78,31 @@ describe('openaiDescriptor', () => {
       })
     ])
 
-    const missing = openaiDescriptor.getSetupStatus?.({ settings: {} })
+    expect(openaiDescriptor.settingsSchema).toBeDefined()
+    const parsed = openaiDescriptor.settingsSchema!.parse({ model: ' gpt-4o-mini ' })
+    expect(parsed.model).toBe('gpt-4o-mini')
+
+    const missing = openaiDescriptor.getSetupStatus!({ settings: {} })
     expect(missing).toEqual(
       expect.objectContaining({
         status: 'configured',
-        canActivate: false
+        canActivate: false,
+        fieldErrors: expect.objectContaining({ model: expect.any(String) }),
+        blockingReasons: expect.arrayContaining([expect.stringMatching(/choose a model/i)])
       })
     )
 
-    const ready = openaiDescriptor.getSetupStatus?.({ settings: { model: 'gpt-4o-mini' } })
+    const blank = openaiDescriptor.getSetupStatus!({ settings: { model: '   ' } })
+    expect(blank).toEqual(
+      expect.objectContaining({
+        status: 'configured',
+        canActivate: false,
+        fieldErrors: expect.objectContaining({ model: expect.any(String) }),
+        blockingReasons: expect.arrayContaining([expect.stringMatching(/choose a model/i)])
+      })
+    )
+
+    const ready = openaiDescriptor.getSetupStatus!({ settings: { model: 'gpt-4o-mini' } })
     expect(ready).toEqual(
       expect.objectContaining({
         status: 'ready',

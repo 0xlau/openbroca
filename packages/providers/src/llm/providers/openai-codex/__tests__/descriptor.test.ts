@@ -54,15 +54,31 @@ describe('openaiCodexDescriptor', () => {
       })
     ])
 
-    const missing = openaiCodexDescriptor.getSetupStatus?.({ settings: {} })
+    expect(openaiCodexDescriptor.settingsSchema).toBeDefined()
+    const parsed = openaiCodexDescriptor.settingsSchema!.parse({ model: ' codex-mini ' })
+    expect(parsed.model).toBe('codex-mini')
+
+    const missing = openaiCodexDescriptor.getSetupStatus!({ settings: {} })
     expect(missing).toEqual(
       expect.objectContaining({
         status: 'configured',
-        canActivate: false
+        canActivate: false,
+        fieldErrors: expect.objectContaining({ model: expect.any(String) }),
+        blockingReasons: expect.arrayContaining([expect.stringMatching(/choose a model/i)])
       })
     )
 
-    const ready = openaiCodexDescriptor.getSetupStatus?.({ settings: { model: 'codex-mini' } })
+    const blank = openaiCodexDescriptor.getSetupStatus!({ settings: { model: '   ' } })
+    expect(blank).toEqual(
+      expect.objectContaining({
+        status: 'configured',
+        canActivate: false,
+        fieldErrors: expect.objectContaining({ model: expect.any(String) }),
+        blockingReasons: expect.arrayContaining([expect.stringMatching(/choose a model/i)])
+      })
+    )
+
+    const ready = openaiCodexDescriptor.getSetupStatus!({ settings: { model: 'codex-mini' } })
     expect(ready).toEqual(
       expect.objectContaining({
         status: 'ready',
