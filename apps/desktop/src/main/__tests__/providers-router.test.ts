@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { z } from 'zod'
+import type { ProviderSetupStatus } from '@openbroca/providers'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
@@ -82,6 +83,62 @@ describe('providersRouter', () => {
     })
   })
 
+  test('listLLM includes provider-defined settings items', async () => {
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register({
+      id: 'mock-llm',
+      displayName: 'Mock LLM',
+      description: 'Mock LLM provider',
+      configSchema: z.object({}),
+      settingsItems: [
+        {
+          key: 'model',
+          type: 'model-select',
+          label: 'Model',
+          dataSource: 'llm-models'
+        }
+      ],
+      create: () => ({
+        id: 'mock-llm',
+        displayName: 'Mock LLM',
+        isConfigured: () => true,
+        listModels: async () => [],
+        generate: async () => ({ content: '', finishReason: 'stop' }),
+        complete: async function* () {}
+      })
+    })
+
+    const store = new MemoryStore()
+    const asrRegistry = new ASRProviderRegistry()
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const providers = await caller.listLLM()
+
+    expect(providers.find((provider) => provider.id === 'mock-llm')).toMatchObject({
+      settingsItems: [
+        expect.objectContaining({
+          key: 'model',
+          type: 'model-select'
+        })
+      ]
+    })
+  })
+
   test('listModels resolves openai-codex from oauth state in main', async () => {
     const secureStorage = {
       setSecret: vi.fn(async () => undefined),
@@ -126,6 +183,95 @@ describe('providersRouter', () => {
 
     expect(models[0]).toEqual({ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' })
     expect(models).toHaveLength(6)
+  })
+
+  test('getSetupStatus returns provider-owned readiness for connected providers', async () => {
+    const getSetupStatus = vi.fn(
+      (): ProviderSetupStatus => ({
+        status: 'configured',
+        canActivate: false,
+        summary: 'Mock status summary',
+        blockingReasons: ['Some reason'],
+        fieldErrors: {
+          model: 'Choose a model'
+        }
+      })
+    )
+
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register({
+      id: 'mock-llm',
+      displayName: 'Mock LLM',
+      description: 'Mock LLM provider',
+      configSchema: z.object({}),
+      getSetupStatus,
+      create: () => ({
+        id: 'mock-llm',
+        displayName: 'Mock LLM',
+        isConfigured: () => true,
+        listModels: async () => [],
+        generate: async () => ({ content: '', finishReason: 'stop' }),
+        complete: async function* () {}
+      })
+    })
+
+    const asrRegistry = new ASRProviderRegistry()
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'mock-llm': {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: {
+            apiKey: 'mock-key'
+          }
+        }
+      },
+      providerSettings: {
+        'mock-llm': {
+          model: 'mock-model'
+        }
+      },
+      activeProviders: {}
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const status = await caller.getSetupStatus({ providerId: 'mock-llm', kind: 'llm' })
+
+    expect(status).toEqual({
+      status: 'configured',
+      canActivate: false,
+      summary: 'Mock status summary',
+      blockingReasons: ['Some reason'],
+      fieldErrors: {
+        model: 'Choose a model'
+      }
+    })
+    expect(getSetupStatus).toHaveBeenCalledWith({
+      connection: expect.objectContaining({
+        enabled: true,
+        connectionType: 'apiKey'
+      }),
+      settings: expect.objectContaining({
+        model: 'mock-model'
+      })
+    })
   })
 
   test('listASR returns normalized capabilities', async () => {

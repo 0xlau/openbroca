@@ -4,7 +4,7 @@ import type { LLMProvider, LLMProviderRegistry } from '@openbroca/providers/llm'
 import type { OAuthService } from '../auth/oauth-service'
 import { normalizeProviderSettings, type ProviderConnectionRecord } from '../../shared/provider-auth'
 
-interface StoreLike {
+export interface StoreLike {
   get<T>(key: string): T | undefined
 }
 
@@ -24,7 +24,7 @@ export interface ActiveLLMSelection {
   model: string
 }
 
-function getNormalizedProviderSettings(store: StoreLike) {
+export function getNormalizedProviderSettings(store: StoreLike) {
   return normalizeProviderSettings(store.get<unknown>('providers'))
 }
 
