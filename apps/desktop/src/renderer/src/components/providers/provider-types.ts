@@ -13,6 +13,9 @@ export type ProviderViewModel = Omit<ProviderDescriptor, 'icon'> & {
   icon?: string
 }
 
+export type ProviderSettingsItemViewModel = ProviderDescriptor['settingsItems'][number]
+export type ProviderSetupStatusViewModel = RouterOutputs['providers']['getSetupStatus']
+
 export type EditableProviderConnectionOption = Extract<
   ProviderConnectionOption,
   { type: 'apiKey' | 'local' }
@@ -20,45 +23,12 @@ export type EditableProviderConnectionOption = Extract<
 
 export type OAuthProviderConnectionOption = Extract<ProviderConnectionOption, { type: 'oauth' }>
 
-export type LLMModelInputMode = 'select' | 'manual'
-
-const dropdownProviderIds = new Set(['openai', 'openai-codex', 'openrouter'])
-
-export function getLLMModelInputMode(providerId: string): LLMModelInputMode {
-  return dropdownProviderIds.has(providerId) ? 'select' : 'manual'
-}
-
-export function getLLMModelSummary(savedModel?: string, activeModel?: string): string[] {
-  if (!savedModel && !activeModel) {
+export function getLLMModelSummary(savedModel?: string): string[] {
+  if (!savedModel) {
     return []
   }
 
-  if (savedModel && activeModel && savedModel !== activeModel) {
-    return [`Active model: ${activeModel}`, `Saved model: ${savedModel}`]
-  }
-
-  return [`${activeModel ? 'Active model' : 'Saved model'}: ${activeModel ?? savedModel}`]
-}
-
-export function hasValidSavedLLMModel(
-  providerId: string,
-  savedModel: string | undefined,
-  availableModels?: Array<{ id: string }>
-): boolean {
-  const candidate = savedModel?.trim()
-  if (!candidate) {
-    return false
-  }
-
-  if (getLLMModelInputMode(providerId) === 'manual') {
-    return true
-  }
-
-  if (!availableModels?.length) {
-    return false
-  }
-
-  return availableModels.some((model) => model.id === candidate)
+  return [`Model: ${savedModel}`]
 }
 
 export function getConnectionOptionByType(
@@ -139,7 +109,8 @@ export function shouldInvertProviderIcon(icon?: string): boolean {
 export function toProviderViewModel<T extends ProviderDescriptor>(provider: T): ProviderViewModel {
   return {
     ...provider,
-    icon: provider.icon ?? undefined
+    icon: provider.icon ?? undefined,
+    settingsItems: provider.settingsItems ?? []
   }
 }
 

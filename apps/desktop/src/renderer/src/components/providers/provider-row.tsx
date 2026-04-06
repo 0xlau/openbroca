@@ -28,9 +28,8 @@ export function ProviderRow({
   isActive,
   isLast,
   savedModel,
-  activeModel,
   onConnect,
-  onOpenModelSettings,
+  onOpenSettings,
   onSetActive,
   onDisconnect
 }: {
@@ -40,9 +39,8 @@ export function ProviderRow({
   isActive: boolean
   isLast: boolean
   savedModel?: string
-  activeModel?: string
   onConnect: (provider: ProviderViewModel) => void
-  onOpenModelSettings?: (provider: ProviderViewModel) => void
+  onOpenSettings?: (provider: ProviderViewModel) => void
   onSetActive: (providerId: string) => void
   onDisconnect: (
     providerId: string,
@@ -57,17 +55,14 @@ export function ProviderRow({
   )
 
   const state = resolveProviderConnectionState(provider, setting, authStatus, isActive)
-  const isLLMRow = section === 'llm'
-  const normalizedSavedModel = savedModel?.trim()
-  const hasSavedModel = isLLMRow ? Boolean(normalizedSavedModel) : false
-  const pendingSavedModelChange =
-    isLLMRow &&
-    state.isActive &&
-    !!activeModel &&
-    hasSavedModel &&
-    normalizedSavedModel !== activeModel
-  const requiresModelSelection = isLLMRow && state.isConnected && !hasSavedModel && !state.isActive
-  const modelSummary = isLLMRow ? getLLMModelSummary(savedModel, activeModel) : []
+  const { data: setupStatus } = trpc.providers.getSetupStatus.useQuery(
+    { providerId: provider.id, kind: section },
+    { enabled: state.isConnected }
+  )
+  const canActivate = state.isConnected && (setupStatus?.canActivate ?? true)
+  const isConfiguredActive = state.isActive && canActivate
+  const modelSummary = section === 'llm' ? getLLMModelSummary(savedModel) : []
+  const hasSettings = provider.settingsItems.length > 0
   const iconSrc = resolveProviderIconSrc(provider.icon)
   const shouldInvertIcon = shouldInvertProviderIcon(provider.icon)
   const connectButton = (
@@ -99,23 +94,23 @@ export function ProviderRow({
   )
   const activeButton = (
     <Button
-      variant={state.isActive && !pendingSavedModelChange ? 'secondary' : 'ghost'}
+      variant={isConfiguredActive ? 'secondary' : 'ghost'}
       size="sm"
       className="shrink-0 gap-1.5"
       onClick={() => onSetActive(provider.id)}
-      disabled={!pendingSavedModelChange && (state.isActive || requiresModelSelection)}
+      disabled={!canActivate || isConfiguredActive}
     >
-      {pendingSavedModelChange ? 'Apply saved model' : state.isActive ? 'Current' : 'Set as active'}
+      {isConfiguredActive ? 'Current' : 'Set as active'}
     </Button>
   )
-  const modelSettingsButton =
-    isLLMRow && state.isConnected && onOpenModelSettings ? (
+  const settingsButton =
+    state.isConnected && hasSettings && onOpenSettings ? (
       <Button
         variant="ghost"
         size="icon-sm"
         className="shrink-0"
-        aria-label={`Open model settings for ${provider.displayName}`}
-        onClick={() => onOpenModelSettings(provider)}
+        aria-label={`Open settings for ${provider.displayName}`}
+        onClick={() => onOpenSettings(provider)}
       >
         <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} size={14} />
       </Button>
@@ -152,9 +147,6 @@ export function ProviderRow({
               {line}
             </TypographyMuted>
           ))}
-          {requiresModelSelection ? (
-            <TypographyMuted className="mt-1 text-xs">Choose a model first</TypographyMuted>
-          ) : null}
         </div>
         {!state.isConnected && state.helperText ? (
           <Tooltip>
@@ -167,7 +159,7 @@ export function ProviderRow({
         {!state.isConnected && !state.helperText ? connectButton : null}
         {state.isConnected ? (
           <div className="flex items-center gap-2">
-            {modelSettingsButton}
+            {settingsButton}
             {activeButton}
             {disconnectButton}
           </div>

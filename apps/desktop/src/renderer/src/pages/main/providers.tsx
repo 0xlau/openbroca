@@ -10,7 +10,7 @@ import {
   type ProviderSettings
 } from '@renderer/stores/provider-store'
 import { ProviderConnectDialog } from '@renderer/components/providers/provider-connect-dialog'
-import { ProviderModelSettingsDialog } from '@renderer/components/providers/provider-model-settings-dialog'
+import { ProviderSettingsDialog } from '@renderer/components/providers/provider-settings-dialog'
 import { ProviderSection } from '@renderer/components/providers/provider-section'
 import {
   toProviderViewModel,
@@ -46,10 +46,13 @@ function ProviderContainer() {
   const trpcUtils = trpc.useUtils()
   const [selectedProvider, setSelectedProvider] = React.useState<ProviderViewModel | null>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
-  const [selectedModelProvider, setSelectedModelProvider] = React.useState<ProviderViewModel | null>(
+  const [selectedSettingsProvider, setSelectedSettingsProvider] = React.useState<ProviderViewModel | null>(
     null
   )
-  const [isModelDialogOpen, setIsModelDialogOpen] = React.useState(false)
+  const [selectedSettingsSection, setSelectedSettingsSection] = React.useState<'llm' | 'asr' | null>(
+    null
+  )
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = React.useState(false)
 
   async function handleSave(
     providerId: string,
@@ -68,35 +71,17 @@ function ProviderContainer() {
     trpcUtils.providerAuth.status.setData({ providerId }, status)
   }
 
-  function getSavedModel(providerId: string): string | undefined {
-    const entry = settings.providerSettings[providerId]
-    const candidate = entry?.model
-    return typeof candidate === 'string' && candidate.trim() ? candidate : undefined
-  }
-
-  async function handleSaveModelSelection(providerId: string, model: string) {
+  async function handleSaveProviderSettings(providerId: string, nextSettings: Record<string, unknown>) {
     await providerStore.getState().update({
       providerSettings: {
-        [providerId]: { model }
+        [providerId]: nextSettings
       }
     })
   }
 
   async function handleSetActive(section: 'llm' | 'asr', providerId: string) {
-    if (section === 'llm') {
-      const model = getSavedModel(providerId)
-      if (!model) {
-        return
-      }
-
-      await providerStore.getState().update({
-        activeProviders: { llm: providerId }
-      })
-      return
-    }
-
     await providerStore.getState().update({
-      activeProviders: { asr: providerId }
+      activeProviders: { [section]: providerId }
     })
   }
 
@@ -121,9 +106,10 @@ function ProviderContainer() {
     setIsDialogOpen(true)
   }
 
-  function handleOpenModelSettings(provider: ProviderViewModel) {
-    setSelectedModelProvider(provider)
-    setIsModelDialogOpen(true)
+  function handleOpenSettings(provider: ProviderViewModel, section: 'llm' | 'asr') {
+    setSelectedSettingsProvider(provider)
+    setSelectedSettingsSection(section)
+    setIsSettingsDialogOpen(true)
   }
 
   if (isLoading) {
@@ -141,7 +127,7 @@ function ProviderContainer() {
           providerSettings={settings.providerSettings}
           activeProviderId={settings.activeProviders.asr}
           onConnect={handleConnect}
-          onOpenModelSettings={handleOpenModelSettings}
+          onOpenSettings={handleOpenSettings}
           onSetActive={handleSetActive}
           onDisconnect={handleDisconnect}
         />
@@ -154,7 +140,7 @@ function ProviderContainer() {
           providerSettings={settings.providerSettings}
           activeProviderId={settings.activeProviders.llm}
           onConnect={handleConnect}
-          onOpenModelSettings={handleOpenModelSettings}
+          onOpenSettings={handleOpenSettings}
           onSetActive={handleSetActive}
           onDisconnect={handleDisconnect}
         />
@@ -174,17 +160,21 @@ function ProviderContainer() {
         onSave={handleSave}
       />
 
-      <ProviderModelSettingsDialog
-        provider={selectedModelProvider}
-        savedModel={selectedModelProvider ? getSavedModel(selectedModelProvider.id) : undefined}
-        open={isModelDialogOpen}
+      <ProviderSettingsDialog
+        provider={selectedSettingsProvider}
+        section={selectedSettingsSection}
+        currentSettings={
+          selectedSettingsProvider ? settings.providerSettings[selectedSettingsProvider.id] : undefined
+        }
+        open={isSettingsDialogOpen}
         onOpenChange={(next) => {
-          setIsModelDialogOpen(next)
+          setIsSettingsDialogOpen(next)
           if (!next) {
-            setSelectedModelProvider(null)
+            setSelectedSettingsProvider(null)
+            setSelectedSettingsSection(null)
           }
         }}
-        onSave={handleSaveModelSelection}
+        onSave={handleSaveProviderSettings}
       />
     </>
   )

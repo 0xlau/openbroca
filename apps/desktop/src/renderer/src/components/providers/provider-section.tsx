@@ -19,7 +19,7 @@ export function ProviderSection({
   providerSettings,
   activeProviderId,
   onConnect,
-  onOpenModelSettings,
+  onOpenSettings,
   onSetActive,
   onDisconnect
 }: {
@@ -30,7 +30,7 @@ export function ProviderSection({
   providerSettings: Record<string, Record<string, unknown> | undefined>
   activeProviderId?: string
   onConnect: (provider: ProviderViewModel) => void
-  onOpenModelSettings: (provider: ProviderViewModel) => void
+  onOpenSettings: (provider: ProviderViewModel, section: 'llm' | 'asr') => void
   onSetActive: (section: 'llm' | 'asr', providerId: string) => void
   onDisconnect: (
     section: 'llm' | 'asr',
@@ -40,15 +40,12 @@ export function ProviderSection({
 }) {
   const sortedProviders = providers
     .map((provider, index) => {
-      const savedModel =
-        section === 'llm' ? resolveModel(providerSettings[provider.id]?.model) : undefined
-      const isActive =
-        activeProviderId === provider.id && (section === 'llm' ? Boolean(savedModel) : true)
+      const savedModel = section === 'llm' ? resolveModel(providerSettings[provider.id]?.model) : undefined
 
       return {
         index,
         provider,
-        isActive,
+        isActive: activeProviderId === provider.id,
         isConnected: !!settings[provider.id]?.enabled,
         savedModel
       }
@@ -79,9 +76,8 @@ export function ProviderSection({
             isActive={isActive}
             isLast={index === sortedProviders.length - 1}
             savedModel={section === 'llm' ? savedModel : undefined}
-            activeModel={section === 'llm' && isActive ? savedModel : undefined}
             onConnect={onConnect}
-            onOpenModelSettings={onOpenModelSettings}
+            onOpenSettings={(selectedProvider) => onOpenSettings(selectedProvider, section)}
             onSetActive={(providerId) => onSetActive(section, providerId)}
             onDisconnect={(providerId, connectionType) =>
               onDisconnect(section, providerId, connectionType)
