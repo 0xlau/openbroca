@@ -148,6 +148,47 @@ describe('providerStore', () => {
     })
   })
 
+  test('prefers providerSettings model over legacy providerModels model when both exist', async () => {
+    storeGetQueryMock.mockResolvedValueOnce({
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      providerSettings: {
+        openai: { model: 'gpt-new' }
+      },
+      providerModels: {
+        openai: { model: 'gpt-legacy' }
+      },
+      activeProviders: {
+        llm: 'openai'
+      }
+    })
+    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const { providerStore } = await import('../provider-store')
+    await providerStore.getState().hydrate()
+
+    expect(providerStore.getState().data).toEqual({
+      providers: {
+        openai: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'token' }
+        }
+      },
+      providerSettings: {
+        openai: { model: 'gpt-new' }
+      },
+      activeProviders: {
+        llm: 'openai'
+      }
+    })
+  })
+
   test('prunes invalid and orphaned provider settings during normalization', async () => {
     storeGetQueryMock.mockResolvedValueOnce({
       providers: {

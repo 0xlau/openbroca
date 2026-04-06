@@ -186,6 +186,12 @@ export function normalizeProviderSettings(raw: unknown): ProviderSettings {
       continue
     }
 
+    // Legacy backfill should never overwrite the new shape when a valid model is already present.
+    const existingModel = normalizeModel(existing.model)
+    if (existingModel) {
+      continue
+    }
+
     providerSettings[providerId] = { ...existing, model }
   }
 
