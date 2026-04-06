@@ -84,9 +84,8 @@ const openRouterProviderFixture: ProviderFixture = {
 const providerStore = createStore<ProviderStoreShape>(() => ({
   data: {
     providers: {},
-    providerModels: {},
-    activeProviders: {},
-    activeModels: {}
+    providerSettings: {},
+    activeProviders: {}
   },
   isHydrated: true,
   update: vi.fn().mockResolvedValue(undefined),
@@ -318,9 +317,8 @@ describe('Providers page', () => {
     providerStore.setState({
       data: {
         providers: {},
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       },
       isHydrated: true,
       update: vi.fn().mockResolvedValue(undefined),
@@ -412,9 +410,8 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-acme' }
           }
         },
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       }
     })
 
@@ -465,7 +462,7 @@ describe('Providers page', () => {
     })
   })
 
-  test('shows Set as active for connected inactive LLM providers and writes activeProviders.llm plus activeModels.llm', async () => {
+  test('shows Set as active for connected inactive LLM providers and writes activeProviders.llm', async () => {
     llmProviders = [
       {
         id: 'openai',
@@ -495,13 +492,12 @@ describe('Providers page', () => {
         providers: {
           openai: connectedOpenAI
         },
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-4.1-mini' }
         },
         activeProviders: {
           asr: 'deepgram'
-        },
-        activeModels: {}
+        }
       },
       update: updateSettings
     })
@@ -515,9 +511,6 @@ describe('Providers page', () => {
       expect(updateSettings).toHaveBeenCalledWith({
         activeProviders: {
           llm: 'openai'
-        },
-        activeModels: {
-          llm: 'gpt-4.1-mini'
         }
       })
     })
@@ -550,9 +543,8 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       }
     })
 
@@ -580,9 +572,8 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       },
       update: updateSettings
     })
@@ -595,7 +586,7 @@ describe('Providers page', () => {
 
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-4.1' }
         }
       })
@@ -616,9 +607,8 @@ describe('Providers page', () => {
             config: { apiKey: 'custom-token' }
           }
         },
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       },
       update: updateSettings
     })
@@ -630,7 +620,7 @@ describe('Providers page', () => {
 
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({
-        providerModels: {
+        providerSettings: {
           custom: { model: 'my-model-v1' }
         }
       })
@@ -654,9 +644,8 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openrouter' }
           }
         },
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       },
       isHydrated: true
     })
@@ -669,14 +658,13 @@ describe('Providers page', () => {
     expect(screen.queryByLabelText('Model name')).toBeNull()
   })
 
-  test('allows applying a changed saved model for an already-active llm provider', async () => {
+  test('shows Current action for an active llm provider when a saved model exists', async () => {
     llmProviders = [openAIProviderFixture]
     llmModelsByProvider.openai = [
       { id: 'gpt-4.1', name: 'gpt-4.1' },
       { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }
     ]
 
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -687,34 +675,19 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-4.1' }
         },
         activeProviders: {
           llm: 'openai'
-        },
-        activeModels: {
-          llm: 'gpt-4.1-mini'
         }
-      },
-      update: updateSettings
+      }
     })
 
     await renderProviders()
 
-    expect(screen.getByRole('button', { name: 'Apply saved model' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Apply saved model' }))
-
-    await waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({
-        activeProviders: {
-          llm: 'openai'
-        },
-        activeModels: {
-          llm: 'gpt-4.1'
-        }
-      })
-    })
+    expect(screen.queryByRole('button', { name: 'Apply saved model' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Current' })).toBeTruthy()
   })
 
   test('allows activation with a saved dropdown model even before loading model options, while dialog save still requires a current option', async () => {
@@ -732,11 +705,10 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-stale' }
         },
-        activeProviders: {},
-        activeModels: {}
+        activeProviders: {}
       },
       update: updateSettings
     })
@@ -751,9 +723,6 @@ describe('Providers page', () => {
       expect(updateSettings).toHaveBeenCalledWith({
         activeProviders: {
           llm: 'openai'
-        },
-        activeModels: {
-          llm: 'gpt-stale'
         }
       })
     })
@@ -768,14 +737,14 @@ describe('Providers page', () => {
 
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-4.1' }
         }
       })
     })
   })
 
-  test('shows Current action for a fully active llm provider with an active model', async () => {
+  test('shows Current action for an active llm provider with a saved model', async () => {
     llmProviders = [
       {
         id: 'openai',
@@ -802,14 +771,11 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {
+        providerSettings: {
           openai: { model: 'gpt-4.1-mini' }
         },
         activeProviders: {
           llm: 'openai'
-        },
-        activeModels: {
-          llm: 'gpt-4.1-mini'
         }
       }
     })
@@ -820,11 +786,10 @@ describe('Providers page', () => {
     expect(screen.queryByRole('button', { name: 'Set as active' })).toBeNull()
   })
 
-  test('keeps incomplete active llm selection recoverable when active model is missing', async () => {
+  test('disables Set as active when an llm provider is selected as active but has no saved model', async () => {
     llmProviders = [openAIProviderFixture]
     llmModelsByProvider.openai = [{ id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }]
 
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
     providerStore.setState({
       ...providerStore.getState(),
       data: {
@@ -835,34 +800,18 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {
-          openai: { model: 'gpt-4.1-mini' }
-        },
+        providerSettings: {},
         activeProviders: {
           llm: 'openai'
-        },
-        activeModels: {}
-      },
-      update: updateSettings
+        }
+      }
     })
 
     await renderProviders()
 
     expect(screen.queryByRole('button', { name: 'Current' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', false)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Set as active' }))
-
-    await waitFor(() => {
-      expect(updateSettings).toHaveBeenCalledWith({
-        activeProviders: {
-          llm: 'openai'
-        },
-        activeModels: {
-          llm: 'gpt-4.1-mini'
-        }
-      })
-    })
+    expect(screen.getByRole('button', { name: 'Set as active' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('Choose a model first')).toBeTruthy()
   })
 
   test('reflects OAuth connected status without exposing tokens and disconnects via preload bridge', async () => {
@@ -898,9 +847,8 @@ describe('Providers page', () => {
             connectionType: 'oauth'
           }
         },
-        providerModels: {},
-        activeProviders: {},
-        activeModels: {}
+        providerSettings: {},
+        activeProviders: {}
       }
     })
     disconnectProviderAuth.mockResolvedValue({
@@ -982,12 +930,11 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-openai' }
           }
         },
-        providerModels: {},
+        providerSettings: {},
         activeProviders: {
           asr: 'openai-realtime',
           llm: 'openai'
-        },
-        activeModels: {}
+        }
       },
       update: updateSettings,
       replace: replaceSettings
@@ -1054,12 +1001,11 @@ describe('Providers page', () => {
             config: { apiKey: 'dg-secret' }
           }
         },
-        providerModels: {},
+        providerSettings: {},
         activeProviders: {
           llm: 'openai',
           asr: 'deepgram'
-        },
-        activeModels: {}
+        }
       },
       replace: replaceSettings
     })
@@ -1079,11 +1025,10 @@ describe('Providers page', () => {
             config: { apiKey: 'dg-secret' }
           }
         },
-        providerModels: {},
+        providerSettings: {},
         activeProviders: {
           asr: 'deepgram'
-        },
-        activeModels: {}
+        }
       })
     })
   })
@@ -1179,12 +1124,11 @@ describe('Providers page', () => {
             config: { apiKey: 'sk-second' }
           }
         },
-        providerModels: {},
+        providerSettings: {
+          'active-provider': { model: 'gpt-4.1-mini' }
+        },
         activeProviders: {
           llm: 'active-provider'
-        },
-        activeModels: {
-          llm: 'gpt-4.1-mini'
         }
       }
     })

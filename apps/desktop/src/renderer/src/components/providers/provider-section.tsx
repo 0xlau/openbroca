@@ -1,17 +1,23 @@
 import { TypographyLarge } from '@openbroca/ui'
-import type { ProviderModelSelection } from '../../../../shared/provider-auth'
 import type { ProviderConnectionRecord } from '@renderer/stores/provider-store'
 import type { ProviderViewModel } from './provider-types'
 import { ProviderRow } from './provider-row'
+
+function resolveModel(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const model = value.trim()
+  return model ? model : undefined
+}
 
 export function ProviderSection({
   section,
   title,
   providers,
   settings,
-  providerModels,
+  providerSettings,
   activeProviderId,
-  activeModel,
   onConnect,
   onOpenModelSettings,
   onSetActive,
@@ -21,9 +27,8 @@ export function ProviderSection({
   title: string
   providers: ProviderViewModel[]
   settings: Record<string, ProviderConnectionRecord | undefined>
-  providerModels: Record<string, ProviderModelSelection | undefined>
+  providerSettings: Record<string, Record<string, unknown> | undefined>
   activeProviderId?: string
-  activeModel?: string
   onConnect: (provider: ProviderViewModel) => void
   onOpenModelSettings: (provider: ProviderViewModel) => void
   onSetActive: (section: 'llm' | 'asr', providerId: string) => void
@@ -34,13 +39,20 @@ export function ProviderSection({
   ) => void
 }) {
   const sortedProviders = providers
-    .map((provider, index) => ({
-      index,
-      provider,
-      isActive:
-        activeProviderId === provider.id && (section === 'llm' ? Boolean(activeModel) : true),
-      isConnected: !!settings[provider.id]?.enabled
-    }))
+    .map((provider, index) => {
+      const savedModel =
+        section === 'llm' ? resolveModel(providerSettings[provider.id]?.model) : undefined
+      const isActive =
+        activeProviderId === provider.id && (section === 'llm' ? Boolean(savedModel) : true)
+
+      return {
+        index,
+        provider,
+        isActive,
+        isConnected: !!settings[provider.id]?.enabled,
+        savedModel
+      }
+    })
     .sort((left, right) => {
       const leftRank = left.isActive ? 0 : left.isConnected ? 1 : 2
       const rightRank = right.isActive ? 0 : right.isConnected ? 1 : 2
@@ -58,7 +70,7 @@ export function ProviderSection({
         <TypographyLarge>{title}</TypographyLarge>
       </div>
       <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-        {sortedProviders.map(({ provider, isActive }, index) => (
+        {sortedProviders.map(({ provider, isActive, savedModel }, index) => (
           <ProviderRow
             key={provider.id}
             section={section}
@@ -66,8 +78,8 @@ export function ProviderSection({
             setting={settings[provider.id]}
             isActive={isActive}
             isLast={index === sortedProviders.length - 1}
-            savedModel={section === 'llm' ? providerModels[provider.id]?.model : undefined}
-            activeModel={section === 'llm' && isActive ? activeModel : undefined}
+            savedModel={section === 'llm' ? savedModel : undefined}
+            activeModel={section === 'llm' && isActive ? savedModel : undefined}
             onConnect={onConnect}
             onOpenModelSettings={onOpenModelSettings}
             onSetActive={(providerId) => onSetActive(section, providerId)}

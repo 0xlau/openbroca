@@ -68,9 +68,15 @@ function ProviderContainer() {
     trpcUtils.providerAuth.status.setData({ providerId }, status)
   }
 
+  function getSavedModel(providerId: string): string | undefined {
+    const entry = settings.providerSettings[providerId]
+    const candidate = entry?.model
+    return typeof candidate === 'string' && candidate.trim() ? candidate : undefined
+  }
+
   async function handleSaveModelSelection(providerId: string, model: string) {
     await providerStore.getState().update({
-      providerModels: {
+      providerSettings: {
         [providerId]: { model }
       }
     })
@@ -78,14 +84,13 @@ function ProviderContainer() {
 
   async function handleSetActive(section: 'llm' | 'asr', providerId: string) {
     if (section === 'llm') {
-      const model = providerStore.getState().data.providerModels[providerId]?.model
+      const model = getSavedModel(providerId)
       if (!model) {
         return
       }
 
       await providerStore.getState().update({
-        activeProviders: { llm: providerId },
-        activeModels: { llm: model }
+        activeProviders: { llm: providerId }
       })
       return
     }
@@ -133,9 +138,8 @@ function ProviderContainer() {
           title="ASR Providers"
           providers={asrProviders}
           settings={settings.providers}
-          providerModels={settings.providerModels}
+          providerSettings={settings.providerSettings}
           activeProviderId={settings.activeProviders.asr}
-          activeModel={settings.activeModels.llm}
           onConnect={handleConnect}
           onOpenModelSettings={handleOpenModelSettings}
           onSetActive={handleSetActive}
@@ -147,9 +151,8 @@ function ProviderContainer() {
           title="LLM Providers"
           providers={llmProviders}
           settings={settings.providers}
-          providerModels={settings.providerModels}
+          providerSettings={settings.providerSettings}
           activeProviderId={settings.activeProviders.llm}
-          activeModel={settings.activeModels.llm}
           onConnect={handleConnect}
           onOpenModelSettings={handleOpenModelSettings}
           onSetActive={handleSetActive}
@@ -173,7 +176,7 @@ function ProviderContainer() {
 
       <ProviderModelSettingsDialog
         provider={selectedModelProvider}
-        savedModel={selectedModelProvider ? settings.providerModels[selectedModelProvider.id]?.model : undefined}
+        savedModel={selectedModelProvider ? getSavedModel(selectedModelProvider.id) : undefined}
         open={isModelDialogOpen}
         onOpenChange={(next) => {
           setIsModelDialogOpen(next)
