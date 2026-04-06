@@ -641,7 +641,9 @@ describe('Instructions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Transfer app' }))
     expect(screen.queryByTestId('alert-dialog-root')).toBeNull()
     expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Remove Cursor' })).toBeTruthy()
+    expect(
+      screen.getByTestId('selected-app-remove-icon-com.todesktop.230313mzl4w4u92')
+    ).toBeTruthy()
     const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
     fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
 
@@ -685,14 +687,18 @@ describe('Instructions', () => {
     ).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
-    expect(screen.getByRole('button', { name: 'Remove Arc' })).toBeTruthy()
+    expect(
+      screen.getByTestId('selected-app-remove-icon-company.thebrowser.Browser')
+    ).toBeTruthy()
     expect(
       screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')
     ).toBeTruthy()
     expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
 
     fireEvent.click(screen.getByTestId('activation-app-row-company.thebrowser.Browser'))
-    expect(screen.queryByRole('button', { name: 'Remove Arc' })).toBeNull()
+    expect(
+      screen.queryByTestId('selected-app-remove-icon-company.thebrowser.Browser')
+    ).toBeNull()
     expect(screen.getByTestId('activation-app-popover')).toBeTruthy()
   })
 
@@ -709,10 +715,11 @@ describe('Instructions', () => {
       screen.getByTestId('activation-app-selected-icon-company.thebrowser.Browser')
     ).toBeTruthy()
 
-    const removeButton = screen.getByRole('button', { name: 'Remove Arc' })
-    expect(removeButton.textContent).toBe('')
+    const removeIcon = screen.getByTestId('selected-app-remove-icon-company.thebrowser.Browser')
+    const badge = removeIcon.parentElement
+    expect(badge?.textContent).toContain('Arc')
     expect(screen.getByTestId('selected-app-remove-icon-company.thebrowser.Browser')).toBeTruthy()
-    expect(removeButton.parentElement?.querySelector('img[alt="Arc icon"]')).toBeTruthy()
+    expect(badge?.querySelector('img[alt="Arc icon"]')).toBeTruthy()
   })
 
   test('rolls back optimistic delete when persistence fails', async () => {

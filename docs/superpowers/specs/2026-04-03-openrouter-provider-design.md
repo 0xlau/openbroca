@@ -2,6 +2,22 @@
 
 **Date:** 2026-04-03
 
+## Superseded By 2026-04-06 Provider-Defined Settings
+
+This document's persistence and activation model is partially superseded by `docs/superpowers/specs/2026-04-06-provider-defined-settings-design.md`.
+
+Use:
+
+```ts
+{
+  providers: {},
+  providerSettings: {},
+  activeProviders: {}
+}
+```
+
+Do not introduce new code that depends on `providerModels` or `activeModels`.
+
 ## Goal
 
 Add a new `openrouter` LLM provider under `packages/providers/src/llm/providers` and integrate it into the desktop app so it can be connected, configured, activated, and used by the real LLM runtime.
