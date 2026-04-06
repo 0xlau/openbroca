@@ -54,7 +54,11 @@ describe('deepgramDescriptor', () => {
       expect.objectContaining({
         key: 'language',
         type: 'select',
-        label: 'Language'
+        label: 'Language',
+        options: expect.arrayContaining([
+          expect.objectContaining({ value: 'en' }),
+          expect.objectContaining({ value: 'zh' })
+        ])
       })
     ])
 
