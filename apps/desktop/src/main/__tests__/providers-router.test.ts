@@ -469,6 +469,124 @@ describe('providersRouter', () => {
     })
   })
 
+  test('getSetupStatus returns not-connected for disconnected providers', async () => {
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register({
+      id: 'mock-llm',
+      displayName: 'Mock LLM',
+      description: 'Mock LLM provider',
+      configSchema: z.object({}),
+      create: () => ({
+        id: 'mock-llm',
+        displayName: 'Mock LLM',
+        isConfigured: () => true,
+        listModels: async () => [],
+        generate: async () => ({ content: '', finishReason: 'stop' }),
+        complete: async function* () {}
+      })
+    })
+
+    const asrRegistry = new ASRProviderRegistry()
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'mock-llm': {
+          enabled: false,
+          connectionType: 'apiKey',
+          config: { apiKey: 'mock-key' }
+        }
+      },
+      providerSettings: {},
+      activeProviders: {}
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const status = await caller.getSetupStatus({ providerId: 'mock-llm', kind: 'llm' })
+
+    expect(status).toEqual({
+      status: 'not-connected',
+      canActivate: false,
+      blockingReasons: ['Connect the provider first']
+    })
+  })
+
+  test('getSetupStatus returns default ready when descriptor has no getSetupStatus', async () => {
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register({
+      id: 'mock-llm',
+      displayName: 'Mock LLM',
+      description: 'Mock LLM provider',
+      configSchema: z.object({}),
+      create: () => ({
+        id: 'mock-llm',
+        displayName: 'Mock LLM',
+        isConfigured: () => true,
+        listModels: async () => [],
+        generate: async () => ({ content: '', finishReason: 'stop' }),
+        complete: async function* () {}
+      })
+    })
+
+    const asrRegistry = new ASRProviderRegistry()
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'mock-llm': {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'mock-key' }
+        }
+      },
+      providerSettings: {
+        'mock-llm': {
+          any: 'value'
+        }
+      },
+      activeProviders: {}
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const status = await caller.getSetupStatus({ providerId: 'mock-llm', kind: 'llm' })
+
+    expect(status).toEqual({
+      status: 'ready',
+      canActivate: true,
+      blockingReasons: []
+    })
+  })
+
   test('listModels resolves openrouter from manual apiKey provider settings', async () => {
     expect(desktopLlmRegistry.listDescriptors().some((d) => d.id === openrouterDescriptor.id)).toBe(
       true
