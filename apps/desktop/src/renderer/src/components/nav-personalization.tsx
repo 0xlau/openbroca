@@ -1,6 +1,6 @@
 'use client'
 
-import { Book02Icon, Plant01Icon, Relieved02Icon } from '@hugeicons/core-free-icons'
+import { Book02Icon, Relieved02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from '@openbroca/ui'
@@ -11,11 +11,6 @@ const navItems: NavItem[] = [
     name: 'Dictionary',
     url: '/dictionary',
     icon: <HugeiconsIcon icon={Book02Icon} strokeWidth={2} />
-  },
-  {
-    name: 'Skills',
-    url: '/skills',
-    icon: <HugeiconsIcon icon={Plant01Icon} strokeWidth={2} />
   },
   {
     name: 'About Me',

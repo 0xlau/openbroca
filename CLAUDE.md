@@ -76,7 +76,7 @@ Path alias `@renderer` resolves to `apps/desktop/src/renderer/src/`.
 
 **Routing** — `react-router` v7 with `createHashRouter` (hash router required for Electron file protocol). Routes are defined in `router/index.tsx`. The root layout (`pages/root.tsx`) wraps all pages in a `SidebarProvider` + `AppSidebar` shell.
 
-**Current pages**: Dashboard (index), Providers, Brocas, Dictionary, Skills, AboutMe.
+**Current pages**: Dashboard (index), Providers, Brocas, Dictionary, AboutMe.
 
 **UI layer** — shadcn/ui components (style: `radix-maia`, base color: `mauve`) live in `components/ui/`. Icons use `@hugeicons/react`. Tailwind CSS v4 is configured entirely via `src/renderer/src/styles/globals.css` — there is no `tailwind.config.js`. CSS variables drive theming (light/dark via `.dark` class, managed by `ThemeProvider`).
 

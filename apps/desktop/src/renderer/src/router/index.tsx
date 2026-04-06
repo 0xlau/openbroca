@@ -5,7 +5,6 @@ import { Brocas } from '@renderer/pages/main/brocas'
 import { Instructions } from '@renderer/pages/main/instructions'
 import { Providers } from '@renderer/pages/main/providers'
 import { MainRoot } from '@renderer/pages/main/main-root'
-import { Skills } from '@renderer/pages/main/skills'
 import { FloatListening } from '@renderer/pages/float/float-listening'
 import { createHashRouter } from 'react-router'
 
@@ -19,7 +18,6 @@ export const router = createHashRouter([
       { path: 'brocas', Component: Brocas },
       { path: 'instructions', Component: Instructions },
       { path: 'dictionary', Component: Dictionary },
-      { path: 'skills', Component: Skills },
       { path: 'about-me', Component: AboutMe }
     ]
   },
