@@ -1,6 +1,11 @@
 import type { ConfigSchema, Disposable, HealthCheckable } from '../shared/types.ts'
 import type { ProviderConnectionOption } from '../shared/connection.ts'
 import type { ProviderSecureStorageOption } from '../shared/oauth.ts'
+import type {
+  ProviderSettingsItem,
+  ProviderSetupContext,
+  ProviderSetupStatus
+} from '../shared/settings.ts'
 
 export interface LLMModel {
   id: string
@@ -118,7 +123,7 @@ export interface LLMProvider extends Partial<Disposable>, Partial<HealthCheckabl
   complete(request: CompletionRequest): AsyncIterable<CompletionChunk>
 }
 
-export interface LLMProviderDescriptor<TConfig = unknown> {
+export interface LLMProviderDescriptor<TConfig = unknown, TSettings = unknown> {
   id: string
   displayName: string
   description: string
@@ -127,5 +132,10 @@ export interface LLMProviderDescriptor<TConfig = unknown> {
   capabilities?: Partial<LLMCapabilities>
   connectionOptions?: ProviderConnectionOption[]
   secureStorage?: ProviderSecureStorageOption
+  settingsSchema?: ConfigSchema<TSettings>
+  settingsItems?: ProviderSettingsItem[]
+  getSetupStatus?: (
+    context: ProviderSetupContext
+  ) => Promise<ProviderSetupStatus> | ProviderSetupStatus
   create(config: TConfig): LLMProvider
 }

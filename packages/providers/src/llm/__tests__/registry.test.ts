@@ -76,6 +76,38 @@ describe('LLMProviderRegistry', () => {
       registry.register(makeDescriptor('x'))
       expect(onRegistered).toHaveBeenCalledWith('x', expect.objectContaining({ id: 'x' }))
     })
+
+    it('preserves settings metadata on registered llm descriptors', () => {
+      const registry = new LLMProviderRegistry()
+      registry.register(
+        makeDescriptor('settings-llm', {
+          settingsItems: [
+            {
+              key: 'model',
+              type: 'model-select',
+              label: 'Model',
+              description: 'Choose the runtime model'
+            }
+          ],
+          getSetupStatus: () => ({
+            status: 'configured',
+            canActivate: false,
+            blockingReasons: ['Model is required']
+          })
+        })
+      )
+
+      expect(registry.listDescriptors()[0]).toMatchObject({
+        id: 'settings-llm',
+        settingsItems: [
+          expect.objectContaining({
+            key: 'model',
+            type: 'model-select'
+          })
+        ]
+      })
+    })
+
   })
 
   describe('resolve', () => {

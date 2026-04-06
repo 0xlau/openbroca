@@ -11,3 +11,14 @@ export {
   type ProviderSecureStorageOption
 } from './shared/oauth.ts'
 export { type ConfigSchema, type Disposable, type HealthCheckable } from './shared/types.ts'
+export {
+  type ProviderSettingsItem,
+  type ProviderSetupContext,
+  type ProviderSetupStatus,
+  type ProviderSettingsOption,
+  type ProviderTextSettingsItem,
+  type ProviderPasswordSettingsItem,
+  type ProviderToggleSettingsItem,
+  type ProviderSelectSettingsItem,
+  type ProviderModelSelectSettingsItem
+} from './shared/settings.ts'

@@ -23,3 +23,14 @@ export {
   type ProviderConnectionOption,
   type ProviderConnectionType
 } from '../shared/connection.ts'
+export {
+  type ProviderSettingsItem,
+  type ProviderSetupContext,
+  type ProviderSetupStatus,
+  type ProviderSettingsOption,
+  type ProviderTextSettingsItem,
+  type ProviderPasswordSettingsItem,
+  type ProviderToggleSettingsItem,
+  type ProviderSelectSettingsItem,
+  type ProviderModelSelectSettingsItem
+} from '../shared/settings.ts'

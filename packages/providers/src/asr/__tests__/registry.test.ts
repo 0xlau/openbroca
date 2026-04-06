@@ -112,6 +112,37 @@ describe('ASRProviderRegistry', () => {
       registry.register(makeCloudDescriptor('x'))
       expect(onRegistered).toHaveBeenCalledWith('x', expect.objectContaining({ id: 'x' }))
     })
+
+    it('preserves settings metadata on registered asr descriptors', () => {
+      const registry = new ASRProviderRegistry()
+      registry.register({
+        ...makeCloudDescriptor('settings-asr'),
+        settingsItems: [
+          {
+            key: 'language',
+            type: 'select',
+            label: 'Language',
+            description: 'Choose the default language',
+            options: [{ label: 'English', value: 'en' }]
+          }
+        ],
+        getSetupStatus: () => ({
+          status: 'ready',
+          canActivate: true,
+          blockingReasons: []
+        })
+      })
+
+      expect(registry.listDescriptors()[0]).toMatchObject({
+        id: 'settings-asr',
+        settingsItems: [
+          expect.objectContaining({
+            key: 'language',
+            type: 'select'
+          })
+        ]
+      })
+    })
   })
 
   describe('resolve', () => {

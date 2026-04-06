@@ -1,5 +1,10 @@
 import type { ProviderConnectionOption } from '../shared/connection.ts'
 import type { ConfigSchema, Disposable } from '../shared/types.ts'
+import type {
+  ProviderSettingsItem,
+  ProviderSetupContext,
+  ProviderSetupStatus
+} from '../shared/settings.ts'
 
 export interface TranscriptionSegment {
   text: string
@@ -88,7 +93,7 @@ export interface LocalASRProvider extends ASRProvider {
   deleteModel(modelId: string): Promise<void>
 }
 
-export interface ASRProviderDescriptor<TConfig = unknown> {
+export interface ASRProviderDescriptor<TConfig = unknown, TSettings = unknown> {
   id: string
   displayName: string
   description: string
@@ -97,6 +102,11 @@ export interface ASRProviderDescriptor<TConfig = unknown> {
   configSchema: ConfigSchema<TConfig>
   capabilities?: Partial<ASRCapabilities>
   connectionOptions?: ProviderConnectionOption[]
+  settingsSchema?: ConfigSchema<TSettings>
+  settingsItems?: ProviderSettingsItem[]
+  getSetupStatus?: (
+    context: ProviderSetupContext
+  ) => Promise<ProviderSetupStatus> | ProviderSetupStatus
   create(config: TConfig): ASRProvider | StreamingASRProvider | LocalASRProvider
 }
 
