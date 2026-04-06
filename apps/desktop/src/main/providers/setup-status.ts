@@ -18,6 +18,15 @@ export async function resolveLLMSetupStatus(
   deps: LLMSetupStatusDeps
 ): Promise<ProviderSetupStatus> {
   const normalized = getNormalizedProviderSettings(deps.store)
+  const descriptor = deps.llmRegistry.listDescriptors().find((entry) => entry.id === providerId)
+  if (!descriptor) {
+    return {
+      status: 'invalid',
+      canActivate: false,
+      blockingReasons: ['Provider is not available']
+    }
+  }
+
   const connection = normalized.providers[providerId]
   const settings = normalized.providerSettings[providerId] ?? {}
 
@@ -29,7 +38,6 @@ export async function resolveLLMSetupStatus(
     }
   }
 
-  const descriptor = deps.llmRegistry.listDescriptors().find((entry) => entry.id === providerId)
   if (!descriptor?.getSetupStatus) {
     return {
       status: 'ready',
@@ -46,6 +54,15 @@ export async function resolveASRSetupStatus(
   deps: ASRSetupStatusDeps
 ): Promise<ProviderSetupStatus> {
   const normalized = getNormalizedProviderSettings(deps.store)
+  const descriptor = deps.asrRegistry.listDescriptors().find((entry) => entry.id === providerId)
+  if (!descriptor) {
+    return {
+      status: 'invalid',
+      canActivate: false,
+      blockingReasons: ['Provider is not available']
+    }
+  }
+
   const connection = normalized.providers[providerId]
   const settings = normalized.providerSettings[providerId] ?? {}
 
@@ -57,7 +74,6 @@ export async function resolveASRSetupStatus(
     }
   }
 
-  const descriptor = deps.asrRegistry.listDescriptors().find((entry) => entry.id === providerId)
   if (!descriptor?.getSetupStatus) {
     return {
       status: 'ready',
@@ -68,4 +84,3 @@ export async function resolveASRSetupStatus(
 
   return await descriptor.getSetupStatus({ connection, settings })
 }
-

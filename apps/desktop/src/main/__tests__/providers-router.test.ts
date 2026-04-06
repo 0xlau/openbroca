@@ -295,6 +295,14 @@ describe('providersRouter', () => {
       description: 'Mock ASR provider',
       kind: 'cloud',
       configSchema: z.object({}),
+      settingsItems: [
+        {
+          key: 'language',
+          type: 'select',
+          label: 'Language',
+          options: [{ label: 'English', value: 'en' }]
+        }
+      ],
       create: () => ({
         id: 'mock-asr',
         displayName: 'Mock ASR',
@@ -316,6 +324,149 @@ describe('providersRouter', () => {
 
     expect(deepgram?.capabilities).toEqual({ nonStreaming: true, streaming: true })
     expect(mock?.capabilities).toEqual({ nonStreaming: true, streaming: false })
+    expect(mock?.settingsItems).toEqual([
+      expect.objectContaining({
+        key: 'language',
+        type: 'select'
+      })
+    ])
+  })
+
+  test('getSetupStatus routes through the ASR path', async () => {
+    const getSetupStatus = vi.fn(
+      (): ProviderSetupStatus => ({
+        status: 'ready',
+        canActivate: true,
+        blockingReasons: []
+      })
+    )
+
+    const llmRegistry = new LLMProviderRegistry()
+    const asrRegistry = new ASRProviderRegistry()
+    asrRegistry.register({
+      id: 'mock-asr',
+      displayName: 'Mock ASR',
+      description: 'Mock ASR provider',
+      kind: 'cloud',
+      configSchema: z.object({}),
+      getSetupStatus,
+      create: () => ({
+        id: 'mock-asr',
+        displayName: 'Mock ASR',
+        isConfigured: () => true,
+        recognize: async () => ({ text: '', segments: [] })
+      })
+    })
+
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'mock-asr': {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: {
+            apiKey: 'mock-key'
+          }
+        }
+      },
+      providerSettings: {
+        'mock-asr': {
+          language: 'en'
+        }
+      },
+      activeProviders: {}
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const status = await caller.getSetupStatus({ providerId: 'mock-asr', kind: 'asr' })
+
+    expect(status).toEqual({
+      status: 'ready',
+      canActivate: true,
+      blockingReasons: []
+    })
+    expect(getSetupStatus).toHaveBeenCalledWith({
+      connection: expect.objectContaining({
+        enabled: true,
+        connectionType: 'apiKey'
+      }),
+      settings: expect.objectContaining({
+        language: 'en'
+      })
+    })
+  })
+
+  test('getSetupStatus returns invalid for mismatched provider kind', async () => {
+    const llmRegistry = new LLMProviderRegistry()
+    llmRegistry.register({
+      id: 'mock-llm',
+      displayName: 'Mock LLM',
+      description: 'Mock LLM provider',
+      configSchema: z.object({}),
+      create: () => ({
+        id: 'mock-llm',
+        displayName: 'Mock LLM',
+        isConfigured: () => true,
+        listModels: async () => [],
+        generate: async () => ({ content: '', finishReason: 'stop' }),
+        complete: async function* () {}
+      })
+    })
+
+    const asrRegistry = new ASRProviderRegistry()
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'mock-llm': {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'mock-key' }
+        }
+      },
+      providerSettings: {},
+      activeProviders: {}
+    })
+
+    const oauthService = new OAuthService({
+      secureStorage: {
+        setSecret: vi.fn(async () => undefined),
+        getSecret: vi.fn(async () => null),
+        deleteSecret: vi.fn(async () => undefined)
+      } satisfies SecureStorage,
+      store,
+      providers: {}
+    })
+
+    const caller = providersRouter.createCaller({
+      store,
+      llmRegistry,
+      asrRegistry,
+      oauthService
+    } as unknown as Context)
+
+    const status = await caller.getSetupStatus({ providerId: 'mock-llm', kind: 'asr' })
+
+    expect(status).toEqual({
+      status: 'invalid',
+      canActivate: false,
+      blockingReasons: ['Provider is not available']
+    })
   })
 
   test('listModels resolves openrouter from manual apiKey provider settings', async () => {
