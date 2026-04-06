@@ -40,11 +40,13 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: asrProvider, settings: { language: 'es' } }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
-    })
+    } as never)
 
     await pipeline.process({
       format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
@@ -64,7 +66,7 @@ describe('PostRecordingPipeline', () => {
         sampleRate: 16000,
         channels: 1
       }),
-      { language: 'en' }
+      { language: 'es' }
     )
     expect(storage.save).toHaveBeenCalledTimes(1)
     expect(llmProvider.generate).toHaveBeenCalledWith(
@@ -118,7 +120,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
@@ -201,7 +203,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
@@ -264,7 +266,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
@@ -327,7 +329,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
@@ -395,7 +397,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
@@ -439,14 +441,17 @@ describe('PostRecordingPipeline', () => {
       recordingStorage: {
         save: vi.fn().mockResolvedValue({ audioFilePath: '/recordings/llm-failure.wav' })
       } as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue({
-        id: 'deepgram',
-        displayName: 'Deepgram',
-        isConfigured: () => true,
-        recognize: vi.fn().mockResolvedValue({
-          text: 'raw transcript',
-          segments: [{ text: 'raw transcript', isFinal: true }]
-        })
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'deepgram',
+          displayName: 'Deepgram',
+          isConfigured: () => true,
+          recognize: vi.fn().mockResolvedValue({
+            text: 'raw transcript',
+            segments: [{ text: 'raw transcript', isFinal: true }]
+          })
+        },
+        settings: {}
       }),
       resolveActiveLLMSelection: vi.fn().mockResolvedValue({
         provider: {
@@ -535,7 +540,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
@@ -603,7 +608,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: async () => asrProvider,
+      resolveActiveASRSelection: async () => ({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection
     })
 
@@ -663,7 +668,7 @@ describe('PostRecordingPipeline', () => {
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue(asrProvider),
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
       resolveActiveLLMSelection: vi
         .fn()
         .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
@@ -701,14 +706,17 @@ describe('PostRecordingPipeline', () => {
       recordingStorage: {
         save: vi.fn().mockResolvedValue({ audioFilePath: '/recordings/two.wav' })
       } as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue({
-        id: 'deepgram',
-        displayName: 'Deepgram',
-        isConfigured: () => true,
-        recognize: vi.fn().mockResolvedValue({
-          text: 'raw transcript',
-          segments: [{ text: 'raw transcript', isFinal: true }]
-        })
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'deepgram',
+          displayName: 'Deepgram',
+          isConfigured: () => true,
+          recognize: vi.fn().mockResolvedValue({
+            text: 'raw transcript',
+            segments: [{ text: 'raw transcript', isFinal: true }]
+          })
+        },
+        settings: {}
       }),
       resolveActiveLLMSelection: vi.fn().mockResolvedValue({
         provider: {
@@ -756,14 +764,17 @@ describe('PostRecordingPipeline', () => {
       recordingStorage: {
         save: vi.fn().mockRejectedValue(new Error('disk full'))
       } as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue({
-        id: 'deepgram',
-        displayName: 'Deepgram',
-        isConfigured: () => true,
-        recognize: vi.fn().mockResolvedValue({
-          text: 'raw transcript',
-          segments: [{ text: 'raw transcript', isFinal: true }]
-        })
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'deepgram',
+          displayName: 'Deepgram',
+          isConfigured: () => true,
+          recognize: vi.fn().mockResolvedValue({
+            text: 'raw transcript',
+            segments: [{ text: 'raw transcript', isFinal: true }]
+          })
+        },
+        settings: {}
       }),
       resolveActiveLLMSelection: vi.fn().mockResolvedValue({
         provider: {
@@ -809,11 +820,14 @@ describe('PostRecordingPipeline', () => {
       recordingStorage: {
         save: vi.fn().mockResolvedValue({ audioFilePath: '/recordings/four.wav' })
       } as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue({
-        id: 'deepgram',
-        displayName: 'Deepgram',
-        isConfigured: () => true,
-        recognize: vi.fn().mockRejectedValue(new Error('asr timeout'))
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'deepgram',
+          displayName: 'Deepgram',
+          isConfigured: () => true,
+          recognize: vi.fn().mockRejectedValue(new Error('asr timeout'))
+        },
+        settings: {}
       }),
       resolveActiveLLMSelection: vi.fn().mockResolvedValue({
         provider: {
@@ -870,11 +884,14 @@ describe('PostRecordingPipeline', () => {
       recordingStorage: {
         save: vi.fn().mockResolvedValue({ audioFilePath: '/recordings/five.wav' })
       } as never,
-      resolveActiveASRProvider: vi.fn().mockResolvedValue({
-        id: 'deepgram',
-        displayName: 'Deepgram',
-        isConfigured: () => true,
-        recognize: vi.fn().mockRejectedValue(error)
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({
+        provider: {
+          id: 'deepgram',
+          displayName: 'Deepgram',
+          isConfigured: () => true,
+          recognize: vi.fn().mockRejectedValue(error)
+        },
+        settings: {}
       }),
       resolveActiveLLMSelection: vi.fn().mockResolvedValue({
         provider: {

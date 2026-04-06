@@ -411,4 +411,45 @@ describe('provider runtime resolution', () => {
     expect(selection.provider.id).toBe('openrouter')
     expect(selection.model).toBe('openai/gpt-4.1-mini')
   })
+
+  test('resolveActiveASRSelection returns ASR provider + saved settings from structured provider settings', async () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        deepgram: {
+          enabled: true,
+          connectionType: 'apiKey',
+          config: { apiKey: 'dg-key' }
+        }
+      },
+      providerSettings: {
+        deepgram: { language: 'fr', punctuation: true }
+      },
+      activeProviders: {
+        asr: 'deepgram'
+      }
+    })
+
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn()
+    }
+    const asrRegistry = {
+      resolve: vi.fn().mockReturnValue(asrProvider)
+    }
+
+    const runtimeModule = (await import('../providers/runtime')) as any
+    const selection = await runtimeModule.resolveActiveASRSelection({
+      asrRegistry,
+      store
+    })
+
+    expect(asrRegistry.resolve).toHaveBeenCalledWith('deepgram', { apiKey: 'dg-key' })
+    expect(selection).toEqual({
+      provider: asrProvider,
+      settings: { language: 'fr', punctuation: true }
+    })
+  })
 })

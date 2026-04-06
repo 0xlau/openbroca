@@ -19,6 +19,11 @@ interface ASRProviderRuntimeDeps {
   store: StoreLike
 }
 
+export interface ActiveASRSelection {
+  provider: ASRProvider
+  settings: Record<string, unknown>
+}
+
 export interface ActiveLLMSelection {
   providerId: string
   model: string
@@ -87,6 +92,30 @@ export async function resolveActiveASRProvider(deps: ASRProviderRuntimeDeps): Pr
   }
 
   return deps.asrRegistry.resolve(providerId, provider.config ?? {})
+}
+
+export async function resolveActiveASRSelection(deps: ASRProviderRuntimeDeps): Promise<ActiveASRSelection> {
+  const providerId = getActiveASRProviderId(deps.store)
+  if (!providerId) {
+    throw new ConfigurationError(
+      'provider:not-configured',
+      'Select an active ASR provider before processing a recording.'
+    )
+  }
+
+  const providers = getProviderRecords(deps.store)
+  const providerRecord = providers[providerId]
+  if (!providerRecord?.enabled) {
+    throw new ConfigurationError(providerId, 'Provider is not configured')
+  }
+
+  const normalized = getNormalizedProviderSettings(deps.store)
+  const settings = normalized.providerSettings[providerId] ?? {}
+
+  return {
+    provider: deps.asrRegistry.resolve(providerId, providerRecord.config ?? {}),
+    settings
+  }
 }
 
 export async function getLLMProviderRuntimeConfig(

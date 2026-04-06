@@ -15,7 +15,10 @@ export class PostRecordingPipeline {
     private readonly deps: {
       historyRepository: HistoryRepository
       recordingStorage: RecordingStorage
-      resolveActiveASRProvider: () => Promise<import('@openbroca/providers/asr').ASRProvider>
+      resolveActiveASRSelection: () => Promise<{
+        provider: import('@openbroca/providers/asr').ASRProvider
+        settings: Record<string, unknown>
+      }>
       resolveActiveLLMSelection: () => Promise<{
         provider: import('@openbroca/providers/llm').LLMProvider
         model: string
@@ -94,9 +97,12 @@ export class PostRecordingPipeline {
     }
 
     let asrProvider: import('@openbroca/providers/asr').ASRProvider
+    let asrSettings: Record<string, unknown> = {}
     try {
       pushTimeline('asr', 'started')
-      asrProvider = await this.deps.resolveActiveASRProvider()
+      const selection = await this.deps.resolveActiveASRSelection()
+      asrProvider = selection.provider
+      asrSettings = selection.settings ?? {}
       console.debug('[voice-debug] active ASR provider resolved', {
         providerId: asrProvider.id,
         displayName: asrProvider.displayName
@@ -122,7 +128,11 @@ export class PostRecordingPipeline {
 
     let rawTranscriptionText = ''
     let asrSegments: TranscriptionSegment[] = []
-    const asrRequest = { language: 'en' }
+    const savedLanguage =
+      typeof asrSettings.language === 'string' && asrSettings.language.trim().length > 0
+        ? asrSettings.language
+        : 'en'
+    const asrRequest = { language: savedLanguage }
     if (recording.format.sampleRate !== 16000) {
       console.debug('[voice-debug] resampling audio for ASR', {
         fromSampleRate: recording.format.sampleRate,

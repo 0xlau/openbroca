@@ -21,7 +21,7 @@ import { createInstructionMatcher } from './instructions/matcher'
 import { RecordingStorage } from './recording-storage'
 import { PostRecordingPipeline } from './post-recording-pipeline'
 import {
-  resolveActiveASRProvider,
+  resolveActiveASRSelection,
   resolveActiveLLMSelection
 } from './providers/runtime'
 import { createAutoEnterService } from './send-key/auto-enter'
@@ -183,8 +183,8 @@ const autoEnterService = createAutoEnterService()
 const postRecordingPipeline = new PostRecordingPipeline({
   historyRepository,
   recordingStorage,
-  resolveActiveASRProvider: () =>
-    resolveActiveASRProvider({
+  resolveActiveASRSelection: () =>
+    resolveActiveASRSelection({
       asrRegistry,
       store
     }),
