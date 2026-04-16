@@ -2,6 +2,7 @@ import React from 'react'
 import { DebugDialogs } from '@renderer/components/dialogs/debug-dialogs'
 import { HistoryRow } from '@renderer/components/history/history-row'
 import { trpc } from '@renderer/trpc'
+import { hasMeaningfulText } from '../../../../shared/meaningful-text'
 import {
   type ChartConfig,
   ChartContainer,
@@ -62,7 +63,9 @@ export const Dashboard: React.FC = () => {
     { enabled: selectedHistoryId !== null }
   )
 
-  const historyItems = historyListQuery.data ?? []
+  const historyItems = (historyListQuery.data ?? []).filter(
+    (item) => settings.debugMode || hasMeaningfulText(item.finalText)
+  )
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">

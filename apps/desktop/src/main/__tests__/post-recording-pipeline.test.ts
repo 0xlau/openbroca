@@ -83,6 +83,136 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
+  test('does not call LLM when ASR returns only whitespace', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-blank-asr' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/blank-asr.wav',
+        fileName: 'blank-asr.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: '  \n\t  ',
+        segments: [{ text: '  \n\t  ', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn()
+    }
+    const resolveActiveLLMSelection = vi
+      .fn()
+      .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    expect(resolveActiveLLMSelection).not.toHaveBeenCalled()
+    expect(llmProvider.generate).not.toHaveBeenCalled()
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-blank-asr',
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'asr',
+        failureMessage: 'ASR returned empty transcript',
+        debug: expect.objectContaining({
+          rawTranscriptionText: '  \n\t  '
+        })
+      })
+    )
+  })
+
+  test('marks the record failed when LLM returns only whitespace', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-blank-llm' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/blank-llm.wav',
+        fileName: 'blank-llm.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send the report by friday',
+        segments: [{ text: 'send the report by friday', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: '   \n',
+        finishReason: 'stop',
+        usage: { promptTokens: 12, completionTokens: 0, totalTokens: 12 }
+      })
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    const lastPatch = repository.update.mock.lastCall?.[1]
+
+    expect(lastPatch).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'llm',
+        failureMessage: 'LLM returned empty content',
+        debug: expect.objectContaining({
+          rawTranscriptionText: 'send the report by friday',
+          llmRequest: expect.objectContaining({
+            model: 'gpt-5.2-codex'
+          })
+        })
+      })
+    )
+    expect(lastPatch?.finalText).toBeUndefined()
+  })
+
   test('appends matched custom instructions and triggers auto enter after success', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-auto-enter' })),

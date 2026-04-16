@@ -47,6 +47,32 @@ const selectedHistoryRecord: {
   }
 }
 
+type HistoryListItem = {
+  id: string
+  createdAt: string
+  updatedAt: string
+  status: string
+  audioDurationMs: number
+  finalText?: string | null
+  audioFileUrl?: string | null
+  failureStage: string | null
+  failureMessage?: string | null
+}
+
+let historyListRecords: HistoryListItem[] = [
+  {
+    id: 'record-1',
+    createdAt: '2026-04-02T10:00:00.000Z',
+    updatedAt: '2026-04-02T10:00:00.000Z',
+    status: 'completed',
+    audioDurationMs: 1000,
+    finalText: 'Send the report by Friday.',
+    audioFileUrl: 'openbroca-media://history/record-1',
+    failureStage: null,
+    failureMessage: null
+  }
+]
+
 const playMock = vi.fn(() => Promise.resolve())
 const pauseMock = vi.fn()
 
@@ -70,18 +96,7 @@ vi.mock('@renderer/trpc', () => ({
     history: {
       list: {
         useQuery: () => ({
-          data: [
-            {
-              id: 'record-1',
-              createdAt: '2026-04-02T10:00:00.000Z',
-              updatedAt: '2026-04-02T10:00:00.000Z',
-              status: 'completed',
-              audioDurationMs: 1000,
-              finalText: 'Send the report by Friday.',
-              audioFileUrl: 'openbroca-media://history/record-1',
-              failureStage: null
-            }
-          ]
+          data: historyListRecords
         })
       },
       getById: {
@@ -218,6 +233,19 @@ describe('Dashboard', () => {
     cleanup()
     playMock.mockClear()
     pauseMock.mockClear()
+    historyListRecords = [
+      {
+        id: 'record-1',
+        createdAt: '2026-04-02T10:00:00.000Z',
+        updatedAt: '2026-04-02T10:00:00.000Z',
+        status: 'completed',
+        audioDurationMs: 1000,
+        finalText: 'Send the report by Friday.',
+        audioFileUrl: 'openbroca-media://history/record-1',
+        failureStage: null,
+        failureMessage: null
+      }
+    ]
     selectedHistoryRecord.finalText = 'Send the report by Friday.'
     selectedHistoryRecord.failureMessage = null
     selectedHistoryRecord.debug.rawTranscriptionText = 'send the report by friday'
@@ -271,5 +299,101 @@ describe('Dashboard', () => {
     const alert = screen.getByRole('alert')
     expect(alert.getAttribute('data-variant')).toBe('destructive')
     expect(screen.getByText('ASR pipeline failed.')).toBeTruthy()
+  })
+
+  test('hides records without meaningful llm output when debug mode is off', async () => {
+    historyListRecords = [
+      historyListRecords[0]!,
+      {
+        id: 'record-failed',
+        createdAt: '2026-04-02T09:59:00.000Z',
+        updatedAt: '2026-04-02T09:59:00.000Z',
+        status: 'failed',
+        audioDurationMs: 1000,
+        finalText: null,
+        audioFileUrl: 'openbroca-media://history/record-failed',
+        failureStage: 'llm',
+        failureMessage: 'upstream 500'
+      },
+      {
+        id: 'record-processing',
+        createdAt: '2026-04-02T09:58:00.000Z',
+        updatedAt: '2026-04-02T09:58:00.000Z',
+        status: 'processing',
+        audioDurationMs: 1000,
+        finalText: null,
+        audioFileUrl: 'openbroca-media://history/record-processing',
+        failureStage: null,
+        failureMessage: null
+      },
+      {
+        id: 'record-empty',
+        createdAt: '2026-04-02T09:57:00.000Z',
+        updatedAt: '2026-04-02T09:57:00.000Z',
+        status: 'completed',
+        audioDurationMs: 1000,
+        finalText: '   ',
+        audioFileUrl: 'openbroca-media://history/record-empty',
+        failureStage: null,
+        failureMessage: null
+      }
+    ]
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expect(screen.getAllByRole('button', { name: /show history details/i })).toHaveLength(1)
+    expect(screen.queryByText('upstream 500')).toBeNull()
+    expect(screen.queryByText('Processing...')).toBeNull()
+  })
+
+  test('shows all records when debug mode is on', async () => {
+    historyListRecords = [
+      historyListRecords[0]!,
+      {
+        id: 'record-failed',
+        createdAt: '2026-04-02T09:59:00.000Z',
+        updatedAt: '2026-04-02T09:59:00.000Z',
+        status: 'failed',
+        audioDurationMs: 1000,
+        finalText: null,
+        audioFileUrl: 'openbroca-media://history/record-failed',
+        failureStage: 'llm',
+        failureMessage: 'upstream 500'
+      },
+      {
+        id: 'record-processing',
+        createdAt: '2026-04-02T09:58:00.000Z',
+        updatedAt: '2026-04-02T09:58:00.000Z',
+        status: 'processing',
+        audioDurationMs: 1000,
+        finalText: null,
+        audioFileUrl: 'openbroca-media://history/record-processing',
+        failureStage: null,
+        failureMessage: null
+      },
+      {
+        id: 'record-empty',
+        createdAt: '2026-04-02T09:57:00.000Z',
+        updatedAt: '2026-04-02T09:57:00.000Z',
+        status: 'completed',
+        audioDurationMs: 1000,
+        finalText: '   ',
+        audioFileUrl: 'openbroca-media://history/record-empty',
+        failureStage: null,
+        failureMessage: null
+      }
+    ]
+    settingsStore.setState((state) => ({
+      ...state,
+      data: { ...state.data, debugMode: true }
+    }))
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expect(screen.getAllByRole('button', { name: /show history details/i })).toHaveLength(4)
+    expect(screen.getByText('upstream 500')).toBeTruthy()
+    expect(screen.getByText('Processing...')).toBeTruthy()
   })
 })

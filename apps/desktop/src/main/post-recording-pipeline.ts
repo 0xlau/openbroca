@@ -6,6 +6,7 @@ import type { HistoryRepository } from './history-repository'
 import type { MatchedInstructionRule } from './instructions/matcher'
 import type { RecordingStorage } from './recording-storage'
 import type { AutoEnterService } from './send-key/auto-enter'
+import { hasMeaningfulText } from '../shared/meaningful-text'
 
 const cleanupPrompt =
   'Clean up the dictated transcript into polished final text without changing intent.'
@@ -150,6 +151,26 @@ export class PostRecordingPipeline {
         finalTranscript: rawTranscriptionText,
         segmentCount: asrSegments.length
       })
+      if (!hasMeaningfulText(rawTranscriptionText)) {
+        const message = 'ASR returned empty transcript'
+        errors.push({ stage: 'asr', message, at: now() })
+        pushTimeline('asr', 'failed', message)
+        this.deps.historyRepository.update(record.id, {
+          status: 'failed',
+          failureStage: 'asr',
+          failureMessage: message,
+          debug: {
+            rawTranscriptionText,
+            asrSegments,
+            asrRequest,
+            asrResponseSummary: { segmentCount: asrSegments.length },
+            errors: [...errors],
+            timeline: [...timeline]
+          }
+        })
+        return
+      }
+
       pushTimeline('asr', 'completed')
       this.deps.historyRepository.update(record.id, {
         debug: {
@@ -292,6 +313,38 @@ export class PostRecordingPipeline {
         finishReason: result.finishReason,
         contentLength: result.content.length
       })
+
+      if (!hasMeaningfulText(result.content)) {
+        const message = 'LLM returned empty content'
+        errors.push({ stage: 'llm', message, at: now() })
+        pushTimeline('llm', 'failed', message)
+        this.deps.historyRepository.update(record.id, {
+          status: 'failed',
+          failureStage: 'llm',
+          failureMessage: message,
+          debug: {
+            rawTranscriptionText,
+            asrSegments,
+            asrRequest,
+            asrResponseSummary: { segmentCount: asrSegments.length },
+            llmRequest: buildLLMRequestDebug(),
+            llmResponseSummary: {
+              finishReason: result.finishReason,
+              matchedInstruction: matchedInstructionDebug
+            },
+            tokenUsage: result.usage,
+            errors: [...errors],
+            timeline: [...timeline]
+          }
+        })
+        console.debug('[voice-debug] post-recording pipeline failed', {
+          recordId: record.id,
+          stage: 'llm',
+          message
+        })
+        return
+      }
+
       pushTimeline('llm', 'completed')
 
       const autoEnterMode = matchedInstruction?.autoEnterMode ?? 'off'
