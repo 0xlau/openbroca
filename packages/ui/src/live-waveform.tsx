@@ -2,6 +2,52 @@ import { useEffect, useRef, type HTMLAttributes } from 'react'
 
 import { cn } from './utils'
 
+export const getFittingBarCount = (width: number, barWidth: number, barGap: number) => {
+  if (width <= 0 || barWidth <= 0) return 0
+
+  const step = barWidth + barGap
+  if (step <= 0) return 0
+
+  return Math.max(0, Math.floor((width + barGap) / step))
+}
+
+export const getCenteredBarStartX = (
+  width: number,
+  barCount: number,
+  barWidth: number,
+  barGap: number
+) => {
+  if (width <= 0 || barCount <= 0 || barWidth <= 0) return 0
+
+  const totalBarsWidth = barCount * barWidth + Math.max(0, barCount - 1) * barGap
+  return Math.max(0, (width - totalBarsWidth) / 2)
+}
+
+export const buildStaticWaveformBars = (
+  relevantData: Uint8Array,
+  barCount: number,
+  sensitivity: number
+) => {
+  if (barCount <= 0) return []
+  if (relevantData.length === 0) {
+    return Array.from({ length: barCount }, () => 0.05)
+  }
+
+  const centerIndex = (barCount - 1) / 2
+  const maxDistance = Math.max(centerIndex, 1)
+
+  return Array.from({ length: barCount }, (_, index) => {
+    const distanceFromCenter = Math.abs(index - centerIndex)
+    const normalizedDistance = distanceFromCenter / maxDistance
+    const dataIndex = Math.min(
+      relevantData.length - 1,
+      Math.floor(normalizedDistance * (relevantData.length - 1))
+    )
+    const value = Math.min(1, (relevantData[dataIndex] / 255) * sensitivity)
+    return Math.max(0.05, value)
+  })
+}
+
 export type LiveWaveformProps = HTMLAttributes<HTMLDivElement> & {
   active?: boolean
   processing?: boolean
@@ -106,8 +152,10 @@ export const LiveWaveform = ({
         transitionProgressRef.current = Math.min(1, transitionProgressRef.current + 0.02)
 
         const processingData = []
-        const barCount = Math.floor(
-          (containerRef.current?.getBoundingClientRect().width || 200) / (barWidth + barGap)
+        const barCount = getFittingBarCount(
+          containerRef.current?.getBoundingClientRect().width || 200,
+          barWidth,
+          barGap
         )
 
         if (mode === 'static') {
@@ -316,22 +364,8 @@ export const LiveWaveform = ({
             const endFreq = Math.floor(dataArray.length * 0.4)
             const relevantData = dataArray.slice(startFreq, endFreq)
 
-            const barCount = Math.floor(rect.width / (barWidth + barGap))
-            const halfCount = Math.floor(barCount / 2)
-            const newBars: number[] = []
-
-            // Mirror the data for symmetric display
-            for (let i = halfCount - 1; i >= 0; i--) {
-              const dataIndex = Math.floor((i / halfCount) * relevantData.length)
-              const value = Math.min(1, (relevantData[dataIndex] / 255) * sensitivity)
-              newBars.push(Math.max(0.05, value))
-            }
-
-            for (let i = 0; i < halfCount; i++) {
-              const dataIndex = Math.floor((i / halfCount) * relevantData.length)
-              const value = Math.min(1, (relevantData[dataIndex] / 255) * sensitivity)
-              newBars.push(Math.max(0.05, value))
-            }
+            const barCount = getFittingBarCount(rect.width, barWidth, barGap)
+            const newBars = buildStaticWaveformBars(relevantData, barCount, sensitivity)
 
             staticBarsRef.current = newBars
             lastActiveDataRef.current = newBars
@@ -379,7 +413,7 @@ export const LiveWaveform = ({
         })()
 
       const step = barWidth + barGap
-      const barCount = Math.floor(rect.width / step)
+      const barCount = getFittingBarCount(rect.width, barWidth, barGap)
       const centerY = rect.height / 2
 
       // Draw bars based on mode
@@ -393,9 +427,11 @@ export const LiveWaveform = ({
               ? staticBarsRef.current
               : []
 
+        const startX = getCenteredBarStartX(rect.width, barCount, barWidth, barGap)
+
         for (let i = 0; i < barCount && i < dataToRender.length; i++) {
           const value = dataToRender[i] || 0.1
-          const x = i * step
+          const x = startX + i * step
           const barHeight = Math.max(baseBarHeight, value * rect.height * 0.8)
           const y = centerY - barHeight / 2
 

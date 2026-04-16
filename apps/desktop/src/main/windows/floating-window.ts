@@ -3,7 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 
 const FLOATING_WINDOW_WIDTH = 180
-const FLOATING_WINDOW_HEIGHT = 36
+const FLOATING_WINDOW_HEIGHT = 38
 const FLOATING_WINDOW_BOTTOM_OFFSET = 50
 
 export function getFloatingWindowPosition(
