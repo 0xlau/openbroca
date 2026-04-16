@@ -51,7 +51,7 @@ class WindowManager {
 
   hideFloating(): void {
     if (this.floatingWindow && !this.floatingWindow.isDestroyed()) {
-      // this.floatingWindow.hide()
+      this.floatingWindow.hide()
       this.onFloatingHidden?.()
     }
   }
