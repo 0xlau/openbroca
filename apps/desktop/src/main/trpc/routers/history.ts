@@ -1,9 +1,9 @@
-import { pathToFileURL } from 'node:url'
 import { z } from 'zod'
+import { toHistoryAudioUrl } from '../../history-audio-protocol'
 import { publicProcedure, router } from '../trpc'
 
-function toAudioFileUrl(audioFilePath?: string): string | undefined {
-  return audioFilePath ? pathToFileURL(audioFilePath).toString() : undefined
+function toAudioFileUrl(record: { id: string; audioFilePath?: string }): string | undefined {
+  return record.audioFilePath ? toHistoryAudioUrl(record.id) : undefined
 }
 
 function toHistorySummaryViewModel(record: {
@@ -30,7 +30,7 @@ function toHistorySummaryViewModel(record: {
     failureMessage: record.failureMessage,
     asrProviderId: record.asrProviderId,
     llmProviderId: record.llmProviderId,
-    audioFileUrl: toAudioFileUrl(record.audioFilePath)
+    audioFileUrl: toAudioFileUrl(record)
   }
 }
 

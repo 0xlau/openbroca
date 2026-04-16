@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { pathToFileURL } from 'node:url'
+import { toHistoryAudioUrl } from '../../../history-audio-protocol'
 import { historyRouter } from '../history'
 
 describe('historyRouter', () => {
@@ -56,7 +56,7 @@ describe('historyRouter', () => {
     const list = await caller.list()
     const detail = await caller.getById({ id: 'record-1' })
 
-    const expectedUrl = pathToFileURL('/tmp/one.wav').toString()
+    const expectedUrl = toHistoryAudioUrl('record-1')
     expect(list[0]?.audioFileUrl).toBe(expectedUrl)
 
     expect(detail).not.toBeNull()

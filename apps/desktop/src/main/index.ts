@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol } from 'electron'
 import { execFile as nodeExecFile } from 'node:child_process'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,6 +21,10 @@ import { createInstructionMatcher } from './instructions/matcher'
 import { RecordingStorage } from './recording-storage'
 import { PostRecordingPipeline } from './post-recording-pipeline'
 import {
+  createHistoryAudioProtocolHandler,
+  HISTORY_AUDIO_PROTOCOL
+} from './history-audio-protocol'
+import {
   resolveActiveASRSelection,
   resolveActiveLLMSelection
 } from './providers/runtime'
@@ -33,6 +37,18 @@ import { normalizeInstructionsSettings } from '../shared/instructions'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 const macBundleIconCache = new Map<string, Promise<string | undefined>>()
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: HISTORY_AUDIO_PROTOCOL,
+    privileges: {
+      secure: true,
+      standard: true,
+      stream: true,
+      supportFetchAPI: true
+    }
+  }
+])
 
 function getAccelerator(): string {
   const shortcuts = store.get('shortcuts') as { floatingWindowAccelerator?: string } | undefined
@@ -221,6 +237,7 @@ app.whenReady().then(() => {
       appIdentityService
     )
   )
+  protocol.handle(HISTORY_AUDIO_PROTOCOL, createHistoryAudioProtocolHandler(historyRepository))
 
   ipcMain.handle('window:minimize', () => windowManager.getMain()?.minimize())
   ipcMain.handle('window:maximize', () => {

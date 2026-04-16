@@ -32,7 +32,7 @@ const selectedHistoryRecord: {
   status: 'completed',
   audioDurationMs: 1000,
   finalText: 'Send the report by Friday.',
-  audioFileUrl: 'file:///tmp/one.wav',
+  audioFileUrl: 'openbroca-media://history/record-1',
   failureStage: null,
   failureMessage: null,
   debug: {
@@ -78,7 +78,7 @@ vi.mock('@renderer/trpc', () => ({
               status: 'completed',
               audioDurationMs: 1000,
               finalText: 'Send the report by Friday.',
-              audioFileUrl: 'file:///tmp/one.wav',
+              audioFileUrl: 'openbroca-media://history/record-1',
               failureStage: null
             }
           ]
@@ -256,7 +256,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('send the report by friday')).toBeTruthy()
     expect(screen.getByText('send the report by friday').className).toContain('min-h-[4.5rem]')
     const audio = screen.getByLabelText('History audio playback')
-    expect(audio.getAttribute('src')).toBe('file:///tmp/one.wav')
+    expect(audio.getAttribute('src')).toBe('openbroca-media://history/record-1')
   })
 
   test('renders failure messages inside a destructive alert', async () => {
