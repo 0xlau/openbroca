@@ -1,5 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
+import { normalizeAboutMeSettings } from '../../../shared/about-me'
+import { normalizeDictionarySettings } from '../../../shared/dictionary'
 import { normalizeInstructionsSettings } from '../../../shared/instructions'
 import { publicProcedure, router } from '../trpc'
 
@@ -27,6 +29,14 @@ function assertAllowedStoreKey(key: string): asserts key is AllowedStoreKey {
 function normalizeStoreValue(key: AllowedStoreKey, value: unknown): unknown {
   if (key === 'instructions') {
     return normalizeInstructionsSettings(value)
+  }
+
+  if (key === 'aboutMe') {
+    return normalizeAboutMeSettings(value)
+  }
+
+  if (key === 'dictionary') {
+    return normalizeDictionarySettings(value)
   }
 
   return value

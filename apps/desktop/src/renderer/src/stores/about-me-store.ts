@@ -1,18 +1,10 @@
 import { createPersistedStore } from './create-persisted-store'
+import {
+  defaultAboutMeSettings,
+  type AboutMeSettings
+} from '../../../shared/about-me'
 
-export interface AboutMeSettings {
-  nickname: string
-  email: string
-  occupation: string
-  bio: string
-}
-
-export const defaultAboutMeSettings: AboutMeSettings = {
-  nickname: '',
-  email: '',
-  occupation: '',
-  bio: ''
-}
+export type { AboutMeSettings }
 
 export const aboutMeStore = createPersistedStore<AboutMeSettings>({
   key: 'aboutMe',

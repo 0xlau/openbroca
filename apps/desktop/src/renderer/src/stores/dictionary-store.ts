@@ -1,23 +1,13 @@
 import { createPersistedStore } from './create-persisted-store'
+import {
+  defaultDictionarySettings,
+  type DictionaryEntry,
+  type DictionarySettings
+} from '../../../shared/dictionary'
 
-export interface DictionaryEntry {
-  id: string
-  term: string
-  type?: 'hotword' | 'replacement'
-  replacement?: string
-  note?: string
-  usageCount: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface DictionarySettings {
-  entries: DictionaryEntry[]
-}
+export type { DictionaryEntry, DictionarySettings }
 
 export const dictionaryStore = createPersistedStore<DictionarySettings>({
   key: 'dictionary',
-  defaults: {
-    entries: []
-  }
+  defaults: defaultDictionarySettings
 })
