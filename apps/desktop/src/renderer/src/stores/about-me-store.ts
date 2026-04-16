@@ -4,6 +4,7 @@ import {
   type AboutMeSettings
 } from '../../../shared/about-me'
 
+export { defaultAboutMeSettings }
 export type { AboutMeSettings }
 
 export const aboutMeStore = createPersistedStore<AboutMeSettings>({

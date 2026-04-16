@@ -25,7 +25,10 @@ describe('shared settings normalization', () => {
         entries: [
           { id: '1', term: ' Typeless ', type: 'hotword', usageCount: 3 },
           { id: '2', term: ' ', replacement: 'OpenBroca', usageCount: 1 },
-          { id: '3', term: 'open broca', replacement: ' OpenBroca ', usageCount: 2 }
+          { id: '3', term: 'open broca', replacement: ' OpenBroca ', usageCount: 2 },
+          { id: '   ', term: 'blank id should drop', usageCount: 4 },
+          { term: 'missing id should drop', usageCount: 5 },
+          { id: 42, term: 'non-string id should drop', usageCount: 6 }
         ]
       })
     ).toEqual({

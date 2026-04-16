@@ -191,4 +191,72 @@ describe('storeRouter', () => {
       ]
     })
   })
+
+  test('normalizes about me and dictionary payloads on write', async () => {
+    const store = new MemoryStore()
+    const caller = storeRouter.createCaller({ store } as unknown as Context)
+
+    await caller.set({
+      key: 'aboutMe',
+      value: {
+        nickname: '  Peiqiang  ',
+        email: 123,
+        occupation: ' Engineer ',
+        bio: null
+      }
+    })
+
+    await caller.set({
+      key: 'dictionary',
+      value: {
+        entries: [
+          {
+            id: ' entry-1 ',
+            term: ' Open Broca ',
+            type: 'replacement',
+            replacement: ' OpenBroca ',
+            note: ' frequent typo ',
+            usageCount: 2
+          },
+          {
+            id: '   ',
+            term: 'drop-blank-id'
+          },
+          {
+            term: 'drop-missing-id'
+          },
+          {
+            id: 42,
+            term: 'drop-non-string-id'
+          },
+          {
+            id: 'entry-2',
+            term: '   '
+          }
+        ]
+      }
+    })
+
+    await expect(caller.get({ key: 'aboutMe' })).resolves.toEqual({
+      nickname: 'Peiqiang',
+      email: '',
+      occupation: 'Engineer',
+      bio: ''
+    })
+
+    await expect(caller.get({ key: 'dictionary' })).resolves.toEqual({
+      entries: [
+        {
+          id: 'entry-1',
+          term: 'Open Broca',
+          type: 'replacement',
+          replacement: 'OpenBroca',
+          note: 'frequent typo',
+          usageCount: 2,
+          createdAt: '',
+          updatedAt: ''
+        }
+      ]
+    })
+  })
 })

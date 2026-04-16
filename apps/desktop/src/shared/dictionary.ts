@@ -2,6 +2,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function normalizeDictionaryEntryId(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const id = value.trim()
+  return id ? id : null
+}
+
+function normalizeDictionaryEntryType(value: unknown): DictionaryEntry['type'] {
+  if (value === 'hotword' || value === 'replacement') {
+    return value
+  }
+
+  return undefined
+}
+
 export interface DictionaryEntry {
   id: string
   term: string
@@ -31,6 +48,11 @@ export function normalizeDictionarySettings(raw: unknown): DictionarySettings {
       return []
     }
 
+    const id = normalizeDictionaryEntryId(candidate.id)
+    if (!id) {
+      return []
+    }
+
     const term = typeof candidate.term === 'string' ? candidate.term.trim() : ''
     if (!term) {
       return []
@@ -38,21 +60,20 @@ export function normalizeDictionarySettings(raw: unknown): DictionarySettings {
 
     const replacement =
       typeof candidate.replacement === 'string' ? candidate.replacement.trim() : undefined
-    const type =
-      candidate.type === 'hotword' || candidate.type === 'replacement' ? candidate.type : undefined
+    const entryType = normalizeDictionaryEntryType(candidate.type)
 
-    return [
-      {
-        id: typeof candidate.id === 'string' ? candidate.id : '',
-        term,
-        type,
-        replacement: replacement || undefined,
-        note: typeof candidate.note === 'string' ? candidate.note.trim() || undefined : undefined,
-        usageCount: typeof candidate.usageCount === 'number' ? candidate.usageCount : 0,
-        createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
-        updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : ''
-      }
-    ]
+    const entry: DictionaryEntry = {
+      id,
+      term,
+      type: entryType,
+      replacement: replacement || undefined,
+      note: typeof candidate.note === 'string' ? candidate.note.trim() || undefined : undefined,
+      usageCount: typeof candidate.usageCount === 'number' ? candidate.usageCount : 0,
+      createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
+      updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : ''
+    }
+
+    return [entry]
   })
 
   return { entries }
