@@ -16,6 +16,7 @@ declare global {
         disconnect: (providerId: string) => Promise<ProviderAuthState>
       }
       listeningSession: {
+        cancelProcessing: () => Promise<void>
         getState: () => Promise<ListeningSessionBridgeState>
         onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => () => void
       }

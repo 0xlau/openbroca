@@ -14,6 +14,7 @@ import { store } from './store'
 import { llmRegistry, asrRegistry } from './providers'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
+import { bindFloatingSessionController } from './floating-session-controller'
 import { RtAudioCaptureSource } from '@openbroca/audio-capture'
 import { ListeningSessionManager } from './listening-session'
 import { HistoryRepository } from './history-repository'
@@ -43,6 +44,7 @@ import { normalizeInstructionsSettings } from '../shared/instructions'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 const macBundleIconCache = new Map<string, Promise<string | undefined>>()
+let unbindFloatingSessionController: (() => void) | null = null
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -240,7 +242,7 @@ const postRecordingPipeline = new PostRecordingPipeline({
 const listeningSession = new ListeningSessionManager(captureSource, {
   getFrontmostAppSnapshot: () => appIdentityService.getFrontmostApp(),
   getTargetApp: () => focusedInputAppService.getFocusedInputApp(),
-  onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
+  onRecordingComplete: (recording, signal) => void postRecordingPipeline.process(recording, { signal })
 })
 
 app.whenReady().then(() => {
@@ -271,6 +273,7 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
   ipcMain.handle('listening-session:get-state', () => listeningSession.getState())
+  ipcMain.handle('listening-session:cancel-processing', () => listeningSession.cancelProcessing())
   ipcMain.handle('provider-auth:connect', (_event, providerId: string) => oauthService.start(providerId))
   ipcMain.handle('provider-auth:disconnect', (_event, providerId: string) =>
     oauthService.disconnect(providerId)
@@ -285,30 +288,18 @@ app.whenReady().then(() => {
     }
   })
 
-  windowManager.setFloatingHiddenHandler(() => {
-    console.debug('[voice-debug] floating window hidden, stopping listening session')
-    listeningSession.stop()
-  })
-
   windowManager.createMain()
 
-  // Register global shortcut for floating window
-  shortcutManager.start(
-    getAccelerator(),
-    () => {
+  unbindFloatingSessionController = bindFloatingSessionController({
+    accelerator: getAccelerator(),
+    getSelectedDeviceId: () => {
       const mic = store.get('microphone') as { selectedDeviceId?: number | null } | undefined
-      console.debug('[voice-debug] shortcut key down', {
-        accelerator: getAccelerator(),
-        selectedDeviceId: mic?.selectedDeviceId ?? null
-      })
-      windowManager.showFloating()
-      listeningSession.start({ deviceId: mic?.selectedDeviceId ?? undefined })
+      return mic?.selectedDeviceId
     },
-    () => {
-      console.debug('[voice-debug] shortcut key up, hiding floating window')
-      windowManager.hideFloating()
-    }
-  )
+    listeningSession,
+    shortcutManager,
+    windowManager
+  })
 
   // Re-register when accelerator config changes
   store.onDidChange('shortcuts', () => {
@@ -323,6 +314,8 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
+  unbindFloatingSessionController?.()
+  unbindFloatingSessionController = null
   void oauthService.dispose()
   listeningSession.stop()
   shortcutManager.stop()

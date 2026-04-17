@@ -29,6 +29,7 @@ function getExposedApi() {
       disconnect: (providerId: string) => Promise<void>
     }
     listeningSession: {
+      cancelProcessing: () => Promise<void>
       getState: () => Promise<ListeningSessionBridgeState>
       onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => () => void
     }
@@ -121,6 +122,17 @@ describe('preload listeningSession bridge', () => {
 
     expect(listener).toHaveBeenCalledWith(state)
     expect(typeof unsubscribe).toBe('function')
+  })
+
+  test('cancels post-recording processing through the main-process bridge', async () => {
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    await api.listeningSession.cancelProcessing()
+
+    expect(invoke).toHaveBeenCalledWith('listening-session:cancel-processing')
   })
 
   test('unsubscribed listeners stop receiving updates', async () => {

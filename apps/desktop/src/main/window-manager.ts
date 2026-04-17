@@ -1,15 +1,17 @@
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, screen, type Rectangle } from 'electron'
 import { createMainWindow, createFloatingWindow, getFloatingWindowPosition } from './windows'
 
+type FloatingWindowSize = Pick<Rectangle, 'width' | 'height'>
+
 interface WindowManagerOptions {
-  createFloatingWindow?: () => BrowserWindow
+  createFloatingWindow?: (size?: FloatingWindowSize) => BrowserWindow
   onFloatingHidden?: () => void
 }
 
 class WindowManager {
   private mainWindow: BrowserWindow | null = null
   private floatingWindow: BrowserWindow | null = null
-  private readonly createFloatingWindow: () => BrowserWindow
+  private readonly createFloatingWindow: (size?: FloatingWindowSize) => BrowserWindow
   private onFloatingHidden: (() => void) | null
 
   constructor(options: WindowManagerOptions = {}) {
@@ -29,24 +31,35 @@ class WindowManager {
     return this.mainWindow
   }
 
-  showFloating(): void {
+  showFloating(size?: FloatingWindowSize): void {
     if (!this.floatingWindow || this.floatingWindow.isDestroyed()) {
-      this.floatingWindow = this.createFloatingWindow()
+      this.floatingWindow = this.createFloatingWindow(size)
       this.floatingWindow.on?.('closed', () => {
         this.floatingWindow = null
       })
     }
 
-    if (this.floatingWindow.isVisible()) return
+    const winBounds = this.floatingWindow.getBounds()
+    const nextSize = size ?? {
+      width: winBounds.width,
+      height: winBounds.height
+    }
 
     // Center on the display where the cursor currently is
     const cursor = screen.getCursorScreenPoint()
     const display = screen.getDisplayNearestPoint(cursor)
-    const winBounds = this.floatingWindow.getBounds()
-    const { x, y } = getFloatingWindowPosition(display.workArea, winBounds)
+    const { x, y } = getFloatingWindowPosition(display.workArea, nextSize)
 
-    this.floatingWindow.setPosition(x, y)
-    this.floatingWindow.showInactive()
+    this.floatingWindow.setBounds({
+      x,
+      y,
+      width: nextSize.width,
+      height: nextSize.height
+    })
+
+    if (!this.floatingWindow.isVisible()) {
+      this.floatingWindow.showInactive()
+    }
   }
 
   hideFloating(): void {

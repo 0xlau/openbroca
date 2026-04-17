@@ -2,16 +2,13 @@ import { BrowserWindow, screen, type Rectangle } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 
-const FLOATING_WINDOW_WIDTH = 180
-const FLOATING_WINDOW_HEIGHT = 38
+export const FLOATING_LISTENING_SIZE = { width: 180, height: 38 } as const
+export const FLOATING_PROCESSING_SIZE = { width: 360, height: 38 } as const
 const FLOATING_WINDOW_BOTTOM_OFFSET = 50
 
 export function getFloatingWindowPosition(
   area: Rectangle,
-  size: Pick<Rectangle, 'width' | 'height'> = {
-    width: FLOATING_WINDOW_WIDTH,
-    height: FLOATING_WINDOW_HEIGHT
-  }
+  size: Pick<Rectangle, 'width' | 'height'> = FLOATING_LISTENING_SIZE
 ): { x: number; y: number } {
   return {
     x: Math.round(area.x + (area.width - size.width) / 2),
@@ -19,14 +16,16 @@ export function getFloatingWindowPosition(
   }
 }
 
-export function createFloatingWindow(): BrowserWindow {
+export function createFloatingWindow(
+  size: Pick<Rectangle, 'width' | 'height'> = FLOATING_LISTENING_SIZE
+): BrowserWindow {
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
-  const { x, y } = getFloatingWindowPosition(display.workArea)
+  const { x, y } = getFloatingWindowPosition(display.workArea, size)
 
   const floatingWindow = new BrowserWindow({
-    width: FLOATING_WINDOW_WIDTH,
-    height: FLOATING_WINDOW_HEIGHT,
+    width: size.width,
+    height: size.height,
     x,
     y,
     frame: false,
