@@ -56,7 +56,7 @@ describe('WindowManager', () => {
     expect(onFloatingHidden).toHaveBeenCalledTimes(1)
   })
 
-  test('resizes and repositions the floating window even when it is already visible', async () => {
+  test('positions the hidden floating window on the cursor display before showing it', async () => {
     const electron = await import('electron')
     const windows = await import('../windows')
     const { WindowManager } = await import('../window-manager')
@@ -70,7 +70,7 @@ describe('WindowManager', () => {
     const createFloatingWindow = vi.fn(() =>
       ({
         isDestroyed: () => false,
-        isVisible: () => true,
+        isVisible: () => false,
         getBounds: () => ({ x: 0, y: 0, width: 180, height: 38 }),
         setBounds,
         setPosition,
@@ -88,6 +88,36 @@ describe('WindowManager', () => {
       { width: 360, height: 38 }
     )
     expect(setBounds).toHaveBeenCalledWith({ x: 44, y: 55, width: 360, height: 38 })
-    expect(showInactive).not.toHaveBeenCalled()
+    expect(showInactive).toHaveBeenCalledTimes(1)
+  })
+
+  test('keeps the visible floating window anchored instead of recentering to the cursor display', async () => {
+    const electron = await import('electron')
+    const windows = await import('../windows')
+    const { WindowManager } = await import('../window-manager')
+
+    vi.mocked(electron.screen.getCursorScreenPoint).mockReturnValue({ x: 999, y: 888 })
+    vi.mocked(electron.screen.getDisplayNearestPoint).mockReturnValue({
+      workArea: { x: 20, y: 30, width: 1280, height: 720 }
+    } as never)
+    vi.mocked(windows.getFloatingWindowPosition).mockReturnValue({ x: 700, y: 710 })
+
+    const createFloatingWindow = vi.fn(() =>
+      ({
+        isDestroyed: () => false,
+        isVisible: () => true,
+        getBounds: () => ({ x: 500, y: 600, width: 180, height: 60 }),
+        setBounds,
+        setPosition,
+        showInactive,
+        hide
+      }) as never
+    )
+    const manager = new WindowManager({ createFloatingWindow })
+
+    manager.showFloating({ width: 360, height: 38 })
+
+    expect(windows.getFloatingWindowPosition).not.toHaveBeenCalled()
+    expect(setBounds).toHaveBeenCalledWith({ x: 410, y: 622, width: 360, height: 38 })
   })
 })

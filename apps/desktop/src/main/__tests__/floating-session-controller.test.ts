@@ -141,6 +141,49 @@ describe('bindFloatingSessionController', () => {
     expect(listeningSession.stop).toHaveBeenCalledTimes(2)
   })
 
+  test('keydown recovers from error by clearing it and starting a new capture', async () => {
+    const { bindFloatingSessionController } = await import('../floating-session-controller')
+    const windowManager = {
+      showFloating: vi.fn(),
+      hideFloating: vi.fn(),
+      setFloatingHiddenHandler: vi.fn()
+    }
+    const listeningSession = {
+      getState: vi.fn(() => currentState),
+      subscribe: vi.fn(() => unsubscribe),
+      start: vi.fn(),
+      stop: vi.fn(() => {
+        currentState = {
+          state: { status: 'idle' },
+          targetApp: null
+        }
+      })
+    }
+    const shortcutManager = {
+      start: vi.fn()
+    }
+
+    bindFloatingSessionController({
+      accelerator: 'CommandOrControl+Space',
+      getSelectedDeviceId: () => 11,
+      listeningSession,
+      shortcutManager,
+      windowManager
+    })
+
+    const [, onKeydown] = shortcutManager.start.mock.calls[0]
+    currentState = {
+      state: { status: 'error', message: 'mic failed' },
+      targetApp: null
+    }
+
+    onKeydown()
+
+    expect(listeningSession.stop).toHaveBeenCalledTimes(1)
+    expect(listeningSession.start).toHaveBeenCalledTimes(1)
+    expect(listeningSession.start).toHaveBeenCalledWith({ deviceId: 11 })
+  })
+
   test('stops an active capture when the floating window is hidden externally', async () => {
     const { bindFloatingSessionController } = await import('../floating-session-controller')
     const windowManager = {

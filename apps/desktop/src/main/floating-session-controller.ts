@@ -72,6 +72,10 @@ export function bindFloatingSessionController(
   shortcutManager.start(
     accelerator,
     () => {
+      if (listeningSession.getState().state.status === 'error') {
+        listeningSession.stop()
+      }
+
       if (listeningSession.getState().state.status !== 'idle') {
         return
       }

@@ -45,14 +45,21 @@ class WindowManager {
       height: winBounds.height
     }
 
-    // Center on the display where the cursor currently is
-    const cursor = screen.getCursorScreenPoint()
-    const display = screen.getDisplayNearestPoint(cursor)
-    const { x, y } = getFloatingWindowPosition(display.workArea, nextSize)
+    const nextPosition = this.floatingWindow.isVisible()
+      ? {
+          x: Math.round(winBounds.x + (winBounds.width - nextSize.width) / 2),
+          y: Math.round(winBounds.y + winBounds.height - nextSize.height)
+        }
+      : (() => {
+          // Center on the display where the cursor currently is
+          const cursor = screen.getCursorScreenPoint()
+          const display = screen.getDisplayNearestPoint(cursor)
+          return getFloatingWindowPosition(display.workArea, nextSize)
+        })()
 
     this.floatingWindow.setBounds({
-      x,
-      y,
+      x: nextPosition.x,
+      y: nextPosition.y,
       width: nextSize.width,
       height: nextSize.height
     })
