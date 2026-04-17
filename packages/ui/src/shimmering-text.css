@@ -29,4 +29,10 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .openbroca-shimmering-text {
+      animation: none;
+    }
+  }
 }
