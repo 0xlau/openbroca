@@ -266,6 +266,10 @@ class ListeningSessionManager {
         controller.signal
       )
     } catch (completionError) {
+      if (isAbortLikeError(completionError, controller.signal)) {
+        return
+      }
+
       console.error('[listening-session] recording completion failed', completionError)
     } finally {
       if (this.processingAbortController === controller) {

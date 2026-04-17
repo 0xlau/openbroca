@@ -279,6 +279,116 @@ describe('ListeningSessionManager', () => {
     completion.resolve()
   })
 
+  test('cancelProcessing does not report abort-like completion failures as errors', async () => {
+    const captureSource = new FakeCaptureSource()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const onRecordingComplete = vi.fn().mockImplementation(
+      async (_recording, signal: AbortSignal) =>
+        await new Promise<void>((resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('processing canceled')
+              error.name = 'AbortError'
+              reject(error)
+            },
+            { once: true }
+          )
+        })
+    )
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    manager.cancelProcessing()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(errorSpy).not.toHaveBeenCalled()
+
+    errorSpy.mockRestore()
+  })
+
+  test('late completion from a canceled processing run cannot reset a newer processing run', async () => {
+    const captureSource = new FakeCaptureSource()
+    const completionA = createDeferred<void>()
+    const completionB = createDeferred<void>()
+    const onRecordingComplete = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        await completionA.promise
+      })
+      .mockImplementationOnce(async () => {
+        await completionB.promise
+      })
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    manager.cancelProcessing()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    captureSource.pushChunk(new Uint8Array([5, 6, 7, 8]))
+    manager.start()
+    await vi.waitFor(() => {
+      expect(captureSource.capture).toHaveBeenCalledTimes(2)
+    })
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    completionA.resolve()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expectManagerState(manager, { status: 'processing' })
+
+    completionB.resolve()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+  })
+
   test('repeated start while processing is ignored', async () => {
     const captureSource = new FakeCaptureSource()
     const completion = createDeferred<void>()
