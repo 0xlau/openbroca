@@ -458,7 +458,7 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
-  test('marks the record as cancelled when ASR aborts with the supplied process signal', async () => {
+  test('short-circuits a pre-aborted run before storage and provider work', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-cancel-asr' })),
       update: vi.fn()
@@ -518,6 +518,9 @@ describe('PostRecordingPipeline', () => {
 
     const lastPatch = repository.update.mock.lastCall?.[1]
 
+    expect(storage.save).not.toHaveBeenCalled()
+    expect(asrProvider.recognize).not.toHaveBeenCalled()
+    expect(repository.update).toHaveBeenCalledTimes(1)
     expect(resolveActiveLLMSelection).not.toHaveBeenCalled()
     expect(llmProvider.generate).not.toHaveBeenCalled()
     expect(lastPatch).toEqual(
@@ -533,6 +536,97 @@ describe('PostRecordingPipeline', () => {
             })
           ]),
           timeline: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'asr',
+              status: 'started'
+            })
+          ])
+        })
+      })
+    )
+  })
+
+  test('marks the record as cancelled when ASR provider aborts after processing starts', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-provider-cancel-asr' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/provider-cancel-asr.wav',
+        fileName: 'provider-cancel-asr.wav',
+        byteLength: 64
+      })
+    }
+    const controller = new AbortController()
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockImplementation(async (_input, options) => {
+        options?.signal?.throwIfAborted?.()
+        controller.abort()
+        const error = new Error('The operation was aborted')
+        error.name = 'AbortError'
+        throw error
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn()
+    }
+    const resolveActiveASRSelection = vi
+      .fn()
+      .mockResolvedValue({ provider: asrProvider, settings: {} })
+    const resolveActiveLLMSelection = vi
+      .fn()
+      .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection,
+      resolveActiveLLMSelection
+    } as never)
+
+    await pipeline.process(
+      {
+        format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+        chunks: [new Uint8Array([1, 2])],
+        startedAt: '2026-04-02T10:00:00.000Z',
+        endedAt: '2026-04-02T10:00:01.000Z',
+        durationMs: 1000
+      },
+      { signal: controller.signal }
+    )
+
+    const lastPatch = repository.update.mock.lastCall?.[1]
+
+    expect(storage.save).toHaveBeenCalledTimes(1)
+    expect(resolveActiveASRSelection).toHaveBeenCalledTimes(1)
+    expect(asrProvider.recognize).toHaveBeenCalledTimes(1)
+    expect(resolveActiveLLMSelection).not.toHaveBeenCalled()
+    expect(llmProvider.generate).not.toHaveBeenCalled()
+    expect(lastPatch).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'asr',
+        failureMessage: 'Cancelled by user',
+        debug: expect.objectContaining({
+          errors: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'asr',
+              message: 'Cancelled by user'
+            })
+          ]),
+          timeline: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'storage',
+              status: 'completed'
+            }),
             expect.objectContaining({
               stage: 'asr',
               status: 'started'
@@ -616,7 +710,7 @@ describe('PostRecordingPipeline', () => {
     expect(lastPatch?.finalText).toBeUndefined()
   })
 
-  test('marks the record as cancelled when LLM aborts with the supplied process signal', async () => {
+  test('marks the record as cancelled when LLM provider aborts after ASR succeeds', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-cancel-llm' })),
       update: vi.fn()
@@ -644,16 +738,11 @@ describe('PostRecordingPipeline', () => {
       isConfigured: () => true,
       listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
       generate: vi.fn().mockImplementation(async (request) => {
-        expect(request).toEqual(
-          expect.objectContaining({
-            model: 'gpt-5.2-codex',
-            signal: controller.signal
-          })
-        )
-
+        request.signal?.throwIfAborted?.()
         controller.abort()
-        const error = new Error('Request aborted')
-        error.name = 'AbortError'
+        const error = new Error('Request canceled')
+        error.name = 'CanceledError'
+        ;(error as Error & { code?: string }).code = 'ERR_CANCELED'
         throw error
       })
     }
@@ -680,19 +769,9 @@ describe('PostRecordingPipeline', () => {
 
     const lastPatch = repository.update.mock.lastCall?.[1]
 
-    expect(asrProvider.recognize).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        language: 'en',
-        signal: controller.signal
-      })
-    )
-    expect(llmProvider.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'gpt-5.2-codex',
-        signal: controller.signal
-      })
-    )
+    expect(storage.save).toHaveBeenCalledTimes(1)
+    expect(asrProvider.recognize).toHaveBeenCalledTimes(1)
+    expect(llmProvider.generate).toHaveBeenCalledTimes(1)
     expect(lastPatch).toEqual(
       expect.objectContaining({
         status: 'failed',
@@ -710,6 +789,10 @@ describe('PostRecordingPipeline', () => {
             })
           ]),
           timeline: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'asr',
+              status: 'completed'
+            }),
             expect.objectContaining({
               stage: 'llm',
               status: 'started'

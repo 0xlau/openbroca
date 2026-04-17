@@ -39,6 +39,8 @@ export interface ProcessOptions {
   signal?: AbortSignal
 }
 
+const USER_CANCELLATION_MESSAGE = 'Cancelled by user'
+
 export function createNormalizedCleanupPromptContextGetters(
   rawGetters: CleanupPromptRawGetters
 ): CleanupPromptContextGetters {
@@ -61,15 +63,49 @@ function normalizeErrorMessage(error: unknown): string {
   return 'Post-recording pipeline failed'
 }
 
-function isAbortLikeError(error: unknown): boolean {
-  if (error instanceof Error) {
-    const combined = `${error.name} ${error.message}`.toLowerCase()
-    return combined.includes('abort') || combined.includes('cancel')
+function createAbortError(signal?: AbortSignal): Error {
+  const reason = signal?.reason
+
+  if (reason instanceof Error) {
+    return reason
   }
 
-  if (typeof error === 'string') {
-    const normalized = error.toLowerCase()
-    return normalized.includes('abort') || normalized.includes('cancel')
+  const error = new Error(USER_CANCELLATION_MESSAGE)
+  error.name = 'AbortError'
+  return error
+}
+
+function isPipelineAbortError(error: unknown, signal?: AbortSignal): boolean {
+  if (!signal?.aborted) {
+    return false
+  }
+
+  if (error == null || error === signal.reason) {
+    return true
+  }
+
+  if (error instanceof DOMException) {
+    return error.name === 'AbortError'
+  }
+
+  if (error instanceof Error) {
+    const errorWithCode = error as Error & { code?: unknown }
+    return (
+      error.name === 'AbortError' ||
+      error.name === 'CanceledError' ||
+      errorWithCode.code === 'ABORT_ERR' ||
+      errorWithCode.code === 'ERR_CANCELED'
+    )
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const maybeAbortError = error as { name?: unknown; code?: unknown }
+    return (
+      maybeAbortError.name === 'AbortError' ||
+      maybeAbortError.name === 'CanceledError' ||
+      maybeAbortError.code === 'ABORT_ERR' ||
+      maybeAbortError.code === 'ERR_CANCELED'
+    )
   }
 
   return false
@@ -117,7 +153,7 @@ export class PostRecordingPipeline {
     const errors: Array<{ stage: 'storage' | 'asr' | 'llm'; message: string; at: string }> = []
     const now = () => new Date().toISOString()
     const resolveStageFailureMessage = (error: unknown) =>
-      signal?.aborted && isAbortLikeError(error) ? 'Cancelled by user' : normalizeErrorMessage(error)
+      isPipelineAbortError(error, signal) ? USER_CANCELLATION_MESSAGE : normalizeErrorMessage(error)
 
     const record = this.deps.historyRepository.create({
       status: 'processing',
@@ -135,6 +171,33 @@ export class PostRecordingPipeline {
       timeline.push(entry)
       console.debug('[voice-debug] pipeline timeline', entry)
       return entry
+    }
+
+    const recordStageCancellation = (stage: 'asr' | 'llm', debug: Record<string, unknown> = {}) => {
+      pushTimeline(stage, 'started')
+      const message = USER_CANCELLATION_MESSAGE
+      errors.push({ stage, message, at: now() })
+      pushTimeline(stage, 'failed', message)
+      this.deps.historyRepository.update(record.id, {
+        status: 'failed',
+        failureStage: stage,
+        failureMessage: message,
+        debug: {
+          ...debug,
+          errors: [...errors],
+          timeline: [...timeline]
+        }
+      })
+    }
+
+    const throwIfProcessingAborted = () => {
+      if (!signal?.aborted) return
+      throw createAbortError(signal)
+    }
+
+    if (signal?.aborted) {
+      recordStageCancellation('asr')
+      return
     }
 
     try {
@@ -171,6 +234,7 @@ export class PostRecordingPipeline {
     let asrSettings: Record<string, unknown> = {}
     try {
       pushTimeline('asr', 'started')
+      throwIfProcessingAborted()
       const selection = await this.deps.resolveActiveASRSelection()
       asrProvider = selection.provider
       asrSettings = selection.settings ?? {}
@@ -217,6 +281,7 @@ export class PostRecordingPipeline {
     const recognitionInput = buildRecognitionInput(recording)
 
     try {
+      throwIfProcessingAborted()
       const asrResult = await asrProvider.recognize(recognitionInput, asrRequest)
       rawTranscriptionText = asrResult.text ?? ''
       asrSegments = asrResult.segments ?? []
@@ -276,6 +341,19 @@ export class PostRecordingPipeline {
       return
     }
 
+    if (signal?.aborted) {
+      recordStageCancellation(
+        'llm',
+        {
+          rawTranscriptionText,
+          asrSegments,
+          asrRequest,
+          asrResponseSummary: { segmentCount: asrSegments.length }
+        }
+      )
+      return
+    }
+
     let matchedInstruction: MatchedInstructionRule | null = null
     if (this.deps.resolveMatchedInstruction) {
       try {
@@ -325,6 +403,7 @@ export class PostRecordingPipeline {
     }
     try {
       pushTimeline('llm', 'started')
+      throwIfProcessingAborted()
       const llmSelection = await this.deps.resolveActiveLLMSelection()
       llmProvider = llmSelection.provider
       llmModel = llmSelection.model
@@ -384,6 +463,7 @@ export class PostRecordingPipeline {
       console.debug('[voice-debug] sending transcript to LLM', {
         transcriptLength: rawTranscriptionText.length
       })
+      throwIfProcessingAborted()
       const result = await llmProvider.generate(llmRequest)
       console.debug('[voice-debug] LLM result received', {
         finishReason: result.finishReason,
