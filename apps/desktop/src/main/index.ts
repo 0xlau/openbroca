@@ -19,7 +19,10 @@ import { ListeningSessionManager } from './listening-session'
 import { HistoryRepository } from './history-repository'
 import { createInstructionMatcher } from './instructions/matcher'
 import { RecordingStorage } from './recording-storage'
-import { PostRecordingPipeline } from './post-recording-pipeline'
+import {
+  createNormalizedCleanupPromptContextGetters,
+  PostRecordingPipeline
+} from './post-recording-pipeline'
 import {
   createHistoryAudioProtocolHandler,
   HISTORY_AUDIO_PROTOCOL
@@ -33,8 +36,6 @@ import { AppIdentityService } from './app-identity/service'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
-import { normalizeAboutMeSettings } from '../shared/about-me'
-import { normalizeDictionarySettings } from '../shared/dictionary'
 import { normalizeInstructionsSettings } from '../shared/instructions'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
@@ -197,6 +198,10 @@ const resolveMatchedInstruction = createInstructionMatcher({
   getInstructions: () => normalizeInstructionsSettings(store.get('instructions')),
   getFrontmostApp: () => appIdentityService.getFrontmostApp()
 })
+const cleanupPromptContextGetters = createNormalizedCleanupPromptContextGetters({
+  getDictionaryRaw: () => store.get('dictionary'),
+  getAboutMeRaw: () => store.get('aboutMe')
+})
 const autoEnterService = createAutoEnterService()
 const postRecordingPipeline = new PostRecordingPipeline({
   historyRepository,
@@ -213,8 +218,8 @@ const postRecordingPipeline = new PostRecordingPipeline({
       store
     }),
   resolveMatchedInstruction,
-  getDictionarySettings: () => normalizeDictionarySettings(store.get('dictionary')),
-  getAboutMeSettings: () => normalizeAboutMeSettings(store.get('aboutMe')),
+  getDictionarySettings: cleanupPromptContextGetters.getDictionarySettings,
+  getAboutMeSettings: cleanupPromptContextGetters.getAboutMeSettings,
   autoEnterService
 })
 const listeningSession = new ListeningSessionManager(captureSource, {

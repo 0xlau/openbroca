@@ -1,5 +1,76 @@
 import { describe, expect, test, vi } from 'vitest'
-import { PostRecordingPipeline } from '../post-recording-pipeline'
+import {
+  createNormalizedCleanupPromptContextGetters,
+  PostRecordingPipeline
+} from '../post-recording-pipeline'
+
+describe('createNormalizedCleanupPromptContextGetters', () => {
+  test('normalizes malformed raw dictionary and about-me values from raw getters', () => {
+    const getters = createNormalizedCleanupPromptContextGetters({
+      getDictionaryRaw: () => ({
+        entries: [
+          null,
+          { id: '', term: 'invalid-id' },
+          { id: 'blank-term', term: '   ' },
+          {
+            id: 'hotword-1',
+            term: '  OpenBroca  ',
+            type: 'hotword',
+            usageCount: 'invalid',
+            createdAt: 100,
+            updatedAt: null
+          },
+          {
+            id: 'replace-1',
+            term: '  broka  ',
+            replacement: '  Broca  ',
+            note: 123,
+            usageCount: 5,
+            createdAt: '2026-04-01T00:00:00.000Z',
+            updatedAt: '2026-04-02T00:00:00.000Z'
+          }
+        ]
+      }),
+      getAboutMeRaw: () => ({
+        nickname: '  Liu  ',
+        email: 42,
+        occupation: undefined,
+        bio: '  ships voice tools  '
+      })
+    })
+
+    expect(getters.getDictionarySettings()).toEqual({
+      entries: [
+        {
+          id: 'hotword-1',
+          term: 'OpenBroca',
+          type: 'hotword',
+          replacement: undefined,
+          note: undefined,
+          usageCount: 0,
+          createdAt: '',
+          updatedAt: ''
+        },
+        {
+          id: 'replace-1',
+          term: 'broka',
+          type: undefined,
+          replacement: 'Broca',
+          note: undefined,
+          usageCount: 5,
+          createdAt: '2026-04-01T00:00:00.000Z',
+          updatedAt: '2026-04-02T00:00:00.000Z'
+        }
+      ]
+    })
+    expect(getters.getAboutMeSettings()).toEqual({
+      nickname: 'Liu',
+      email: '',
+      occupation: '',
+      bio: 'ships voice tools'
+    })
+  })
+})
 
 describe('PostRecordingPipeline', () => {
   test('stores audio, runs ASR, runs LLM, and finalizes the history record', async () => {

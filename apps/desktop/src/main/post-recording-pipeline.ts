@@ -7,9 +7,36 @@ import type { MatchedInstructionRule } from './instructions/matcher'
 import type { RecordingStorage } from './recording-storage'
 import type { AutoEnterService } from './send-key/auto-enter'
 import { buildCleanupSystemPrompt } from './cleanup-prompt'
-import { defaultAboutMeSettings, type AboutMeSettings } from '../shared/about-me'
-import { defaultDictionarySettings, type DictionarySettings } from '../shared/dictionary'
+import {
+  defaultAboutMeSettings,
+  normalizeAboutMeSettings,
+  type AboutMeSettings
+} from '../shared/about-me'
+import {
+  defaultDictionarySettings,
+  normalizeDictionarySettings,
+  type DictionarySettings
+} from '../shared/dictionary'
 import { hasMeaningfulText } from '../shared/meaningful-text'
+
+export interface CleanupPromptRawGetters {
+  getDictionaryRaw: () => unknown
+  getAboutMeRaw: () => unknown
+}
+
+export interface CleanupPromptContextGetters {
+  getDictionarySettings: () => DictionarySettings
+  getAboutMeSettings: () => AboutMeSettings
+}
+
+export function createNormalizedCleanupPromptContextGetters(
+  rawGetters: CleanupPromptRawGetters
+): CleanupPromptContextGetters {
+  return {
+    getDictionarySettings: () => normalizeDictionarySettings(rawGetters.getDictionaryRaw()),
+    getAboutMeSettings: () => normalizeAboutMeSettings(rawGetters.getAboutMeRaw())
+  }
+}
 
 export class PostRecordingPipeline {
   constructor(
