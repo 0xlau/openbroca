@@ -7,6 +7,10 @@ export interface CleanupPromptContext {
   matchedInstructionText?: string | null
 }
 
+function sanitizeForPromptLine(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim()
+}
+
 function compareDictionaryEntries(left: DictionaryEntry, right: DictionaryEntry): number {
   if (right.usageCount !== left.usageCount) {
     return right.usageCount - left.usageCount
@@ -51,12 +55,15 @@ function serializeDictionary(settings: DictionarySettings): string {
   const entries = [...settings.entries].sort(compareDictionaryEntries)
   const hotwords = entries.filter((entry) => isHotwordEntry(entry))
   const replacements = entries.filter((entry) => isReplacementEntry(entry))
-  const notes = entries.filter((entry) => typeof entry.note === 'string' && entry.note.trim().length > 0)
+  const includedEntries = [...hotwords, ...replacements]
+  const notes = includedEntries.filter(
+    (entry) => typeof entry.note === 'string' && sanitizeForPromptLine(entry.note).length > 0
+  )
 
   const lines: string[] = []
 
   if (hotwords.length > 0) {
-    lines.push('hotword:', ...hotwords.map((entry) => `- ${entry.term}`))
+    lines.push('hotword:', ...hotwords.map((entry) => `- ${sanitizeForPromptLine(entry.term)}`))
   }
 
   if (replacements.length > 0) {
@@ -65,7 +72,10 @@ function serializeDictionary(settings: DictionarySettings): string {
     }
     lines.push(
       'replacement:',
-      ...replacements.map((entry) => `- ${entry.term} => ${entry.replacement}`)
+      ...replacements.map(
+        (entry) =>
+          `- ${sanitizeForPromptLine(entry.term)} => ${sanitizeForPromptLine(entry.replacement)}`
+      )
     )
   }
 
@@ -73,17 +83,23 @@ function serializeDictionary(settings: DictionarySettings): string {
     if (lines.length > 0) {
       lines.push('')
     }
-    lines.push('notes:', ...notes.map((entry) => `- ${entry.term}: ${entry.note}`))
+    lines.push(
+      'notes:',
+      ...notes.map(
+        (entry) =>
+          `- ${sanitizeForPromptLine(entry.term)}: ${sanitizeForPromptLine(entry.note ?? '')}`
+      )
+    )
   }
 
   return renderNoneWhenEmpty(lines)
 }
 
 function serializeAboutMe(settings: AboutMeSettings): string {
-  const nickname = settings.nickname.trim()
-  const email = settings.email.trim()
-  const occupation = settings.occupation.trim()
-  const bio = settings.bio.trim()
+  const nickname = sanitizeForPromptLine(settings.nickname)
+  const email = sanitizeForPromptLine(settings.email)
+  const occupation = sanitizeForPromptLine(settings.occupation)
+  const bio = sanitizeForPromptLine(settings.bio)
 
   const lines = [
     nickname ? `nickname: ${nickname}` : null,
@@ -96,7 +112,7 @@ function serializeAboutMe(settings: AboutMeSettings): string {
 }
 
 export function buildCleanupSystemPrompt(context: CleanupPromptContext): string {
-  const matchedInstructionText = context.matchedInstructionText?.trim()
+  const matchedInstructionText = sanitizeForPromptLine(context.matchedInstructionText ?? '')
 
   return [
     'You are a post-processing editor for dictated text.',
@@ -142,6 +158,8 @@ export function buildCleanupSystemPrompt(context: CleanupPromptContext): string 
     '',
     'About the user:',
     serializeAboutMe(context.aboutMe),
-    ...(matchedInstructionText ? ['', 'Matched app instructions:', matchedInstructionText] : [])
+    ...(matchedInstructionText.length > 0
+      ? ['', 'Matched app instructions:', matchedInstructionText]
+      : [])
   ].join('\n')
 }

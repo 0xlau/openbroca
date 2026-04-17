@@ -195,4 +195,78 @@ describe('buildCleanupSystemPrompt', () => {
 
     expect(matchedInstructionIndex).toBeGreaterThan(aboutMeBlockIndex)
   })
+
+  test('sanitizes multiline dictionary and about-me values into prompt-safe single lines', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: {
+        entries: [
+          {
+            id: '1',
+            term: '  Open\nBroca  ',
+            type: 'replacement',
+            replacement: '  Open\r\nBroca Desktop ',
+            note: ' keep\nas canonical ',
+            usageCount: 1,
+            createdAt: '',
+            updatedAt: '2026-04-17T10:00:00.000Z'
+          }
+        ]
+      },
+      aboutMe: {
+        nickname: '  Pei\nqiang  ',
+        email: ' test\r\n@example.com ',
+        occupation: ' Engineer\n ',
+        bio: '\n Builds voice tools \r\n'
+      }
+    })
+
+    expect(prompt).toContain('replacement:\n- Open Broca => Open Broca Desktop')
+    expect(prompt).toContain('notes:\n- Open Broca: keep as canonical')
+    expect(prompt).toContain('nickname: Pei qiang')
+    expect(prompt).toContain('email: test @example.com')
+    expect(prompt).toContain('occupation: Engineer')
+    expect(prompt).toContain('bio: Builds voice tools')
+    expect(prompt).not.toContain('\nBroca')
+    expect(prompt).not.toContain('\r')
+  })
+
+  test('sanitizes matched instructions to a single prompt-safe line before append', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: { entries: [] },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      matchedInstructionText: '\n- Keep concise\r\n- Avoid bullets\n'
+    })
+
+    expect(prompt).toContain('Matched app instructions:\n- Keep concise - Avoid bullets')
+    expect(prompt).not.toContain('Matched app instructions:\n- Keep concise\r\n- Avoid bullets')
+    expect(prompt).not.toContain('Matched app instructions:\n- Keep concise\n- Avoid bullets')
+  })
+
+  test('does not emit orphan notes for malformed replacement entries that are excluded', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: {
+        entries: [
+          {
+            id: 'bad-replacement',
+            term: 'bad term',
+            type: 'replacement',
+            note: 'should not appear',
+            usageCount: 10,
+            createdAt: '',
+            updatedAt: '2026-04-17T10:00:00.000Z'
+          }
+        ]
+      },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' }
+    })
+
+    const dictionaryBlock = prompt.slice(
+      prompt.indexOf('Dictionary:\n') + 'Dictionary:\n'.length,
+      prompt.indexOf('\n\nAbout the user:\n')
+    )
+
+    expect(dictionaryBlock).toBe('None.')
+    expect(dictionaryBlock).not.toContain('notes:')
+    expect(dictionaryBlock).not.toContain('bad term: should not appear')
+  })
 })
