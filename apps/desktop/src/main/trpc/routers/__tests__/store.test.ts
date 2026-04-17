@@ -1,9 +1,11 @@
-import { describe, expect, test } from 'vitest'
+import { callTRPCProcedure } from '@trpc/server'
+import { describe, expect, test, vi } from 'vitest'
 import type { Context } from '../../context'
 import { storeRouter } from '../store'
 
 class MemoryStore {
   store: Record<string, unknown>
+  private listeners = new Map<string, Set<(newValue: unknown) => void>>()
 
   constructor(initial: Record<string, unknown> = {}) {
     this.store = { ...initial }
@@ -15,14 +17,38 @@ class MemoryStore {
 
   set(key: string, value: unknown): void {
     this.store[key] = value
+    this.emitChange(key, value)
   }
 
   delete(key: string): void {
     delete this.store[key]
   }
 
-  onDidChange(): () => void {
-    return () => undefined
+  onDidChange(key: string, listener: (newValue: unknown) => void): () => void {
+    const listeners = this.listeners.get(key) ?? new Set<(newValue: unknown) => void>()
+    listeners.add(listener)
+    this.listeners.set(key, listeners)
+
+    return () => {
+      const active = this.listeners.get(key)
+      if (!active) {
+        return
+      }
+      active.delete(listener)
+      if (active.size === 0) {
+        this.listeners.delete(key)
+      }
+    }
+  }
+
+  emitChange(key: string, value: unknown): void {
+    const listeners = this.listeners.get(key)
+    if (!listeners) {
+      return
+    }
+    for (const listener of listeners) {
+      listener(value)
+    }
   }
 }
 
@@ -286,6 +312,45 @@ describe('storeRouter', () => {
 
     await expect(caller.get({ key: 'prompts' })).resolves.toEqual({
       template: ''
+    })
+  })
+
+  test('watch yields store changes and aborts without leaving stale abort listeners', async () => {
+    const store = new MemoryStore()
+    const controller = new AbortController()
+    const addEventListenerSpy = vi.spyOn(controller.signal, 'addEventListener')
+    const removeEventListenerSpy = vi.spyOn(controller.signal, 'removeEventListener')
+
+    const result = await callTRPCProcedure({
+      router: storeRouter,
+      path: 'watch',
+      getRawInput: async () => ({ key: 'settings' }),
+      ctx: { store } as unknown as Context,
+      type: 'subscription',
+      signal: controller.signal,
+      batchIndex: 0
+    })
+
+    const iterator = (result as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    const firstNext = iterator.next()
+    await Promise.resolve()
+
+    store.emitChange('settings', { theme: 'dark' })
+
+    await expect(firstNext).resolves.toEqual({
+      value: { theme: 'dark' },
+      done: false
+    })
+
+    expect(addEventListenerSpy).toHaveBeenCalledWith('abort', expect.any(Function), { once: true })
+    expect(removeEventListenerSpy).toHaveBeenCalledTimes(1)
+
+    const secondNext = iterator.next()
+    controller.abort()
+
+    await expect(secondNext).resolves.toEqual({
+      value: undefined,
+      done: true
     })
   })
 })

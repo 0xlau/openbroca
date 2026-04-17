@@ -90,9 +90,27 @@ export const storeRouter = router({
         if (queue.length > 0) {
           yield queue.shift()
         } else {
+          if (signal?.aborted) {
+            break
+          }
+
           await new Promise<void>((resolve) => {
-            notify = resolve
-            signal?.addEventListener('abort', () => resolve(), { once: true })
+            const cleanup = () => {
+              notify = null
+              signal?.removeEventListener('abort', onAbort)
+            }
+
+            const onAbort = () => {
+              cleanup()
+              resolve()
+            }
+
+            notify = () => {
+              cleanup()
+              resolve()
+            }
+
+            signal?.addEventListener('abort', onAbort, { once: true })
           })
         }
       }
