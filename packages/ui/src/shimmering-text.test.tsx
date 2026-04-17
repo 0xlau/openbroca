@@ -48,7 +48,7 @@ describe('ShimmeringText', () => {
     const shimmeringTextCss = getShimmeringTextCss()
 
     expect(shimmeringTextCss).toMatch(
-      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*{[\s\S]*?\.openbroca-shimmering-text\s*{[\s\S]*?animation:\s*none;[\s\S]*?background-image:\s*none;[\s\S]*?background-clip:\s*border-box;[\s\S]*?color:\s*inherit;[\s\S]*?-webkit-text-fill-color:\s*currentColor;[\s\S]*?}/
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*{[\s\S]*?\.openbroca-shimmering-text\s*{[\s\S]*?animation:\s*none;[\s\S]*?color:\s*inherit;[\s\S]*?text-shadow:\s*none;[\s\S]*?opacity:\s*1;[\s\S]*?}/
     )
   })
 })

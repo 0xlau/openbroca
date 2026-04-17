@@ -1,10 +1,15 @@
 @keyframes openbroca-text-shimmer {
-  from {
-    background-position: 200% center;
+  0%,
+  100% {
+    opacity: 0.72;
+    text-shadow: 0 0 0 currentColor;
   }
 
-  to {
-    background-position: -200% center;
+  50% {
+    opacity: 1;
+    text-shadow:
+      0 0 0.35em color-mix(in srgb, currentColor 28%, transparent),
+      0 0 0.75em color-mix(in srgb, currentColor 12%, transparent);
   }
 }
 
@@ -13,34 +18,17 @@
   color: inherit;
 }
 
-@supports (((-webkit-background-clip: text) or (background-clip: text)) and
-  (color: color-mix(in srgb, currentColor 35%, transparent))) {
+@supports (color: color-mix(in srgb, currentColor 35%, transparent)) {
   .openbroca-shimmering-text {
-    background-image: linear-gradient(
-      110deg,
-      color-mix(in srgb, currentColor 35%, transparent) 20%,
-      currentColor 45%,
-      color-mix(in srgb, currentColor 35%, transparent) 70%
-    );
-    background-size: 200% 100%;
-    background-clip: text;
-    animation: openbroca-text-shimmer 1.8s linear infinite;
-    color: inherit;
-    text-shadow: 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    animation: openbroca-text-shimmer 1.8s ease-in-out infinite;
   }
 
   @media (prefers-reduced-motion: reduce) {
     .openbroca-shimmering-text {
       animation: none;
-      background-image: none;
-      background-clip: border-box;
-      background-size: auto;
       color: inherit;
       text-shadow: none;
-      -webkit-background-clip: border-box;
-      -webkit-text-fill-color: currentColor;
+      opacity: 1;
     }
   }
 }
