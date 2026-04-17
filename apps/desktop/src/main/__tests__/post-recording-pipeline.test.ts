@@ -5,7 +5,7 @@ import {
 } from '../post-recording-pipeline'
 
 describe('createNormalizedCleanupPromptContextGetters', () => {
-  test('normalizes malformed raw dictionary and about-me values from raw getters', () => {
+  test('normalizes malformed raw dictionary/about-me values and prompt template from raw getters', () => {
     const getters = createNormalizedCleanupPromptContextGetters({
       getDictionaryRaw: () => ({
         entries: [
@@ -36,8 +36,11 @@ describe('createNormalizedCleanupPromptContextGetters', () => {
         email: 42,
         occupation: undefined,
         bio: '  ships voice tools  '
+      }),
+      getPromptsRaw: () => ({
+        template: '  Keep {{about_me.nickname}}  '
       })
-    })
+    } as never)
 
     expect(getters.getDictionarySettings()).toEqual({
       entries: [
@@ -68,6 +71,9 @@ describe('createNormalizedCleanupPromptContextGetters', () => {
       email: '',
       occupation: '',
       bio: 'ships voice tools'
+    })
+    expect((getters as never as { getPromptTemplateSettings: () => { template: string } }).getPromptTemplateSettings()).toEqual({
+      template: '  Keep {{about_me.nickname}}  '
     })
   })
 })
@@ -154,7 +160,7 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
-  test('builds cleanup system prompt with dictionary and about-me context', async () => {
+  test('builds cleanup system prompt by resolving dictionary and about-me placeholders', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-prompt-context' })),
       update: vi.fn()
@@ -233,18 +239,17 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:')
-    expect(llmRequest?.messages[0]?.content).toContain('hotword:')
-    expect(llmRequest?.messages[0]?.content).toContain('- openbroca')
-    expect(llmRequest?.messages[0]?.content).toContain('replacement:')
-    expect(llmRequest?.messages[0]?.content).toContain('- broka => Broca')
-    expect(llmRequest?.messages[0]?.content).toContain('About the user:')
-    expect(llmRequest?.messages[0]?.content).toContain('nickname: Liu')
-    expect(llmRequest?.messages[0]?.content).toContain('email: liu@example.com')
-    expect(llmRequest?.messages[0]?.content).toContain('bio: Works on OpenBroca.')
+    expect(llmRequest?.messages[0]?.content).toContain('Use hotword:\n- openbroca')
+    expect(llmRequest?.messages[0]?.content).toContain('replacement:\n- broka => Broca')
+    expect(llmRequest?.messages[0]?.content).toContain(
+      'notes:\n- broka: Product name capitalization'
+    )
+    expect(llmRequest?.messages[0]?.content).toContain(
+      'If identity details are clearly implied, keep references aligned with Liu.'
+    )
   })
 
-  test('renders empty dictionary/about-me state as explicit none blocks in system prompt', async () => {
+  test('resolves empty dictionary/about-me state into default template placeholders', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-prompt-empty-context' })),
       update: vi.fn()
@@ -302,8 +307,94 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:\nNone.')
-    expect(llmRequest?.messages[0]?.content).toContain('About the user:\nNone.')
+    expect(llmRequest?.messages[0]?.content).toContain('Use None. as canonical terminology guidance.')
+    expect(llmRequest?.messages[0]?.content).toContain(
+      'If identity details are clearly implied, keep references aligned with .'
+    )
+  })
+
+  test('uses saved prompt template from pipeline getters and resolves placeholders at runtime', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-custom-template' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/custom-template.wav',
+        fileName: 'custom-template.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        customInstructions: '  Use short chat-style replies.  ',
+        autoEnterMode: 'off'
+      }),
+      getDictionarySettings: () => ({
+        entries: [
+          {
+            id: 'dict-1',
+            term: 'openbroca',
+            type: 'hotword',
+            usageCount: 1,
+            createdAt: '2026-04-01T00:00:00.000Z',
+            updatedAt: '2026-04-02T00:00:00.000Z'
+          }
+        ]
+      }),
+      getAboutMeSettings: () => ({
+        nickname: 'Liu',
+        email: 'liu@example.com',
+        occupation: 'Engineer',
+        bio: ''
+      }),
+      getPromptTemplateSettings: () => ({
+        template:
+          'HOTWORDS={{dictionary.hotwords}} | NICK={{about_me.nickname}} | MATCHED={{matched_instructions}} | FUTURE={{raw_transcript}} | UNKNOWN={{unknown_placeholder}}'
+      })
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(llmRequest?.messages[0]?.content).toBe(
+      'HOTWORDS=- openbroca | NICK=Liu | MATCHED=Use short chat-style replies. | FUTURE= | UNKNOWN='
+    )
   })
 
   test('does not call LLM when ASR returns only whitespace', async () => {
@@ -436,7 +527,7 @@ describe('PostRecordingPipeline', () => {
     expect(lastPatch?.finalText).toBeUndefined()
   })
 
-  test('appends matched custom instructions and triggers auto enter after success', async () => {
+  test('records matched instruction metadata and triggers auto enter after success', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-auto-enter' })),
       update: vi.fn()
@@ -497,12 +588,10 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:\nNone.')
-    expect(llmRequest?.messages[0]?.content).toContain('About the user:\nNone.')
     expect(llmRequest?.messages[0]?.content).toContain(
-      'Matched app instructions:\nUse short chat-style replies.'
+      'You are an accurate post-processing editor for dictated text.'
     )
-    expect(llmRequest?.messages[0]?.content).toContain('Use short chat-style replies.')
+    expect(llmRequest?.messages[0]?.content).not.toContain('Use short chat-style replies.')
     expect(triggerAutoEnter).toHaveBeenCalledTimes(1)
 
     expect(repository.update).toHaveBeenLastCalledWith(
@@ -780,8 +869,19 @@ describe('PostRecordingPipeline', () => {
         bundleId: 'com.snapshot.bundle'
       })
     )
-    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain('Use snapshot instruction.')
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-snapshot',
+      expect.objectContaining({
+        debug: expect.objectContaining({
+          llmRequest: expect.objectContaining({
+            matchedInstruction: expect.objectContaining({
+              ruleId: 'rule-snapshot',
+              customInstructions: 'Use snapshot instruction.'
+            })
+          })
+        })
+      })
+    )
   })
 
   test('does not trigger auto enter when llm stage fails after request construction', async () => {

@@ -13,6 +13,27 @@ export interface PromptTemplatePlaceholder {
   availability: 'available' | 'planned'
 }
 
+export interface PromptTemplateDictionaryRuntimeContext {
+  text?: string
+  hotwords?: string
+  replacements?: string
+  notes?: string
+}
+
+export interface PromptTemplateAboutMeRuntimeContext {
+  text?: string
+  nickname?: string
+  email?: string
+  occupation?: string
+  bio?: string
+}
+
+export interface PromptTemplateRuntimeContext {
+  dictionary?: PromptTemplateDictionaryRuntimeContext | null
+  aboutMe?: PromptTemplateAboutMeRuntimeContext | null
+  matchedInstructionText?: string | null
+}
+
 export const defaultPromptTemplateSettings: PromptTemplateSettings = {
   template: ''
 }
@@ -48,6 +69,71 @@ export const defaultPromptTemplateText = [
   '',
   'Return only the cleaned final text, with no commentary.'
 ].join('\n')
+
+function normalizeRuntimeString(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function tokenToPlaceholderName(token: string): string | null {
+  const matched = token.match(/^{{\s*([A-Za-z0-9_.-]+)\s*}}$/)
+  return matched?.[1] ?? null
+}
+
+const plannedPlaceholderNames = new Set(
+  promptTemplatePlaceholders
+    .filter((placeholder) => placeholder.availability === 'planned')
+    .map((placeholder) => tokenToPlaceholderName(placeholder.token))
+    .filter((token): token is string => token !== null)
+)
+
+function resolveImplementedPlaceholder(
+  placeholder: string,
+  context: PromptTemplateRuntimeContext
+): string | undefined {
+  switch (placeholder) {
+    case 'dictionary':
+      return normalizeRuntimeString(context.dictionary?.text)
+    case 'dictionary.hotwords':
+      return normalizeRuntimeString(context.dictionary?.hotwords)
+    case 'dictionary.replacements':
+      return normalizeRuntimeString(context.dictionary?.replacements)
+    case 'dictionary.notes':
+      return normalizeRuntimeString(context.dictionary?.notes)
+    case 'about_me':
+      return normalizeRuntimeString(context.aboutMe?.text)
+    case 'about_me.nickname':
+      return normalizeRuntimeString(context.aboutMe?.nickname)
+    case 'about_me.email':
+      return normalizeRuntimeString(context.aboutMe?.email)
+    case 'about_me.occupation':
+      return normalizeRuntimeString(context.aboutMe?.occupation)
+    case 'about_me.bio':
+      return normalizeRuntimeString(context.aboutMe?.bio)
+    case 'matched_instructions':
+    case 'matched_instructions.text':
+      return normalizeRuntimeString(context.matchedInstructionText)
+    default:
+      return undefined
+  }
+}
+
+export function resolvePromptTemplate(
+  template: string,
+  context: PromptTemplateRuntimeContext
+): string {
+  return template.replace(/{{\s*([A-Za-z0-9_.-]+)\s*}}/g, (_match, placeholder: string) => {
+    const implemented = resolveImplementedPlaceholder(placeholder, context)
+    if (typeof implemented === 'string') {
+      return implemented
+    }
+
+    if (plannedPlaceholderNames.has(placeholder)) {
+      return ''
+    }
+
+    return ''
+  })
+}
 
 export function normalizePromptTemplateSettings(raw: unknown): PromptTemplateSettings {
   if (!isRecord(raw)) {

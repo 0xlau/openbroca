@@ -200,7 +200,8 @@ const resolveMatchedInstruction = createInstructionMatcher({
 })
 const cleanupPromptContextGetters = createNormalizedCleanupPromptContextGetters({
   getDictionaryRaw: () => store.get('dictionary'),
-  getAboutMeRaw: () => store.get('aboutMe')
+  getAboutMeRaw: () => store.get('aboutMe'),
+  getPromptsRaw: () => store.get('prompts')
 })
 const autoEnterService = createAutoEnterService()
 const postRecordingPipeline = new PostRecordingPipeline({
@@ -220,6 +221,7 @@ const postRecordingPipeline = new PostRecordingPipeline({
   resolveMatchedInstruction,
   getDictionarySettings: cleanupPromptContextGetters.getDictionarySettings,
   getAboutMeSettings: cleanupPromptContextGetters.getAboutMeSettings,
+  getPromptTemplateSettings: cleanupPromptContextGetters.getPromptTemplateSettings,
   autoEnterService
 })
 const listeningSession = new ListeningSessionManager(captureSource, {

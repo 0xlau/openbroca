@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { normalizeAboutMeSettings } from '../../shared/about-me'
 import { defaultDictionarySettings, normalizeDictionarySettings } from '../../shared/dictionary'
+import { defaultPromptTemplateText } from '../../shared/prompt-template'
 import { buildCleanupSystemPrompt } from '../cleanup-prompt'
 
 describe('shared settings normalization', () => {
@@ -87,20 +88,7 @@ describe('shared settings normalization', () => {
 })
 
 describe('buildCleanupSystemPrompt', () => {
-  test('renders None blocks when dictionary and about me are empty', () => {
-    const prompt = buildCleanupSystemPrompt({
-      dictionary: { entries: [] },
-      aboutMe: { nickname: '', email: '', occupation: '', bio: '' }
-    })
-
-    expect(prompt).toContain('Dictionary:\nNone.')
-    expect(prompt).toContain('About the user:\nNone.')
-    expect(prompt).toContain(
-      'If the original speech is naturally list-like, step-based, or clearly easier to read as bullets or short structure, you may format it structurally.'
-    )
-  })
-
-  test('serializes hotwords, replacements, notes, and inferred replacement type ordering', () => {
+  test('resolves default template placeholders from runtime context', () => {
     const prompt = buildCleanupSystemPrompt({
       dictionary: {
         entries: [
@@ -140,63 +128,32 @@ describe('buildCleanupSystemPrompt', () => {
           }
         ]
       },
-      aboutMe: { nickname: '', email: '', occupation: '', bio: '' }
-    })
-
-    const dictionaryBlock = prompt.slice(
-      prompt.indexOf('Dictionary:\n') + 'Dictionary:\n'.length,
-      prompt.indexOf('\n\nAbout the user:\n')
-    )
-
-    expect(dictionaryBlock).toContain('hotword:\n- LLM\n- Typeless')
-    expect(dictionaryBlock).toContain('replacement:\n- broca app => OpenBroca Desktop\n- open broca => OpenBroca')
-    expect(dictionaryBlock).toContain(
-      'notes:\n- Typeless: product name, preserve exact casing\n- broca app: desktop product name'
-    )
-  })
-
-  test('serializes about me with stable lowercase keys for non-empty trimmed fields only', () => {
-    const prompt = buildCleanupSystemPrompt({
-      dictionary: { entries: [] },
       aboutMe: {
-        nickname: '  Peiqiang  ',
-        email: '   ',
-        occupation: ' Software Engineer ',
-        bio: ' Builds AI and voice tools '
-      }
-    })
-
-    const aboutMeBlock = prompt.slice(
-      prompt.indexOf('About the user:\n') + 'About the user:\n'.length
-    )
-
-    expect(aboutMeBlock).toContain('nickname: Peiqiang')
-    expect(aboutMeBlock).toContain('occupation: Software Engineer')
-    expect(aboutMeBlock).toContain('bio: Builds AI and voice tools')
-    expect(aboutMeBlock).not.toContain('email:')
-  })
-
-  test('appends matched instructions after the core prompt blocks when present', () => {
-    const prompt = buildCleanupSystemPrompt({
-      dictionary: { entries: [] },
-      aboutMe: {
-        nickname: 'Peiqiang',
+        nickname: 'Liu',
         email: 'liupeiqiang@example.com',
         occupation: 'Software Engineer',
         bio: 'Builds AI and voice tools'
-      },
-      matchedInstructionText: '  Use short chat-style replies.  '
+      }
     })
 
-    const aboutMeBlockIndex = prompt.indexOf('About the user:')
-    const matchedInstructionIndex = prompt.indexOf(
-      'Matched app instructions:\nUse short chat-style replies.'
-    )
-
-    expect(matchedInstructionIndex).toBeGreaterThan(aboutMeBlockIndex)
+    expect(prompt).toContain('Use hotword:\n- LLM\n- Typeless')
+    expect(prompt).toContain('replacement:\n- broca app => OpenBroca Desktop\n- open broca => OpenBroca')
+    expect(prompt).toContain('notes:\n- Typeless: product name, preserve exact casing')
+    expect(prompt).toContain('keep references aligned with Liu')
+    expect(prompt).toContain('The transcript content will be injected from .')
   })
 
-  test('sanitizes multiline dictionary and about-me values into prompt-safe single lines', () => {
+  test('falls back to shared default template when custom template is empty', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: { entries: [] },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      template: ''
+    } as never)
+
+    expect(prompt).toContain(defaultPromptTemplateText.split('\n')[0] ?? '')
+  })
+
+  test('uses saved custom template and resolves known nested placeholders', () => {
     const prompt = buildCleanupSystemPrompt({
       dictionary: {
         entries: [
@@ -217,77 +174,38 @@ describe('buildCleanupSystemPrompt', () => {
         email: ' test\r\n@example.com ',
         occupation: ' Engineer\n ',
         bio: '\n Builds voice tools \r\n'
-      }
-    })
-
-    expect(prompt).toContain('replacement:\n- Open Broca => Open Broca Desktop')
-    expect(prompt).toContain('notes:\n- Open Broca: keep as canonical')
-    expect(prompt).toContain('nickname: Pei qiang')
-    expect(prompt).toContain('email: test @example.com')
-    expect(prompt).toContain('occupation: Engineer')
-    expect(prompt).toContain('bio: Builds voice tools')
-    expect(prompt).not.toContain('\nBroca')
-    expect(prompt).not.toContain('\r')
-  })
-
-  test('sanitizes matched instructions to a single prompt-safe line before append', () => {
-    const prompt = buildCleanupSystemPrompt({
-      dictionary: { entries: [] },
-      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
-      matchedInstructionText: '\n- Keep concise\r\n- Avoid bullets\n'
-    })
-
-    expect(prompt).toContain('Matched app instructions:\n- Keep concise - Avoid bullets')
-    expect(prompt).not.toContain('Matched app instructions:\n- Keep concise\r\n- Avoid bullets')
-    expect(prompt).not.toContain('Matched app instructions:\n- Keep concise\n- Avoid bullets')
-  })
-
-  test('sanitizes unicode line separators in dictionary and about-me values', () => {
-    const prompt = buildCleanupSystemPrompt({
-      dictionary: {
-        entries: [
-          {
-            id: 'unicode',
-            term: 'Open\u2028Broca',
-            type: 'replacement',
-            replacement: 'Open\u2029Broca Desktop',
-            note: 'keep\u2028canonical\u2029form',
-            usageCount: 2,
-            createdAt: '',
-            updatedAt: '2026-04-17T10:00:00.000Z'
-          }
-        ]
       },
-      aboutMe: {
-        nickname: 'Pei\u2028qiang',
-        email: 'liu\u2029peiqiang@example.com',
-        occupation: 'Software\u2028Engineer',
-        bio: 'Builds\u2029voice tools'
-      }
-    })
+      matchedInstructionText: '\n- Keep concise\r\n- Avoid bullets\n',
+      template: [
+        'HOTWORDS={{dictionary.hotwords}}',
+        'REPLACEMENTS={{dictionary.replacements}}',
+        'NOTES={{dictionary.notes}}',
+        'ABOUT={{about_me}}',
+        'EMAIL={{about_me.email}}',
+        'MATCHED={{matched_instructions.text}}'
+      ].join('\n')
+    } as never)
 
-    expect(prompt).toContain('replacement:\n- Open Broca => Open Broca Desktop')
-    expect(prompt).toContain('notes:\n- Open Broca: keep canonical form')
-    expect(prompt).toContain('nickname: Pei qiang')
-    expect(prompt).toContain('email: liu peiqiang@example.com')
-    expect(prompt).toContain('occupation: Software Engineer')
-    expect(prompt).toContain('bio: Builds voice tools')
+    expect(prompt).toContain('HOTWORDS=')
+    expect(prompt).toContain('REPLACEMENTS=- Open Broca => Open Broca Desktop')
+    expect(prompt).toContain('NOTES=- Open Broca: keep as canonical')
+    expect(prompt).toContain(
+      'ABOUT=nickname: Pei qiang\nemail: test @example.com\noccupation: Engineer\nbio: Builds voice tools'
+    )
+    expect(prompt).toContain('EMAIL=test @example.com')
+    expect(prompt).toContain('MATCHED=- Keep concise - Avoid bullets')
     expect(prompt).not.toContain('\u2028')
     expect(prompt).not.toContain('\u2029')
   })
 
-  test('sanitizes unicode line separators in matched instructions before append', () => {
+  test('resolves planned and unknown placeholders to empty strings', () => {
     const prompt = buildCleanupSystemPrompt({
       dictionary: { entries: [] },
-      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
-      matchedInstructionText: 'Use concise replies\u2028Avoid bullet lists\u2029Stay direct'
-    })
+      aboutMe: { nickname: 'Liu', email: '', occupation: '', bio: '' },
+      template: 'A={{about_me.nickname}} B={{raw_transcript}} C={{not_defined}} D={{matched_instructions}}'
+    } as never)
 
-    expect(prompt).toContain(
-      'Matched app instructions:\nUse concise replies Avoid bullet lists Stay direct'
-    )
-    expect(prompt).not.toContain('\u2028')
-    expect(prompt).not.toContain('\u2029')
+    expect(prompt).toBe('A=Liu B= C= D=')
   })
 
   test('does not emit orphan notes for malformed replacement entries that are excluded', () => {
@@ -305,16 +223,10 @@ describe('buildCleanupSystemPrompt', () => {
           }
         ]
       },
-      aboutMe: { nickname: '', email: '', occupation: '', bio: '' }
-    })
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      template: 'notes={{dictionary.notes}}'
+    } as never)
 
-    const dictionaryBlock = prompt.slice(
-      prompt.indexOf('Dictionary:\n') + 'Dictionary:\n'.length,
-      prompt.indexOf('\n\nAbout the user:\n')
-    )
-
-    expect(dictionaryBlock).toBe('None.')
-    expect(dictionaryBlock).not.toContain('notes:')
-    expect(dictionaryBlock).not.toContain('bad term: should not appear')
+    expect(prompt).toBe('notes=')
   })
 })

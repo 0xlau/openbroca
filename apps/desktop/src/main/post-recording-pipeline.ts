@@ -18,15 +18,21 @@ import {
   type DictionarySettings
 } from '../shared/dictionary'
 import { hasMeaningfulText } from '../shared/meaningful-text'
+import {
+  normalizePromptTemplateSettings,
+  type PromptTemplateSettings
+} from '../shared/prompt-template'
 
 export interface CleanupPromptRawGetters {
   getDictionaryRaw: () => unknown
   getAboutMeRaw: () => unknown
+  getPromptsRaw: () => unknown
 }
 
 export interface CleanupPromptContextGetters {
   getDictionarySettings: () => DictionarySettings
   getAboutMeSettings: () => AboutMeSettings
+  getPromptTemplateSettings: () => PromptTemplateSettings
 }
 
 export function createNormalizedCleanupPromptContextGetters(
@@ -34,7 +40,8 @@ export function createNormalizedCleanupPromptContextGetters(
 ): CleanupPromptContextGetters {
   return {
     getDictionarySettings: () => normalizeDictionarySettings(rawGetters.getDictionaryRaw()),
-    getAboutMeSettings: () => normalizeAboutMeSettings(rawGetters.getAboutMeRaw())
+    getAboutMeSettings: () => normalizeAboutMeSettings(rawGetters.getAboutMeRaw()),
+    getPromptTemplateSettings: () => normalizePromptTemplateSettings(rawGetters.getPromptsRaw())
   }
 }
 
@@ -56,6 +63,7 @@ export class PostRecordingPipeline {
       ) => Promise<MatchedInstructionRule | null>
       getDictionarySettings?: () => DictionarySettings
       getAboutMeSettings?: () => AboutMeSettings
+      getPromptTemplateSettings?: () => PromptTemplateSettings
       autoEnterService?: AutoEnterService
     }
   ) {}
@@ -319,7 +327,8 @@ export class PostRecordingPipeline {
       const systemPrompt = buildCleanupSystemPrompt({
         dictionary: this.deps.getDictionarySettings?.() ?? defaultDictionarySettings,
         aboutMe: this.deps.getAboutMeSettings?.() ?? defaultAboutMeSettings,
-        matchedInstructionText: matchedInstruction?.customInstructions ?? null
+        matchedInstructionText: matchedInstruction?.customInstructions ?? null,
+        template: this.deps.getPromptTemplateSettings?.().template
       })
 
       llmRequest = {
