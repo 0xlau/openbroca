@@ -83,6 +83,158 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
+  test('builds cleanup system prompt with dictionary and about-me context', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-prompt-context' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/prompt-context.wav',
+        fileName: 'prompt-context.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      getDictionarySettings: () => ({
+        entries: [
+          {
+            id: 'dict-1',
+            term: 'openbroca',
+            type: 'hotword',
+            usageCount: 4,
+            createdAt: '2026-04-01T00:00:00.000Z',
+            updatedAt: '2026-04-02T00:00:00.000Z'
+          },
+          {
+            id: 'dict-2',
+            term: 'broka',
+            type: 'replacement',
+            replacement: 'Broca',
+            note: 'Product name capitalization',
+            usageCount: 2,
+            createdAt: '2026-04-01T00:00:00.000Z',
+            updatedAt: '2026-04-02T00:00:00.000Z'
+          }
+        ]
+      }),
+      getAboutMeSettings: () => ({
+        nickname: 'Liu',
+        email: 'liu@example.com',
+        occupation: '',
+        bio: 'Works on OpenBroca.'
+      })
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:')
+    expect(llmRequest?.messages[0]?.content).toContain('hotword:')
+    expect(llmRequest?.messages[0]?.content).toContain('- openbroca')
+    expect(llmRequest?.messages[0]?.content).toContain('replacement:')
+    expect(llmRequest?.messages[0]?.content).toContain('- broka => Broca')
+    expect(llmRequest?.messages[0]?.content).toContain('About the user:')
+    expect(llmRequest?.messages[0]?.content).toContain('nickname: Liu')
+    expect(llmRequest?.messages[0]?.content).toContain('email: liu@example.com')
+    expect(llmRequest?.messages[0]?.content).toContain('bio: Works on OpenBroca.')
+  })
+
+  test('renders empty dictionary/about-me state as explicit none blocks in system prompt', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-prompt-empty-context' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/prompt-empty-context.wav',
+        fileName: 'prompt-empty-context.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      getDictionarySettings: () => ({ entries: [] }),
+      getAboutMeSettings: () => ({
+        nickname: '',
+        email: '',
+        occupation: '',
+        bio: ''
+      })
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:\nNone.')
+    expect(llmRequest?.messages[0]?.content).toContain('About the user:\nNone.')
+  })
+
   test('does not call LLM when ASR returns only whitespace', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-blank-asr' })),
@@ -274,8 +426,10 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:\nNone.')
+    expect(llmRequest?.messages[0]?.content).toContain('About the user:\nNone.')
     expect(llmRequest?.messages[0]?.content).toContain(
-      'Clean up the dictated transcript into polished final text without changing intent.'
+      'Matched app instructions:\nUse short chat-style replies.'
     )
     expect(llmRequest?.messages[0]?.content).toContain('Use short chat-style replies.')
     expect(triggerAutoEnter).toHaveBeenCalledTimes(1)

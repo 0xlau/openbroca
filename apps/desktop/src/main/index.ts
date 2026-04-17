@@ -33,6 +33,8 @@ import { AppIdentityService } from './app-identity/service'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
+import { normalizeAboutMeSettings } from '../shared/about-me'
+import { normalizeDictionarySettings } from '../shared/dictionary'
 import { normalizeInstructionsSettings } from '../shared/instructions'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
@@ -211,6 +213,8 @@ const postRecordingPipeline = new PostRecordingPipeline({
       store
     }),
   resolveMatchedInstruction,
+  getDictionarySettings: () => normalizeDictionarySettings(store.get('dictionary')),
+  getAboutMeSettings: () => normalizeAboutMeSettings(store.get('aboutMe')),
   autoEnterService
 })
 const listeningSession = new ListeningSessionManager(captureSource, {

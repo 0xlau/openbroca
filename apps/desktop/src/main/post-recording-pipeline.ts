@@ -6,10 +6,10 @@ import type { HistoryRepository } from './history-repository'
 import type { MatchedInstructionRule } from './instructions/matcher'
 import type { RecordingStorage } from './recording-storage'
 import type { AutoEnterService } from './send-key/auto-enter'
+import { buildCleanupSystemPrompt } from './cleanup-prompt'
+import { defaultAboutMeSettings, type AboutMeSettings } from '../shared/about-me'
+import { defaultDictionarySettings, type DictionarySettings } from '../shared/dictionary'
 import { hasMeaningfulText } from '../shared/meaningful-text'
-
-const cleanupPrompt =
-  'Clean up the dictated transcript into polished final text without changing intent.'
 
 export class PostRecordingPipeline {
   constructor(
@@ -27,6 +27,8 @@ export class PostRecordingPipeline {
       resolveMatchedInstruction?: (
         frontmostAppSnapshot?: CapturedRecording['frontmostAppSnapshot']
       ) => Promise<MatchedInstructionRule | null>
+      getDictionarySettings?: () => DictionarySettings
+      getAboutMeSettings?: () => AboutMeSettings
       autoEnterService?: AutoEnterService
     }
   ) {}
@@ -287,10 +289,11 @@ export class PostRecordingPipeline {
     }
 
     try {
-      const customInstructions = matchedInstruction?.customInstructions.trim()
-      const systemPrompt = customInstructions
-        ? `${cleanupPrompt}\n\nMatched app instructions:\n${customInstructions}`
-        : cleanupPrompt
+      const systemPrompt = buildCleanupSystemPrompt({
+        dictionary: this.deps.getDictionarySettings?.() ?? defaultDictionarySettings,
+        aboutMe: this.deps.getAboutMeSettings?.() ?? defaultAboutMeSettings,
+        matchedInstructionText: matchedInstruction?.customInstructions ?? null
+      })
 
       llmRequest = {
         model: llmModel,
