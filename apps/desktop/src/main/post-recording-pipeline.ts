@@ -35,6 +35,10 @@ export interface CleanupPromptContextGetters {
   getPromptTemplateSettings: () => PromptTemplateSettings
 }
 
+export interface ProcessOptions {
+  signal?: AbortSignal
+}
+
 export function createNormalizedCleanupPromptContextGetters(
   rawGetters: CleanupPromptRawGetters
 ): CleanupPromptContextGetters {
@@ -43,6 +47,32 @@ export function createNormalizedCleanupPromptContextGetters(
     getAboutMeSettings: () => normalizeAboutMeSettings(rawGetters.getAboutMeRaw()),
     getPromptTemplateSettings: () => normalizePromptTemplateSettings(rawGetters.getPromptsRaw())
   }
+}
+
+function normalizeErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  if (typeof error === 'string' && error.length > 0) {
+    return error
+  }
+
+  return 'Post-recording pipeline failed'
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const combined = `${error.name} ${error.message}`.toLowerCase()
+    return combined.includes('abort') || combined.includes('cancel')
+  }
+
+  if (typeof error === 'string') {
+    const normalized = error.toLowerCase()
+    return normalized.includes('abort') || normalized.includes('cancel')
+  }
+
+  return false
 }
 
 export class PostRecordingPipeline {
@@ -68,7 +98,8 @@ export class PostRecordingPipeline {
     }
   ) {}
 
-  async process(recording: CapturedRecording): Promise<void> {
+  async process(recording: CapturedRecording, options: ProcessOptions = {}): Promise<void> {
+    const signal = options.signal
     console.debug('[voice-debug] post-recording pipeline started', {
       durationMs: recording.durationMs,
       sampleRate: recording.format.sampleRate,
@@ -85,6 +116,8 @@ export class PostRecordingPipeline {
     }> = []
     const errors: Array<{ stage: 'storage' | 'asr' | 'llm'; message: string; at: string }> = []
     const now = () => new Date().toISOString()
+    const resolveStageFailureMessage = (error: unknown) =>
+      signal?.aborted && isAbortLikeError(error) ? 'Cancelled by user' : normalizeErrorMessage(error)
 
     const record = this.deps.historyRepository.create({
       status: 'processing',
@@ -149,7 +182,7 @@ export class PostRecordingPipeline {
         asrProviderId: asrProvider.id
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = resolveStageFailureMessage(error)
       errors.push({ stage: 'asr', message, at: now() })
       pushTimeline('asr', 'failed', message)
       this.deps.historyRepository.update(record.id, {
@@ -170,7 +203,10 @@ export class PostRecordingPipeline {
       typeof asrSettings.language === 'string' && asrSettings.language.trim().length > 0
         ? asrSettings.language
         : 'en'
-    const asrRequest = { language: savedLanguage }
+    const asrRequest = {
+      language: savedLanguage,
+      ...(signal ? { signal } : {})
+    }
     if (recording.format.sampleRate !== 16000) {
       console.debug('[voice-debug] resampling audio for ASR', {
         fromSampleRate: recording.format.sampleRate,
@@ -221,7 +257,7 @@ export class PostRecordingPipeline {
     } catch (error) {
       rawTranscriptionText = ''
       asrSegments = []
-      const message = error instanceof Error ? error.message : String(error)
+      const message = resolveStageFailureMessage(error)
       errors.push({ stage: 'asr', message, at: now() })
       pushTimeline('asr', 'failed', message)
       this.deps.historyRepository.update(record.id, {
@@ -303,7 +339,7 @@ export class PostRecordingPipeline {
         llmProviderId: llmProvider.id
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = resolveStageFailureMessage(error)
       errors.push({ stage: 'llm', message, at: now() })
       pushTimeline('llm', 'failed', message)
       this.deps.historyRepository.update(record.id, {
@@ -342,7 +378,8 @@ export class PostRecordingPipeline {
             role: 'user',
             content: rawTranscriptionText
           }
-        ]
+        ],
+        ...(signal ? { signal } : {})
       }
       console.debug('[voice-debug] sending transcript to LLM', {
         transcriptLength: rawTranscriptionText.length
@@ -443,7 +480,7 @@ export class PostRecordingPipeline {
         status: 'completed'
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = resolveStageFailureMessage(error)
       errors.push({ stage: 'llm', message, at: now() })
       pushTimeline('llm', 'failed', message)
       this.deps.historyRepository.update(record.id, {

@@ -458,6 +458,96 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
+  test('marks the record as cancelled when ASR aborts with the supplied process signal', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-cancel-asr' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/cancel-asr.wav',
+        fileName: 'cancel-asr.wav',
+        byteLength: 64
+      })
+    }
+    const controller = new AbortController()
+    controller.abort()
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockImplementation(async (_input, options) => {
+        expect(options).toEqual({
+          language: 'en',
+          signal: controller.signal
+        })
+
+        const error = new Error('Recognition aborted')
+        error.name = 'AbortError'
+        throw error
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn()
+    }
+    const resolveActiveLLMSelection = vi
+      .fn()
+      .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection
+    } as never)
+
+    await pipeline.process(
+      {
+        format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+        chunks: [new Uint8Array([1, 2])],
+        startedAt: '2026-04-02T10:00:00.000Z',
+        endedAt: '2026-04-02T10:00:01.000Z',
+        durationMs: 1000
+      },
+      { signal: controller.signal }
+    )
+
+    const lastPatch = repository.update.mock.lastCall?.[1]
+
+    expect(resolveActiveLLMSelection).not.toHaveBeenCalled()
+    expect(llmProvider.generate).not.toHaveBeenCalled()
+    expect(lastPatch).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'asr',
+        failureMessage: 'Cancelled by user',
+        debug: expect.objectContaining({
+          errors: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'asr',
+              message: 'Cancelled by user'
+            })
+          ]),
+          timeline: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'asr',
+              status: 'started'
+            }),
+            expect.objectContaining({
+              stage: 'asr',
+              status: 'failed',
+              message: 'Cancelled by user'
+            })
+          ])
+        })
+      })
+    )
+  })
+
   test('marks the record failed when LLM returns only whitespace', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-blank-llm' })),
@@ -524,6 +614,115 @@ describe('PostRecordingPipeline', () => {
       })
     )
     expect(lastPatch?.finalText).toBeUndefined()
+  })
+
+  test('marks the record as cancelled when LLM aborts with the supplied process signal', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-cancel-llm' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/cancel-llm.wav',
+        fileName: 'cancel-llm.wav',
+        byteLength: 64
+      })
+    }
+    const controller = new AbortController()
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send the report by friday',
+        segments: [{ text: 'send the report by friday', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockImplementation(async (request) => {
+        expect(request).toEqual(
+          expect.objectContaining({
+            model: 'gpt-5.2-codex',
+            signal: controller.signal
+          })
+        )
+
+        controller.abort()
+        const error = new Error('Request aborted')
+        error.name = 'AbortError'
+        throw error
+      })
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' })
+    } as never)
+
+    await pipeline.process(
+      {
+        format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+        chunks: [new Uint8Array([1, 2])],
+        startedAt: '2026-04-02T10:00:00.000Z',
+        endedAt: '2026-04-02T10:00:01.000Z',
+        durationMs: 1000
+      },
+      { signal: controller.signal }
+    )
+
+    const lastPatch = repository.update.mock.lastCall?.[1]
+
+    expect(asrProvider.recognize).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        language: 'en',
+        signal: controller.signal
+      })
+    )
+    expect(llmProvider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-5.2-codex',
+        signal: controller.signal
+      })
+    )
+    expect(lastPatch).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'llm',
+        failureMessage: 'Cancelled by user',
+        debug: expect.objectContaining({
+          rawTranscriptionText: 'send the report by friday',
+          llmRequest: expect.objectContaining({
+            model: 'gpt-5.2-codex'
+          }),
+          errors: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'llm',
+              message: 'Cancelled by user'
+            })
+          ]),
+          timeline: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'llm',
+              status: 'started'
+            }),
+            expect.objectContaining({
+              stage: 'llm',
+              status: 'failed',
+              message: 'Cancelled by user'
+            })
+          ])
+        })
+      })
+    )
   })
 
   test('records matched instruction metadata and triggers auto enter after success', async () => {
