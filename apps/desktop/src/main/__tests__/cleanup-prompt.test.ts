@@ -136,11 +136,17 @@ describe('buildCleanupSystemPrompt', () => {
       }
     })
 
-    expect(prompt).toContain('Use hotword:\n- LLM\n- Typeless')
+    expect(prompt).toContain('Primary goal:')
+    expect(prompt).toContain('Output principles:')
+    expect(prompt).toContain('Dictionary rules:')
+    expect(prompt).toContain('User facts:')
+    expect(prompt).toContain('Hard constraints:')
+    expect(prompt).toContain('Dictionary:\nhotword:\n- LLM\n- Typeless')
     expect(prompt).toContain('replacement:\n- broca app => OpenBroca Desktop\n- open broca => OpenBroca')
     expect(prompt).toContain('notes:\n- Typeless: product name, preserve exact casing')
-    expect(prompt).toContain('keep references aligned with Liu')
-    expect(prompt).toContain('The transcript content will be injected from .')
+    expect(prompt).toContain('About the user:\nnickname: Liu')
+    expect(prompt).not.toContain('{{raw_transcript}}')
+    expect(prompt).not.toContain('The transcript content will be injected from')
   })
 
   test('falls back to shared default template when custom template is empty', () => {
@@ -206,6 +212,26 @@ describe('buildCleanupSystemPrompt', () => {
     } as never)
 
     expect(prompt).toBe('A=Liu B= C= D=')
+  })
+
+  test('includes matched instructions section after about-user block and degrades safely when empty', () => {
+    const withMatch = buildCleanupSystemPrompt({
+      dictionary: { entries: [] },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      matchedInstructionText: '  Keep concise.  '
+    })
+    const noMatch = buildCleanupSystemPrompt({
+      dictionary: { entries: [] },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      matchedInstructionText: null
+    })
+
+    expect(withMatch).toContain('Matched app instructions:')
+    expect(withMatch).toContain('Keep concise.')
+    expect(withMatch.indexOf('Matched app instructions:')).toBeGreaterThan(
+      withMatch.indexOf('About the user:')
+    )
+    expect(noMatch).toContain('Matched app instructions:')
   })
 
   test('does not emit orphan notes for malformed replacement entries that are excluded', () => {

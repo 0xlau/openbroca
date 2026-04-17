@@ -239,14 +239,14 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain('Use hotword:\n- openbroca')
+    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:\nhotword:\n- openbroca')
     expect(llmRequest?.messages[0]?.content).toContain('replacement:\n- broka => Broca')
     expect(llmRequest?.messages[0]?.content).toContain(
       'notes:\n- broka: Product name capitalization'
     )
-    expect(llmRequest?.messages[0]?.content).toContain(
-      'If identity details are clearly implied, keep references aligned with Liu.'
-    )
+    expect(llmRequest?.messages[0]?.content).toContain('About the user:\nnickname: Liu')
+    expect(llmRequest?.messages[0]?.content).toContain('Primary goal:')
+    expect(llmRequest?.messages[0]?.content).toContain('Hard constraints:')
   })
 
   test('resolves empty dictionary/about-me state into default template placeholders', async () => {
@@ -307,10 +307,9 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain('Use None. as canonical terminology guidance.')
-    expect(llmRequest?.messages[0]?.content).toContain(
-      'If identity details are clearly implied, keep references aligned with .'
-    )
+    expect(llmRequest?.messages[0]?.content).toContain('Dictionary:\nNone.')
+    expect(llmRequest?.messages[0]?.content).toContain('About the user:\nNone.')
+    expect(llmRequest?.messages[0]?.content).toContain('Matched app instructions:')
   })
 
   test('uses saved prompt template from pipeline getters and resolves placeholders at runtime', async () => {
@@ -588,10 +587,8 @@ describe('PostRecordingPipeline', () => {
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
-    expect(llmRequest?.messages[0]?.content).toContain(
-      'You are an accurate post-processing editor for dictated text.'
-    )
-    expect(llmRequest?.messages[0]?.content).not.toContain('Use short chat-style replies.')
+    expect(llmRequest?.messages[0]?.content).toContain('Matched app instructions:')
+    expect(llmRequest?.messages[0]?.content).toContain('Use short chat-style replies.')
     expect(triggerAutoEnter).toHaveBeenCalledTimes(1)
 
     expect(repository.update).toHaveBeenLastCalledWith(
