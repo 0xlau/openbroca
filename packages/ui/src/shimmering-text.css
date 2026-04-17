@@ -24,8 +24,9 @@
     );
     background-size: 200% 100%;
     background-clip: text;
-    color: transparent;
     animation: openbroca-text-shimmer 1.8s linear infinite;
+    color: inherit;
+    text-shadow: 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
@@ -37,6 +38,7 @@
       background-clip: border-box;
       background-size: auto;
       color: inherit;
+      text-shadow: none;
       -webkit-background-clip: border-box;
       -webkit-text-fill-color: currentColor;
     }

@@ -25,7 +25,7 @@ export const FloatListening: React.FC = () => {
     <div className={cn('flex gap-2', showProcessing && 'w-full max-w-full')}>
       <div
         className={cn(
-          'bg-background h-9 flex items-center rounded-full border gap-2',
+          'bg-background text-foreground h-9 flex items-center rounded-full border gap-2',
           showProcessing
             ? 'min-w-0 flex-1 justify-center px-3'
             : targetApp?.iconDataUrl
