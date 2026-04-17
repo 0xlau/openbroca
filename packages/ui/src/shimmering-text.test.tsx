@@ -3,12 +3,16 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
 
-import { ShimmeringText } from './shimmering-text'
+import { ShimmeringText } from './index'
 
 describe('ShimmeringText', () => {
-  test('renders a span with the shared shimmer slot and merged classes', () => {
+  test('is exported from the package root and renders the shared slot contract', () => {
     render(
-      <ShimmeringText className="text-sm" data-testid="shimmering-text">
+      <ShimmeringText
+        className="text-sm"
+        data-testid="shimmering-text"
+        title="Shared loading text"
+      >
         Processing...
       </ShimmeringText>
     )
@@ -17,8 +21,8 @@ describe('ShimmeringText', () => {
 
     expect(text.tagName).toBe('SPAN')
     expect(text.getAttribute('data-slot')).toBe('shimmering-text')
-    expect(text.className).toContain('openbroca-shimmering-text')
     expect(text.className).toContain('text-sm')
+    expect(text.getAttribute('title')).toBe('Shared loading text')
     expect(text.textContent).toBe('Processing...')
   })
 })

@@ -10,16 +10,23 @@
 
 .openbroca-shimmering-text {
   display: inline-block;
-  background-image: linear-gradient(
-    110deg,
-    color-mix(in srgb, currentColor 35%, transparent) 20%,
-    currentColor 45%,
-    color-mix(in srgb, currentColor 35%, transparent) 70%
-  );
-  background-size: 200% 100%;
-  background-clip: text;
-  color: transparent;
-  animation: openbroca-text-shimmer 1.8s linear infinite;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: inherit;
+}
+
+@supports (((-webkit-background-clip: text) or (background-clip: text)) and
+  (color: color-mix(in srgb, currentColor 35%, transparent))) {
+  .openbroca-shimmering-text {
+    background-image: linear-gradient(
+      110deg,
+      color-mix(in srgb, currentColor 35%, transparent) 20%,
+      currentColor 45%,
+      color-mix(in srgb, currentColor 35%, transparent) 70%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: openbroca-text-shimmer 1.8s linear infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 }
