@@ -5,7 +5,7 @@ import { normalizeDictionarySettings } from '../../../shared/dictionary'
 import { normalizeInstructionsSettings } from '../../../shared/instructions'
 import { publicProcedure, router } from '../trpc'
 
-const allowedStoreKeys = new Set([
+const allowedStoreKeys = [
   'aboutMe',
   'dictionary',
   'instructions',
@@ -13,12 +13,13 @@ const allowedStoreKeys = new Set([
   'settings',
   'microphone',
   'shortcuts'
-])
+] as const
 
-type AllowedStoreKey = (typeof allowedStoreKeys) extends Set<infer Key> ? Key : never
+type AllowedStoreKey = (typeof allowedStoreKeys)[number]
+const allowedStoreKeySet = new Set<AllowedStoreKey>(allowedStoreKeys)
 
 function assertAllowedStoreKey(key: string): asserts key is AllowedStoreKey {
-  if (!allowedStoreKeys.has(key)) {
+  if (!allowedStoreKeySet.has(key as AllowedStoreKey)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: `Store key not allowed: ${key}`
