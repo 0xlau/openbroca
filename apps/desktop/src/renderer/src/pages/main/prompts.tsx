@@ -1,17 +1,6 @@
 import React from 'react'
-import {
-  Button,
-  CardContent,
-  Textarea,
-  TypographyH3,
-  TypographyMuted,
-  TypographySmall
-} from '@openbroca/ui'
-import {
-  promptsStore,
-  defaultPromptTemplateText,
-  promptTemplatePlaceholders
-} from '@renderer/stores/prompts-store'
+import { Button, CardContent, Textarea, TypographyH3, TypographyMuted } from '@openbroca/ui'
+import { promptsStore, defaultPromptTemplateText } from '@renderer/stores/prompts-store'
 import { useStore } from 'zustand'
 
 function resolveTemplateValue(template: string): string {
@@ -22,31 +11,8 @@ function normalizeTemplateForPersistence(template: string): string {
   return template.trim().length > 0 ? template : ''
 }
 
-function insertPlaceholderToken(
-  currentText: string,
-  token: string,
-  textarea: HTMLTextAreaElement | null
-): { nextText: string; nextCaret: number | null } {
-  if (!textarea) {
-    return { nextText: `${currentText}${token}`, nextCaret: null }
-  }
-
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-
-  if (start == null || end == null) {
-    return { nextText: `${currentText}${token}`, nextCaret: null }
-  }
-
-  return {
-    nextText: `${currentText.slice(0, start)}${token}${currentText.slice(end)}`,
-    nextCaret: start + token.length
-  }
-}
-
 export const Prompts: React.FC = () => {
   const { data: savedPrompts, isHydrated, update } = useStore(promptsStore)
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
   const lastSyncedTemplateRef = React.useRef<string>(
     resolveTemplateValue(promptsStore.getState().data.template)
   )
@@ -58,15 +24,6 @@ export const Prompts: React.FC = () => {
     [savedPrompts.template]
   )
   const [template, setTemplate] = React.useState(persistedTemplate)
-
-  const availablePlaceholders = React.useMemo(
-    () => promptTemplatePlaceholders.filter((placeholder) => placeholder.availability === 'available'),
-    []
-  )
-  const plannedPlaceholders = React.useMemo(
-    () => promptTemplatePlaceholders.filter((placeholder) => placeholder.availability === 'planned'),
-    []
-  )
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -113,30 +70,6 @@ export const Prompts: React.FC = () => {
     } finally {
       setIsSaving(false)
     }
-  }
-
-  function handleInsertToken(token: string) {
-    let nextCaret: number | null = null
-
-    setTemplate((currentTemplate) => {
-      const insertion = insertPlaceholderToken(currentTemplate, token, textareaRef.current)
-      nextCaret = insertion.nextCaret
-      return insertion.nextText
-    })
-
-    if (nextCaret == null) {
-      return
-    }
-
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current
-      if (!textarea) {
-        return
-      }
-
-      textarea.focus()
-      textarea.setSelectionRange(nextCaret, nextCaret)
-    })
   }
 
   return (
@@ -187,7 +120,6 @@ export const Prompts: React.FC = () => {
         </label>
         <Textarea
           id="prompt-template-editor"
-          ref={textareaRef}
           value={template}
           className="min-h-80 font-mono"
           onChange={(event) => {
@@ -198,53 +130,10 @@ export const Prompts: React.FC = () => {
           }}
         />
         <TypographyMuted className="text-xs">
-          Saves are permissive. Unknown placeholders are allowed.
+          You can use {'{{dictionary}}'}, {'{{about_me}}'}, and {'{{matched_instructions}}'} in
+          the template.
         </TypographyMuted>
       </CardContent>
-
-      <section className="space-y-4">
-        <div className="space-y-2">
-          <TypographySmall>Available placeholders</TypographySmall>
-          <div className="space-y-2">
-            {availablePlaceholders.map((placeholder) => (
-              <div key={placeholder.token} className="rounded-lg border border-border/60 p-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => handleInsertToken(placeholder.token)}
-                >
-                  {placeholder.token}
-                </Button>
-                <TypographySmall className="mt-2">{placeholder.label}</TypographySmall>
-                <TypographyMuted className="text-xs">{placeholder.description}</TypographyMuted>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <TypographySmall>Planned placeholders</TypographySmall>
-          <div className="space-y-2">
-            {plannedPlaceholders.map((placeholder) => (
-              <div key={placeholder.token} className="rounded-lg border border-border/60 p-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => handleInsertToken(placeholder.token)}
-                >
-                  {placeholder.token}
-                </Button>
-                <TypographySmall className="mt-2">{placeholder.label}</TypographySmall>
-                <TypographyMuted className="text-xs">{placeholder.description}</TypographyMuted>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
     </form>
   )
 }

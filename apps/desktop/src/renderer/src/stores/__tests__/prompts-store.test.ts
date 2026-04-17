@@ -2,8 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   defaultPromptTemplateSettings,
   defaultPromptTemplateText,
-  normalizePromptTemplateSettings,
-  promptTemplatePlaceholders
+  normalizePromptTemplateSettings
 } from '../../../../shared/prompt-template'
 
 const { storeGetQueryMock, storeSetMutateMock, storeWatchSubscribeMock } = vi.hoisted(() => ({
@@ -34,13 +33,11 @@ describe('prompt-template shared normalization', () => {
     expect(defaultPromptTemplateText.trim().length).toBeGreaterThan(0)
   })
 
-  test('exposes required placeholders including planned transcript token', () => {
-    expect(promptTemplatePlaceholders.map((placeholder) => placeholder.token)).toEqual(
-      expect.arrayContaining(['{{dictionary}}', '{{about_me.nickname}}', '{{raw_transcript}}'])
-    )
-
-    expect(promptTemplatePlaceholders.find((placeholder) => placeholder.token === '{{raw_transcript}}'))
-      .toMatchObject({ availability: 'planned' })
+  test('default prompt template text mentions the three supported placeholders', () => {
+    expect(defaultPromptTemplateText).toContain('{{dictionary}}')
+    expect(defaultPromptTemplateText).toContain('{{about_me}}')
+    expect(defaultPromptTemplateText).toContain('{{matched_instructions}}')
+    expect(defaultPromptTemplateText).not.toContain('{{raw_transcript}}')
   })
 
   test('preserves template whitespace while coercing malformed payloads', () => {

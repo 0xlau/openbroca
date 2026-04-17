@@ -3,13 +3,11 @@ import {
   defaultPromptTemplateSettings,
   defaultPromptTemplateText,
   normalizePromptTemplateSettings,
-  promptTemplatePlaceholders,
-  type PromptTemplatePlaceholder,
   type PromptTemplateSettings
 } from '../../../shared/prompt-template'
 
-export { defaultPromptTemplateSettings, defaultPromptTemplateText, promptTemplatePlaceholders }
-export type { PromptTemplatePlaceholder, PromptTemplateSettings }
+export { defaultPromptTemplateSettings, defaultPromptTemplateText }
+export type { PromptTemplateSettings }
 
 export const promptsStore = createPersistedStore<PromptTemplateSettings>({
   key: 'prompts',

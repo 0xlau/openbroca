@@ -6,13 +6,6 @@ export interface PromptTemplateSettings {
   template: string
 }
 
-export interface PromptTemplatePlaceholder {
-  token: string
-  label: string
-  description: string
-  availability: 'available' | 'planned'
-}
-
 export interface PromptTemplateDictionaryRuntimeContext {
   text?: string
   hotwords?: string
@@ -37,27 +30,6 @@ export interface PromptTemplateRuntimeContext {
 export const defaultPromptTemplateSettings: PromptTemplateSettings = {
   template: ''
 }
-
-export const promptTemplatePlaceholders: PromptTemplatePlaceholder[] = [
-  {
-    token: '{{dictionary}}',
-    label: 'Dictionary',
-    description: 'Canonical terminology rules and replacements from the user dictionary.',
-    availability: 'available'
-  },
-  {
-    token: '{{about_me.nickname}}',
-    label: 'About Me Nickname',
-    description: "The user's preferred nickname from About Me settings.",
-    availability: 'available'
-  },
-  {
-    token: '{{raw_transcript}}',
-    label: 'Raw Transcript',
-    description: 'The unedited transcript text captured from dictation input.',
-    availability: 'planned'
-  }
-]
 
 export const defaultPromptTemplateText = [
   'You are a post-processing editor for dictated text.',
@@ -113,18 +85,6 @@ function normalizeRuntimeString(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function tokenToPlaceholderName(token: string): string | null {
-  const matched = token.match(/^{{\s*([A-Za-z0-9_.-]+)\s*}}$/)
-  return matched?.[1] ?? null
-}
-
-const plannedPlaceholderNames = new Set(
-  promptTemplatePlaceholders
-    .filter((placeholder) => placeholder.availability === 'planned')
-    .map((placeholder) => tokenToPlaceholderName(placeholder.token))
-    .filter((token): token is string => token !== null)
-)
-
 function resolveImplementedPlaceholder(
   placeholder: string,
   context: PromptTemplateRuntimeContext
@@ -164,10 +124,6 @@ export function resolvePromptTemplate(
     const implemented = resolveImplementedPlaceholder(placeholder, context)
     if (typeof implemented === 'string') {
       return implemented
-    }
-
-    if (plannedPlaceholderNames.has(placeholder)) {
-      return ''
     }
 
     return ''

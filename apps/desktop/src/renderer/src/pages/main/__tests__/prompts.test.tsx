@@ -17,27 +17,6 @@ const defaultPromptTemplateText = [
   'Return only the cleaned final text, with no commentary.'
 ].join('\n')
 
-const promptTemplatePlaceholders = [
-  {
-    token: '{{dictionary}}',
-    label: 'Dictionary',
-    description: 'Canonical terminology rules and replacements from the user dictionary.',
-    availability: 'available' as const
-  },
-  {
-    token: '{{about_me.nickname}}',
-    label: 'About Me Nickname',
-    description: "The user's preferred nickname from About Me settings.",
-    availability: 'available' as const
-  },
-  {
-    token: '{{raw_transcript}}',
-    label: 'Raw Transcript',
-    description: 'The unedited transcript text captured from dictation input.',
-    availability: 'planned' as const
-  }
-]
-
 let promptsStoreMock: ReturnType<typeof createPromptsStore>
 
 function createPromptsStore(data: PromptTemplateSettings) {
@@ -56,7 +35,6 @@ function createPromptsStore(data: PromptTemplateSettings) {
 
 vi.mock('@renderer/stores/prompts-store', () => ({
   defaultPromptTemplateText,
-  promptTemplatePlaceholders,
   get promptsStore() {
     return promptsStoreMock
   }
@@ -278,70 +256,16 @@ describe('Prompts', () => {
     expect(promptsStoreMock.getState().data.template).toBe('Server updated template')
   })
 
-  test('groups placeholder references by available and planned', async () => {
+  test('shows a static helper line for the three supported placeholders', async () => {
     const { Prompts } = await import('../prompts')
 
     render(<Prompts />)
 
-    expect(screen.getByText('Available placeholders')).toBeTruthy()
-    expect(screen.getByText('Planned placeholders')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '{{dictionary}}' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '{{raw_transcript}}' })).toBeTruthy()
-  })
-
-  test('inserts placeholder tokens at caret and appends when caret is unavailable', async () => {
-    promptsStoreMock = createPromptsStore({ template: 'Hello World' })
-    const { Prompts } = await import('../prompts')
-
-    render(<Prompts />)
-
-    const textarea = screen.getByLabelText('Prompt template') as HTMLTextAreaElement
-    textarea.focus()
-    textarea.setSelectionRange(6, 6)
-
-    const dictionaryButton = screen.getByRole('button', { name: '{{dictionary}}' })
-    fireEvent.mouseDown(dictionaryButton)
-    fireEvent.click(dictionaryButton)
-
-    expect(textarea.value).toBe('Hello {{dictionary}}World')
-    await waitFor(() => {
-      expect(textarea.selectionStart).toBe(20)
-      expect(textarea.selectionEnd).toBe(20)
-    })
-
-    const originalSelectionStart = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      'selectionStart'
-    )
-    const originalSelectionEnd = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      'selectionEnd'
-    )
-
-    try {
-      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', {
-        configurable: true,
-        get() {
-          return null
-        }
-      })
-      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionEnd', {
-        configurable: true,
-        get() {
-          return null
-        }
-      })
-
-      fireEvent.click(screen.getByRole('button', { name: '{{raw_transcript}}' }))
-      expect(textarea.value).toBe('Hello {{dictionary}}World{{raw_transcript}}')
-    } finally {
-      if (originalSelectionStart) {
-        Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', originalSelectionStart)
-      }
-      if (originalSelectionEnd) {
-        Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionEnd', originalSelectionEnd)
-      }
-    }
+    expect(
+      screen.getByText(
+        'You can use {{dictionary}}, {{about_me}}, and {{matched_instructions}} in the template.'
+      )
+    ).toBeTruthy()
   })
 
   test('constrains and centers the page content', async () => {
