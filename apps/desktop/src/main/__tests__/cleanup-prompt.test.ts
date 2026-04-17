@@ -242,6 +242,54 @@ describe('buildCleanupSystemPrompt', () => {
     expect(prompt).not.toContain('Matched app instructions:\n- Keep concise\n- Avoid bullets')
   })
 
+  test('sanitizes unicode line separators in dictionary and about-me values', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: {
+        entries: [
+          {
+            id: 'unicode',
+            term: 'Open\u2028Broca',
+            type: 'replacement',
+            replacement: 'Open\u2029Broca Desktop',
+            note: 'keep\u2028canonical\u2029form',
+            usageCount: 2,
+            createdAt: '',
+            updatedAt: '2026-04-17T10:00:00.000Z'
+          }
+        ]
+      },
+      aboutMe: {
+        nickname: 'Pei\u2028qiang',
+        email: 'liu\u2029peiqiang@example.com',
+        occupation: 'Software\u2028Engineer',
+        bio: 'Builds\u2029voice tools'
+      }
+    })
+
+    expect(prompt).toContain('replacement:\n- Open Broca => Open Broca Desktop')
+    expect(prompt).toContain('notes:\n- Open Broca: keep canonical form')
+    expect(prompt).toContain('nickname: Pei qiang')
+    expect(prompt).toContain('email: liu peiqiang@example.com')
+    expect(prompt).toContain('occupation: Software Engineer')
+    expect(prompt).toContain('bio: Builds voice tools')
+    expect(prompt).not.toContain('\u2028')
+    expect(prompt).not.toContain('\u2029')
+  })
+
+  test('sanitizes unicode line separators in matched instructions before append', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: { entries: [] },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      matchedInstructionText: 'Use concise replies\u2028Avoid bullet lists\u2029Stay direct'
+    })
+
+    expect(prompt).toContain(
+      'Matched app instructions:\nUse concise replies Avoid bullet lists Stay direct'
+    )
+    expect(prompt).not.toContain('\u2028')
+    expect(prompt).not.toContain('\u2029')
+  })
+
   test('does not emit orphan notes for malformed replacement entries that are excluded', () => {
     const prompt = buildCleanupSystemPrompt({
       dictionary: {

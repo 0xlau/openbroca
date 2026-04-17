@@ -8,7 +8,7 @@ export interface CleanupPromptContext {
 }
 
 function sanitizeForPromptLine(value: string): string {
-  return value.replace(/[\r\n]+/g, ' ').trim()
+  return value.replace(/[\r\n\u2028\u2029]+/g, ' ').trim()
 }
 
 function compareDictionaryEntries(left: DictionaryEntry, right: DictionaryEntry): number {
