@@ -30,6 +30,7 @@ class FakeCaptureSource implements AudioCaptureSource {
   private readonly release = createDeferred<void>()
   private readonly queuedChunks: Uint8Array[] = []
   private runtimeError: Error | null = null
+  private abortWithError = false
 
   capture = vi.fn((options: CaptureOptions = {}) => {
     this.captureCalls.push(options)
@@ -50,6 +51,11 @@ class FakeCaptureSource implements AudioCaptureSource {
           }
 
           if (options.signal?.aborted) {
+            if (this.abortWithError) {
+              const error = new Error('capture aborted')
+              error.name = 'AbortError'
+              throw error
+            }
             return { done: true, value: undefined }
           }
 
@@ -69,6 +75,11 @@ class FakeCaptureSource implements AudioCaptureSource {
 
   failWith(error: Error): void {
     this.runtimeError = error
+    this.release.resolve()
+  }
+
+  finishWithAbortError(): void {
+    this.abortWithError = true
     this.release.resolve()
   }
 
@@ -240,6 +251,43 @@ describe('ListeningSessionManager', () => {
     })
 
     expect(states).toEqual(['starting', 'listening', 'stopping', 'processing', 'idle'])
+  })
+
+  test('stop still transitions into processing when capture aborts after buffered audio exists', async () => {
+    const captureSource = new FakeCaptureSource()
+    const completion = createDeferred<void>()
+    const onRecordingComplete = vi.fn().mockImplementation(async () => {
+      await completion.promise
+    })
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finishWithAbortError()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    expect(onRecordingComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunks: [expect.any(Uint8Array)]
+      }),
+      expect.any(AbortSignal)
+    )
+
+    completion.resolve()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
   })
 
   test('cancelProcessing aborts post-recording work and returns to idle', async () => {

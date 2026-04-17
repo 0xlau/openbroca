@@ -187,15 +187,21 @@ class ListeningSessionManager {
         error: normalizeErrorMessage(error)
       })
       if (isAbortLikeError(error, opts.signal)) {
-        this.setSessionState({ status: 'idle' })
+        if (this.state.status === 'stopping' && chunks.length > 0) {
+          console.debug('[voice-debug] stop completed with buffered audio', {
+            chunkCount: chunks.length
+          })
+        } else {
+          this.setSessionState({ status: 'idle' })
+          return
+        }
+      } else {
+        this.setSessionState({
+          status: 'error',
+          message: normalizeErrorMessage(error)
+        })
         return
       }
-
-      this.setSessionState({
-        status: 'error',
-        message: normalizeErrorMessage(error)
-      })
-      return
     } finally {
       if (this.abortController?.signal === opts.signal || opts.signal.aborted) {
         this.abortController = null
