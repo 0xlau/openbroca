@@ -159,6 +159,16 @@ describe('buildCleanupSystemPrompt', () => {
     expect(prompt).toContain(defaultPromptTemplateText.split('\n')[0] ?? '')
   })
 
+  test('falls back to shared default template when custom template is whitespace-only', () => {
+    const prompt = buildCleanupSystemPrompt({
+      dictionary: { entries: [] },
+      aboutMe: { nickname: '', email: '', occupation: '', bio: '' },
+      template: ' \n\t '
+    } as never)
+
+    expect(prompt).toContain(defaultPromptTemplateText.split('\n')[0] ?? '')
+  })
+
   test('uses saved custom template and resolves known nested placeholders', () => {
     const prompt = buildCleanupSystemPrompt({
       dictionary: {

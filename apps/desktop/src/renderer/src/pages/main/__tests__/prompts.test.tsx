@@ -79,6 +79,17 @@ describe('Prompts', () => {
     )
   })
 
+  test('uses the shared default template text when persisted template is whitespace-only', async () => {
+    promptsStoreMock = createPromptsStore({ template: '  \n\t  ' })
+    const { Prompts } = await import('../prompts')
+
+    render(<Prompts />)
+
+    expect((screen.getByLabelText('Prompt template') as HTMLTextAreaElement).value).toBe(
+      defaultPromptTemplateText
+    )
+  })
+
   test('uses the persisted template when present', async () => {
     promptsStoreMock = createPromptsStore({ template: 'Saved prompt template body' })
     const { Prompts } = await import('../prompts')
@@ -194,6 +205,77 @@ describe('Prompts', () => {
         template: defaultPromptTemplateText
       })
     })
+  })
+
+  test('treats whitespace-only edited template as no custom template when saving', async () => {
+    promptsStoreMock = createPromptsStore({ template: 'Custom persisted template' })
+    const { Prompts } = await import('../prompts')
+
+    render(<Prompts />)
+
+    fireEvent.change(screen.getByLabelText('Prompt template'), {
+      target: { value: ' \n\t ' }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(promptsStoreMock.getState().update).toHaveBeenCalledWith({
+        template: ''
+      })
+    })
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('Prompt template') as HTMLTextAreaElement).value).toBe(
+        defaultPromptTemplateText
+      )
+    })
+
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+  })
+
+  test('does not overwrite externally updated persisted template when save fails', async () => {
+    promptsStoreMock = createPromptsStore({ template: 'Persisted template' })
+    let rejectSave: ((error: Error) => void) | null = null
+    const rejectedUpdate = vi.fn(
+      async () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSave = reject
+        })
+    )
+    promptsStoreMock.setState((state) => ({ ...state, update: rejectedUpdate }))
+    const { Prompts } = await import('../prompts')
+
+    render(<Prompts />)
+
+    fireEvent.change(screen.getByLabelText('Prompt template'), {
+      target: { value: 'Local unsaved edit' }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(rejectedUpdate).toHaveBeenCalledWith({
+        template: 'Local unsaved edit'
+      })
+    })
+
+    act(() => {
+      promptsStoreMock.setState((state) => ({
+        ...state,
+        data: { template: 'Server updated template' }
+      }))
+    })
+
+    act(() => {
+      rejectSave?.(new Error('Failed to save prompt template'))
+    })
+
+    expect(await screen.findByText('Failed to save prompt template')).toBeTruthy()
+    expect((screen.getByLabelText('Prompt template') as HTMLTextAreaElement).value).toBe(
+      'Local unsaved edit'
+    )
+    expect(promptsStoreMock.getState().data.template).toBe('Server updated template')
   })
 
   test('groups placeholder references by available and planned', async () => {

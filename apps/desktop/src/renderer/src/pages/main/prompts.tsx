@@ -15,7 +15,11 @@ import {
 import { useStore } from 'zustand'
 
 function resolveTemplateValue(template: string): string {
-  return template.length > 0 ? template : defaultPromptTemplateText
+  return template.trim().length > 0 ? template : defaultPromptTemplateText
+}
+
+function normalizeTemplateForPersistence(template: string): string {
+  return template.trim().length > 0 ? template : ''
 }
 
 function insertPlaceholderToken(
@@ -92,22 +96,17 @@ export const Prompts: React.FC = () => {
       return
     }
 
-    const previousPersistedTemplate = savedPrompts.template
+    const nextPersistedTemplate = normalizeTemplateForPersistence(template)
+    const nextResolvedTemplate = resolveTemplateValue(nextPersistedTemplate)
 
     setIsSaving(true)
     setSaveError(null)
 
     try {
-      await update({ template })
+      await update({ template: nextPersistedTemplate })
+      setTemplate(nextResolvedTemplate)
       setSaveError(null)
     } catch (error) {
-      promptsStore.setState((state) => ({
-        ...state,
-        data: {
-          ...state.data,
-          template: previousPersistedTemplate
-        }
-      }))
       setSaveError(
         error instanceof Error ? error.message : 'Failed to save prompt template. Please try again.'
       )

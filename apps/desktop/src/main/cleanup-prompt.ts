@@ -158,7 +158,7 @@ export function buildCleanupSystemPrompt(context: CleanupPromptContext): string 
     },
     matchedInstructionText
   }
-  const template = typeof context.template === 'string' && context.template.length > 0
+  const template = typeof context.template === 'string' && context.template.trim().length > 0
     ? context.template
     : defaultPromptTemplateText
 
