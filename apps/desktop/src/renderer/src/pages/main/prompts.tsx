@@ -115,9 +115,6 @@ export const Prompts: React.FC = () => {
             {saveError}
           </p>
         ) : null}
-        <label htmlFor="prompt-template-editor" className="text-sm font-medium">
-          Prompt template
-        </label>
         <Textarea
           id="prompt-template-editor"
           value={template}
