@@ -8,11 +8,17 @@ import type { ListeningSessionBridgeState, ListeningSessionState } from '../../.
 vi.mock('@openbroca/ui', () => ({
   Button: ({
     children,
-    onClick
+    onClick,
+    className
   }: {
     children: React.ReactNode
     onClick?: () => void
-  }) => <button onClick={onClick}>{children}</button>,
+    className?: string
+  }) => (
+    <button onClick={onClick} className={className}>
+      {children}
+    </button>
+  ),
   cn: (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' '),
   LiveWaveform: ({ active }: { active: boolean }) => (
     <div data-testid="waveform" data-active={String(active)} />
@@ -166,6 +172,22 @@ describe('FloatListening', () => {
       expect(within(container).queryByTestId('waveform')).toBeNull()
       expect(within(container).queryByTestId('float-target-app-icon')).toBeNull()
       expect(within(container).getByRole('button')).toBeTruthy()
+    })
+  })
+
+  test('uses a flexible processing layout that fits within the floating window', async () => {
+    const { container } = await renderForBridgeState({
+      state: { status: 'processing' },
+      targetApp: null
+    })
+
+    await waitFor(() => {
+      const outer = container.firstElementChild as HTMLElement | null
+      const shell = within(container).getByText('Thinking...').parentElement?.parentElement as HTMLElement | null
+      expect(outer?.className).toContain('w-full')
+      expect(shell?.className).toContain('flex-1')
+      expect(shell?.className).toContain('min-w-0')
+      expect(shell?.className).not.toContain('w-[320px]')
     })
   })
 

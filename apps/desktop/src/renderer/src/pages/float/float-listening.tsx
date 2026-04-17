@@ -7,6 +7,7 @@ import { microphoneStore } from '@renderer/stores/microphone-store'
 import { listeningSessionStore } from '@renderer/stores/listening-session-store'
 import { useStore } from 'zustand'
 import { cn } from '@openbroca/ui'
+import { isProcessingShellState } from '../../../../shared/listening-session-state'
 
 export const FloatListening: React.FC = () => {
   useEffect(() => {
@@ -17,19 +18,19 @@ export const FloatListening: React.FC = () => {
   const { data } = useStore(microphoneStore)
   const { bridge } = useStore(listeningSessionStore)
   const { state, targetApp } = bridge
-  const showProcessing = state.status === 'stopping' || state.status === 'processing'
+  const showProcessing = isProcessingShellState(state)
   const showCancel = state.status === 'processing'
 
   return (
-    <div className="flex gap-2">
+    <div className={cn('flex gap-2', showProcessing && 'w-full max-w-full')}>
       <div
         className={cn(
-          'bg-background h-9 shrink-0 flex items-center rounded-full border gap-2',
+          'bg-background h-9 flex items-center rounded-full border gap-2',
           showProcessing
-            ? 'w-[320px] justify-between px-3'
+            ? 'min-w-0 flex-1 justify-center px-3'
             : targetApp?.iconDataUrl
-              ? 'justify-center px-2 pr-3'
-              : 'justify-center px-4'
+              ? 'shrink-0 justify-center px-2 pr-3'
+              : 'shrink-0 justify-center px-4'
         )}
       >
         {!showProcessing && targetApp?.iconDataUrl ? (
@@ -67,6 +68,7 @@ export const FloatListening: React.FC = () => {
 
       {showCancel ? (
         <Button
+          className="shrink-0"
           size="icon"
           variant="secondary"
           onClick={() => void window.api.listeningSession.cancelProcessing()}
