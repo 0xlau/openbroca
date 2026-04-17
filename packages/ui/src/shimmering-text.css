@@ -33,6 +33,12 @@
   @media (prefers-reduced-motion: reduce) {
     .openbroca-shimmering-text {
       animation: none;
+      background-image: none;
+      background-clip: border-box;
+      background-size: auto;
+      color: inherit;
+      -webkit-background-clip: border-box;
+      -webkit-text-fill-color: currentColor;
     }
   }
 }
