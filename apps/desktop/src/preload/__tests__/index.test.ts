@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { ListeningSessionState } from '../../shared/listening-session-state'
+import type { ListeningSessionBridgeState } from '../../shared/listening-session-state'
 
 const invoke = vi.fn()
 const on = vi.fn()
@@ -29,8 +29,8 @@ function getExposedApi() {
       disconnect: (providerId: string) => Promise<void>
     }
     listeningSession: {
-      getState: () => Promise<ListeningSessionState>
-      onStateChange: (callback: (state: ListeningSessionState) => void) => () => void
+      getState: () => Promise<ListeningSessionBridgeState>
+      onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => () => void
     }
   }
 }
@@ -52,8 +52,19 @@ describe('preload listeningSession bridge', () => {
   })
 
   test('fetches the current listening session snapshot', async () => {
-    const state: ListeningSessionState = { status: 'listening' }
-    invoke.mockResolvedValueOnce(state)
+    const bridge: ListeningSessionBridgeState = {
+      state: { status: 'listening' },
+      targetApp: {
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      }
+    }
+    invoke.mockResolvedValueOnce(bridge)
     enableContextIsolation()
 
     await import('../index')
@@ -62,7 +73,7 @@ describe('preload listeningSession bridge', () => {
     const result = await api.listeningSession.getState()
 
     expect(invoke).toHaveBeenCalledWith('listening-session:get-state')
-    expect(result).toEqual(state)
+    expect(result).toEqual(bridge)
   })
 
   test('connects a provider through the main-process auth bridge', async () => {
@@ -101,7 +112,10 @@ describe('preload listeningSession bridge', () => {
     const handler = on.mock.calls.find(
       ([channel]) => channel === 'listening-session:state-changed'
     )?.[1]
-    const state: ListeningSessionState = { status: 'starting' }
+    const state: ListeningSessionBridgeState = {
+      state: { status: 'starting' },
+      targetApp: null
+    }
 
     handler?.({}, state)
 
@@ -121,7 +135,13 @@ describe('preload listeningSession bridge', () => {
     )?.[1]
 
     unsubscribe()
-    handler?.({}, { status: 'idle' } satisfies ListeningSessionState)
+    handler?.(
+      {},
+      {
+        state: { status: 'idle' },
+        targetApp: null
+      } satisfies ListeningSessionBridgeState
+    )
 
     expect(removeListener).toHaveBeenCalledWith('listening-session:state-changed', handler)
   })

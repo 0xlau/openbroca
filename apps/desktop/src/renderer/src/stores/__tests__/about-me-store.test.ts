@@ -80,4 +80,18 @@ describe('aboutMeStore', () => {
       bio: ''
     })
   })
+
+  test('re-exports defaultAboutMeSettings for renderer consumers', async () => {
+    storeGetQueryMock.mockResolvedValue(null)
+    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const module = await import('../about-me-store')
+
+    expect(module.defaultAboutMeSettings).toEqual({
+      nickname: '',
+      email: '',
+      occupation: '',
+      bio: ''
+    })
+  })
 })

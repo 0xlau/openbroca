@@ -33,6 +33,9 @@ import {
 } from './providers/runtime'
 import { createAutoEnterService } from './send-key/auto-enter'
 import { AppIdentityService } from './app-identity/service'
+import { FocusedInputAppService } from './focused-input/service'
+import { resolveMacFocusedInputApp } from './focused-input/platform/macos'
+import { resolveWindowsFocusedInputApp } from './focused-input/platform/windows'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
@@ -203,6 +206,16 @@ const cleanupPromptContextGetters = createNormalizedCleanupPromptContextGetters(
   getAboutMeRaw: () => store.get('aboutMe'),
   getPromptsRaw: () => store.get('prompts')
 })
+const focusedInputAppService = new FocusedInputAppService({
+  resolveFocusedInputApp:
+    process.platform === 'darwin'
+      ? () => resolveMacFocusedInputApp()
+      : process.platform === 'win32'
+        ? () => resolveWindowsFocusedInputApp()
+        : async () => null,
+  hydrateApp: (app) => appIdentityService.hydrateApp(app),
+  getFrontmostApp: () => appIdentityService.getFrontmostApp()
+})
 const autoEnterService = createAutoEnterService()
 const postRecordingPipeline = new PostRecordingPipeline({
   historyRepository,
@@ -226,6 +239,7 @@ const postRecordingPipeline = new PostRecordingPipeline({
 })
 const listeningSession = new ListeningSessionManager(captureSource, {
   getFrontmostAppSnapshot: () => appIdentityService.getFrontmostApp(),
+  getTargetApp: () => focusedInputAppService.getFocusedInputApp(),
   onRecordingComplete: (recording) => void postRecordingPipeline.process(recording)
 })
 

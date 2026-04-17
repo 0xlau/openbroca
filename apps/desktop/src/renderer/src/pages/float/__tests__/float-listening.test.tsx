@@ -3,10 +3,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, waitFor, within } from '@testing-library/react'
 import { createStore } from 'zustand'
-import type { ListeningSessionState } from '../../../../../shared/listening-session-state'
+import type { ListeningSessionBridgeState, ListeningSessionState } from '../../../../../shared/listening-session-state'
 
 vi.mock('@openbroca/ui', () => ({
   Button: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
+  cn: (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' '),
   LiveWaveform: ({ active }: { active: boolean }) => (
     <div data-testid="waveform" data-active={String(active)} />
   )
@@ -21,8 +22,8 @@ vi.mock('@renderer/stores/microphone-store', () => ({
   }))
 }))
 
-async function renderForState(state: ListeningSessionState) {
-  const listeners = new Set<(next: ListeningSessionState) => void>()
+async function renderForBridgeState(bridge: ListeningSessionBridgeState) {
+  const listeners = new Set<(next: ListeningSessionBridgeState) => void>()
   window.api = {
     ...window.api,
     windowControls: {
@@ -31,7 +32,7 @@ async function renderForState(state: ListeningSessionState) {
       close: vi.fn()
     },
     listeningSession: {
-      getState: vi.fn().mockResolvedValue(state),
+      getState: vi.fn().mockResolvedValue(bridge),
       onStateChange: vi.fn((callback) => {
         listeners.add(callback)
         return () => listeners.delete(callback)
@@ -48,7 +49,8 @@ async function renderForState(state: ListeningSessionState) {
 
   return {
     waveform: within(view.container).getByTestId('waveform'),
-    emit(next: ListeningSessionState) {
+    container: view.container,
+    emit(next: ListeningSessionBridgeState) {
       for (const listener of listeners) {
         listener(next)
       }
@@ -64,7 +66,10 @@ describe('FloatListening', () => {
   })
 
   test('activates the waveform only while listening', async () => {
-    const { waveform } = await renderForState({ status: 'listening' })
+    const { waveform } = await renderForBridgeState({
+      state: { status: 'listening' },
+      targetApp: null
+    })
 
     await waitFor(() => {
       expect(waveform.getAttribute('data-active')).toBe('true')
@@ -77,21 +82,108 @@ describe('FloatListening', () => {
     { status: 'stopping' },
     { status: 'error', message: 'boom' }
   ] satisfies ListeningSessionState[])('keeps the waveform inactive for %o', async (state) => {
-    const { waveform } = await renderForState(state)
+    const { waveform } = await renderForBridgeState({
+      state,
+      targetApp: null
+    })
 
     await waitFor(() => {
       expect(waveform.getAttribute('data-active')).toBe('false')
     })
   })
 
+  test('renders the target app icon when one is available', async () => {
+    const { container } = await renderForBridgeState({
+      state: { status: 'listening' },
+      targetApp: {
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      }
+    })
+
+    await waitFor(() => {
+      const icon = within(container).getByAltText('Cursor icon')
+      expect(icon).toBeTruthy()
+      expect(icon.getAttribute('src')).toBe('data:image/png;base64,cursor')
+      expect(within(container).getByTestId('float-target-app-icon')).toBeTruthy()
+    })
+  })
+
+  test('does not render the icon container when target app is missing or iconless', async () => {
+    const { container, emit } = await renderForBridgeState({
+      state: { status: 'starting' },
+      targetApp: null
+    })
+
+    await waitFor(() => {
+      expect(within(container).queryByTestId('float-target-app-icon')).toBeNull()
+    })
+
+    emit({
+      state: { status: 'listening' },
+      targetApp: {
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected'
+      }
+    })
+
+    await waitFor(() => {
+      expect(within(container).queryByTestId('float-target-app-icon')).toBeNull()
+    })
+  })
+
+  test('renders the icon when a later bridge update adds one', async () => {
+    const { container, emit } = await renderForBridgeState({
+      state: { status: 'starting' },
+      targetApp: null
+    })
+
+    await waitFor(() => {
+      expect(within(container).queryByTestId('float-target-app-icon')).toBeNull()
+    })
+
+    emit({
+      state: { status: 'listening' },
+      targetApp: {
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      }
+    })
+
+    await waitFor(() => {
+      const icon = within(container).getByAltText('Cursor icon')
+      expect(icon.getAttribute('src')).toBe('data:image/png;base64,cursor')
+    })
+  })
+
   test('reacts to later session updates from the bridge', async () => {
-    const { emit, waveform } = await renderForState({ status: 'starting' })
+    const { emit, waveform } = await renderForBridgeState({
+      state: { status: 'starting' },
+      targetApp: null
+    })
 
     await waitFor(() => {
       expect(waveform.getAttribute('data-active')).toBe('false')
     })
 
-    emit({ status: 'listening' })
+    emit({
+      state: { status: 'listening' },
+      targetApp: null
+    })
 
     await waitFor(() => {
       expect(waveform.getAttribute('data-active')).toBe('true')

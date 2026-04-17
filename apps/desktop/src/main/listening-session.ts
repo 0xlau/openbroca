@@ -1,6 +1,11 @@
 import type { AudioCaptureSource, CaptureOptions } from '@openbroca/audio-capture'
 import type { AppIdentity } from '@openbroca/app-identity'
-import type { ListeningSessionState } from '../shared/listening-session-state'
+import {
+  INITIAL_LISTENING_SESSION_BRIDGE_STATE,
+  isTargetAppPollingState,
+  type ListeningSessionBridgeState,
+  type ListeningSessionState
+} from '../shared/listening-session-state'
 import type { CapturedRecording } from './recording-types'
 
 interface SessionOptions {
@@ -10,6 +15,8 @@ interface SessionOptions {
 interface ListeningSessionOptions {
   onRecordingComplete?: (recording: CapturedRecording) => Promise<void> | void
   getFrontmostAppSnapshot?: () => Promise<AppIdentity | null>
+  getTargetApp?: () => Promise<AppIdentity | null>
+  targetAppPollIntervalMs?: number
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -28,21 +35,48 @@ function isAbortLikeError(error: unknown, signal: AbortSignal): boolean {
   return signal.aborted || (error instanceof Error && error.name === 'AbortError')
 }
 
+function sameAppIdentity(left: AppIdentity | null, right: AppIdentity | null): boolean {
+  if (left === right) return true
+  if (!left || !right) return false
+
+  const sameStableIdentity =
+    (left.id && right.id && left.id === right.id) ||
+    (left.bundleId && right.bundleId && left.bundleId === right.bundleId) ||
+    (left.aumid && right.aumid && left.aumid === right.aumid) ||
+    (left.path && right.path && left.path === right.path)
+
+  if (!sameStableIdentity) {
+    return false
+  }
+
+  return (
+    left.bundleId === right.bundleId &&
+    left.aumid === right.aumid &&
+    left.path === right.path &&
+    left.iconDataUrl === right.iconDataUrl
+  )
+}
+
 class ListeningSessionManager {
   private abortController: AbortController | null = null
   private state: ListeningSessionState = { status: 'idle' }
-  private listeners = new Set<(state: ListeningSessionState) => void>()
+  private targetApp: AppIdentity | null = null
+  private bridgeState: ListeningSessionBridgeState = INITIAL_LISTENING_SESSION_BRIDGE_STATE
+  private listeners = new Set<(state: ListeningSessionBridgeState) => void>()
+  private targetAppPollTimer: ReturnType<typeof setInterval> | null = null
+  private targetAppPollGeneration = 0
+  private targetAppRefreshGeneration: number | null = null
 
   constructor(
     private captureSource: AudioCaptureSource,
     private readonly options: ListeningSessionOptions = {}
   ) {}
 
-  getState(): ListeningSessionState {
-    return this.state
+  getState(): ListeningSessionBridgeState {
+    return this.bridgeState
   }
 
-  subscribe(listener: (state: ListeningSessionState) => void): () => void {
+  subscribe(listener: (state: ListeningSessionBridgeState) => void): () => void {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
@@ -66,7 +100,7 @@ class ListeningSessionManager {
     }
 
     this.abortController = new AbortController()
-    this.setState({ status: 'starting' })
+    this.setSessionState({ status: 'starting' })
     void this.run({ ...options, signal: this.abortController.signal })
   }
 
@@ -81,7 +115,7 @@ class ListeningSessionManager {
     if (this.state.status === 'error') {
       this.abortController?.abort()
       this.abortController = null
-      this.setState({ status: 'idle' })
+      this.setSessionState({ status: 'idle' })
       return
     }
 
@@ -89,7 +123,7 @@ class ListeningSessionManager {
       return
     }
 
-    this.setState({ status: 'stopping' })
+    this.setSessionState({ status: 'stopping' })
     this.abortController?.abort()
   }
 
@@ -118,7 +152,7 @@ class ListeningSessionManager {
       startedAtMs = Date.now()
 
       const stream = this.captureSource.capture(captureOptions)
-      this.setState({ status: 'listening' })
+      this.setSessionState({ status: 'listening' })
 
       for await (const chunk of stream) {
         if (!didLogFirstChunk) {
@@ -133,18 +167,18 @@ class ListeningSessionManager {
       console.debug('[voice-debug] capture stream ended', {
         chunkCount: chunks.length
       })
-      this.setState({ status: 'idle' })
+      this.setSessionState({ status: 'idle' })
     } catch (error) {
       console.debug('[voice-debug] listening run failed', {
         aborted: opts.signal.aborted,
         error: normalizeErrorMessage(error)
       })
       if (isAbortLikeError(error, opts.signal)) {
-        this.setState({ status: 'idle' })
+        this.setSessionState({ status: 'idle' })
         return
       }
 
-      this.setState({
+      this.setSessionState({
         status: 'error',
         message: normalizeErrorMessage(error)
       })
@@ -190,15 +224,98 @@ class ListeningSessionManager {
     }
   }
 
-  private setState(next: ListeningSessionState): void {
+  private setSessionState(next: ListeningSessionState): void {
     console.debug('[voice-debug] listening state changed', {
       from: this.state.status,
       to: next.status
     })
+
     this.state = next
-    for (const listener of this.listeners) {
-      listener(next)
+    this.syncTargetAppPolling()
+    this.publish()
+  }
+
+  private publish(): void {
+    this.bridgeState = {
+      state: this.state,
+      targetApp: this.targetApp
     }
+
+    for (const listener of this.listeners) {
+      listener(this.bridgeState)
+    }
+  }
+
+  private syncTargetAppPolling(): void {
+    if (!isTargetAppPollingState(this.state) || !this.options.getTargetApp) {
+      if (this.targetAppPollTimer) {
+        clearInterval(this.targetAppPollTimer)
+        this.targetAppPollTimer = null
+      }
+
+      this.targetAppPollGeneration += 1
+      this.targetAppRefreshGeneration = null
+      this.targetApp = null
+      return
+    }
+
+    if (this.targetAppPollTimer) {
+      return
+    }
+
+    this.targetAppPollGeneration += 1
+    void this.refreshTargetApp(this.targetAppPollGeneration)
+    this.targetAppPollTimer = setInterval(() => {
+      void this.refreshTargetApp(this.targetAppPollGeneration)
+    }, this.options.targetAppPollIntervalMs ?? 500)
+  }
+
+  private async refreshTargetApp(generation: number): Promise<void> {
+    if (
+      generation !== this.targetAppPollGeneration ||
+      this.targetAppRefreshGeneration === generation ||
+      !this.options.getTargetApp ||
+      !isTargetAppPollingState(this.state)
+    ) {
+      return
+    }
+
+    this.targetAppRefreshGeneration = generation
+
+    try {
+      let nextTargetApp: AppIdentity | null = null
+
+      try {
+        nextTargetApp = await this.resolveTargetApp()
+      } catch (error) {
+        console.debug('[voice-debug] target app resolution failed', {
+          error: normalizeErrorMessage(error)
+        })
+      }
+
+      if (
+        generation !== this.targetAppPollGeneration ||
+        !isTargetAppPollingState(this.state) ||
+        sameAppIdentity(this.targetApp, nextTargetApp)
+      ) {
+        return
+      }
+
+      this.targetApp = nextTargetApp
+      this.publish()
+    } finally {
+      if (this.targetAppRefreshGeneration === generation) {
+        this.targetAppRefreshGeneration = null
+      }
+    }
+  }
+
+  private async resolveTargetApp(): Promise<AppIdentity | null> {
+    if (!this.options.getTargetApp) {
+      return null
+    }
+
+    return (await this.options.getTargetApp()) ?? null
   }
 }
 

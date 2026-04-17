@@ -7,7 +7,13 @@ type ServiceDeps = {
   resolveIconDataUrl: (path?: string) => Promise<string | undefined>
 }
 
+function getAppIconCacheKey(item: AppIdentity): string | undefined {
+  return item.path ?? item.bundleId ?? item.aumid ?? item.id
+}
+
 export class AppIdentityService {
+  private readonly iconDataUrlCache = new Map<string, Promise<string | undefined>>()
+
   constructor(private readonly deps: ServiceDeps) {}
 
   private async resolveIconDataUrl(path?: string): Promise<string | undefined> {
@@ -31,33 +37,59 @@ export class AppIdentityService {
       return item.iconDataUrl
     }
 
-    if (item.platform === 'macos') {
-      const bundleIcon = await this.resolveBundleIconDataUrl(item.path)
-      if (bundleIcon) {
-        return bundleIcon
+    const cacheKey = getAppIconCacheKey(item)
+    if (cacheKey) {
+      const cached = this.iconDataUrlCache.get(cacheKey)
+      if (cached) {
+        return cached
       }
     }
 
-    return this.resolveIconDataUrl(item.path)
+    const pending = (async () => {
+      if (item.platform === 'macos') {
+        const bundleIcon = await this.resolveBundleIconDataUrl(item.path)
+        if (bundleIcon) {
+          return bundleIcon
+        }
+      }
+
+      return this.resolveIconDataUrl(item.path)
+    })()
+
+    if (cacheKey) {
+      this.iconDataUrlCache.set(cacheKey, pending)
+    }
+
+    const resolved = await pending
+
+    if (!resolved && cacheKey) {
+      this.iconDataUrlCache.delete(cacheKey)
+    }
+
+    return resolved
   }
 
-  async listApps(): Promise<AppIdentity[]> {
-    const apps = await this.deps.listApps()
-    return Promise.all(
-      apps.map(async (item) => ({
-        ...item,
-        iconDataUrl: await this.resolveAppIcon(item)
-      }))
-    )
-  }
-
-  async getFrontmostApp(): Promise<AppIdentity | null> {
-    const item = await this.deps.getFrontmostApp()
-    if (!item) return null
-
+  private async hydrateKnownApp(item: AppIdentity): Promise<AppIdentity> {
     return {
       ...item,
       iconDataUrl: await this.resolveAppIcon(item)
     }
+  }
+
+  async hydrateApp(item: AppIdentity | null): Promise<AppIdentity | null> {
+    if (!item) {
+      return null
+    }
+
+    return this.hydrateKnownApp(item)
+  }
+
+  async listApps(): Promise<AppIdentity[]> {
+    const apps = await this.deps.listApps()
+    return Promise.all(apps.map((item) => this.hydrateKnownApp(item)))
+  }
+
+  async getFrontmostApp(): Promise<AppIdentity | null> {
+    return this.hydrateApp(await this.deps.getFrontmostApp())
   }
 }

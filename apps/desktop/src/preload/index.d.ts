@@ -1,6 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { ProviderAuthState } from '../shared/provider-auth'
-import type { ListeningSessionState } from '../shared/listening-session-state'
+import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
 
 declare global {
   interface Window {
@@ -16,8 +16,8 @@ declare global {
         disconnect: (providerId: string) => Promise<ProviderAuthState>
       }
       listeningSession: {
-        getState: () => Promise<ListeningSessionState>
-        onStateChange: (callback: (state: ListeningSessionState) => void) => () => void
+        getState: () => Promise<ListeningSessionBridgeState>
+        onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => () => void
       }
     }
     trpc: {

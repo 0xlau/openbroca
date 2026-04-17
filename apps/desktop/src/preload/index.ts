@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { ListeningSessionState } from '../shared/listening-session-state'
+import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
 import type { ProviderAuthState } from '../shared/provider-auth'
 
 // Custom APIs for renderer
@@ -18,9 +18,9 @@ const api = {
   },
   listeningSession: {
     getState: () =>
-      ipcRenderer.invoke('listening-session:get-state') as Promise<ListeningSessionState>,
-    onStateChange: (callback: (state: ListeningSessionState) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, state: ListeningSessionState) =>
+      ipcRenderer.invoke('listening-session:get-state') as Promise<ListeningSessionBridgeState>,
+    onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: ListeningSessionBridgeState) =>
         callback(state)
 
       ipcRenderer.on('listening-session:state-changed', handler)

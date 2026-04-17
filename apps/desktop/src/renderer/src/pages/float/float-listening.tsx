@@ -6,6 +6,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { microphoneStore } from '@renderer/stores/microphone-store'
 import { listeningSessionStore } from '@renderer/stores/listening-session-store'
 import { useStore } from 'zustand'
+import { cn } from '@openbroca/ui'
 
 export const FloatListening: React.FC = () => {
   useEffect(() => {
@@ -14,13 +15,31 @@ export const FloatListening: React.FC = () => {
   }, [])
 
   const { data } = useStore(microphoneStore)
-  const { state } = useStore(listeningSessionStore)
+  const { bridge } = useStore(listeningSessionStore)
+  const { state, targetApp } = bridge
 
   const showCancel = false
 
   return (
     <div className="flex gap-2">
-      <div className="bg-background w-20 h-9 flex items-center justify-center rounded-full border">
+      <div
+        className={cn(
+          `bg-background h-9 shrink-0 flex items-center justify-center rounded-full border gap-2`,
+          targetApp?.iconDataUrl ? 'px-2 pr-3' : 'px-4'
+        )}
+      >
+        {targetApp?.iconDataUrl ? (
+          <div
+            className="size-6 shrink-0 overflow-hidden rounded-full"
+            data-testid="float-target-app-icon"
+          >
+            <img
+              src={targetApp.iconDataUrl}
+              alt={`${targetApp.displayName} icon`}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : null}
         <LiveWaveform
           active={state.status === 'listening'}
           deviceId={data.selectedBrowserDeviceId ?? undefined}

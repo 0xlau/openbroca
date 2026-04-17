@@ -1,18 +1,21 @@
 import { createStore } from 'zustand'
-import type { ListeningSessionState } from '../../../shared/listening-session-state'
+import {
+  INITIAL_LISTENING_SESSION_BRIDGE_STATE,
+  type ListeningSessionBridgeState
+} from '../../../shared/listening-session-state'
 
 interface ListeningSessionStoreState {
-  state: ListeningSessionState
+  bridge: ListeningSessionBridgeState
 }
 
 const listeningSessionStoreImpl = createStore<ListeningSessionStoreState>(() => ({
-  state: { status: 'idle' }
+  bridge: INITIAL_LISTENING_SESSION_BRIDGE_STATE
 }))
 
 let initialized = false
 
-function setListeningSessionState(state: ListeningSessionState): void {
-  listeningSessionStoreImpl.setState({ state })
+function setListeningSessionBridgeState(bridge: ListeningSessionBridgeState): void {
+  listeningSessionStoreImpl.setState({ bridge })
 }
 
 function initializeListeningSessionStore(): void {
@@ -24,21 +27,24 @@ function initializeListeningSessionStore(): void {
 
   let receivedLiveUpdate = false
 
-  window.api.listeningSession.onStateChange((state) => {
+  window.api.listeningSession.onStateChange((bridge) => {
     receivedLiveUpdate = true
-    setListeningSessionState(state)
+    setListeningSessionBridgeState(bridge)
   })
 
   void window.api.listeningSession
     .getState()
-    .then((state) => {
+    .then((bridge) => {
       if (!receivedLiveUpdate) {
-        setListeningSessionState(state)
+        setListeningSessionBridgeState(bridge)
       }
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : 'Failed to load listening session'
-      setListeningSessionState({ status: 'error', message })
+      setListeningSessionBridgeState({
+        state: { status: 'error', message },
+        targetApp: null
+      })
     })
 }
 

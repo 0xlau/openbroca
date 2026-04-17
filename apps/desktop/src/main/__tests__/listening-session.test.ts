@@ -1,5 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
 import type { AudioCaptureSource, CaptureOptions } from '@openbroca/audio-capture'
+import type { AppIdentity } from '@openbroca/app-identity'
+import type {
+  ListeningSessionBridgeState,
+  ListeningSessionState
+} from '../../shared/listening-session-state'
 import { ListeningSessionManager } from '../listening-session'
 
 function createDeferred<T>() {
@@ -72,11 +77,19 @@ class FakeCaptureSource implements AudioCaptureSource {
   }
 }
 
+function expectManagerState(
+  manager: ListeningSessionManager,
+  state: ListeningSessionState,
+  targetApp: AppIdentity | null = null
+): void {
+  expect(manager.getState()).toEqual({ state, targetApp } satisfies ListeningSessionBridgeState)
+}
+
 describe('ListeningSessionManager', () => {
   test('starts in idle state', () => {
     const manager = new ListeningSessionManager(new FakeCaptureSource())
 
-    expect(manager.getState()).toEqual({ status: 'idle' })
+    expectManagerState(manager, { status: 'idle' })
   })
 
   test('start transitions from idle to starting to listening', async () => {
@@ -84,8 +97,8 @@ describe('ListeningSessionManager', () => {
     const manager = new ListeningSessionManager(captureSource)
     const states: string[] = []
 
-    manager.subscribe((state) => {
-      states.push(state.status)
+    manager.subscribe((bridge) => {
+      states.push(bridge.state.status)
     })
 
     manager.start()
@@ -93,7 +106,7 @@ describe('ListeningSessionManager', () => {
     await captureSource.waitForCaptureStart()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     expect(states.slice(0, 2)).toEqual(['starting', 'listening'])
@@ -143,14 +156,14 @@ describe('ListeningSessionManager', () => {
 
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     manager.stop()
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
 
     await vi.waitFor(() => {
@@ -169,17 +182,17 @@ describe('ListeningSessionManager', () => {
     manager.start()
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     manager.stop()
 
-    expect(manager.getState()).toEqual({ status: 'stopping' })
+    expectManagerState(manager, { status: 'stopping' })
 
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
   })
 
@@ -192,7 +205,7 @@ describe('ListeningSessionManager', () => {
 
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     expect(captureSource.capture).toHaveBeenCalledTimes(1)
@@ -206,7 +219,7 @@ describe('ListeningSessionManager', () => {
     manager.stop()
     manager.stop()
 
-    expect(manager.getState()).toEqual({ status: 'idle' })
+    expectManagerState(manager, { status: 'idle' })
   })
 
   test('setup failures transition to error', async () => {
@@ -219,7 +232,7 @@ describe('ListeningSessionManager', () => {
     manager.start()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({
+      expectManagerState(manager, {
         status: 'error',
         message: 'device unavailable'
       })
@@ -233,13 +246,13 @@ describe('ListeningSessionManager', () => {
     manager.start()
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     captureSource.failWith(new Error('stream failed'))
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({
+      expectManagerState(manager, {
         status: 'error',
         message: 'stream failed'
       })
@@ -251,21 +264,21 @@ describe('ListeningSessionManager', () => {
     const manager = new ListeningSessionManager(captureSource)
     const states: string[] = []
 
-    manager.subscribe((state) => {
-      states.push(state.status)
+    manager.subscribe((bridge) => {
+      states.push(bridge.state.status)
     })
 
     manager.start()
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     manager.stop()
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
 
     expect(states).toContain('stopping')
@@ -282,14 +295,14 @@ describe('ListeningSessionManager', () => {
     manager.start()
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     manager.stop()
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
 
     await vi.waitFor(() => {
@@ -323,14 +336,14 @@ describe('ListeningSessionManager', () => {
     manager.start()
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     manager.stop()
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
 
     await vi.waitFor(() => {
@@ -358,7 +371,7 @@ describe('ListeningSessionManager', () => {
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
 
     expect(debugSpy).toHaveBeenCalledWith(
@@ -381,6 +394,185 @@ describe('ListeningSessionManager', () => {
     debugSpy.mockRestore()
   })
 
+  test('polls target app while the session is active and clears it when idle', async () => {
+    const captureSource = new FakeCaptureSource()
+    const getTargetApp = vi.fn().mockResolvedValue({
+      id: 'cursor',
+      displayName: 'Cursor',
+      platform: 'macos',
+      bundleId: 'com.todesktop.230313mzl4w4u92',
+      path: '/Applications/Cursor.app',
+      source: 'detected',
+      iconDataUrl: 'data:image/png;base64,cursor'
+    } satisfies AppIdentity)
+    const manager = new ListeningSessionManager(captureSource, {
+      getTargetApp,
+      targetAppPollIntervalMs: 5
+    })
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+
+    await vi.waitFor(() => {
+      expect(manager.getState().targetApp).toEqual(
+        expect.objectContaining({
+          id: 'cursor',
+          iconDataUrl: 'data:image/png;base64,cursor'
+        })
+      )
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    expect(getTargetApp).toHaveBeenCalled()
+  })
+
+  test('does not rebroadcast unchanged target app identities', async () => {
+    const captureSource = new FakeCaptureSource()
+    const getTargetApp = vi.fn().mockResolvedValue({
+      id: 'cursor',
+      displayName: 'Cursor',
+      platform: 'macos',
+      bundleId: 'com.todesktop.230313mzl4w4u92',
+      path: '/Applications/Cursor.app',
+      source: 'detected',
+      iconDataUrl: 'data:image/png;base64,cursor'
+    } satisfies AppIdentity)
+    const manager = new ListeningSessionManager(captureSource, {
+      getTargetApp,
+      targetAppPollIntervalMs: 5
+    })
+    const listener = vi.fn()
+
+    manager.subscribe(listener)
+    manager.start()
+    await captureSource.waitForCaptureStart()
+
+    await vi.waitFor(() => {
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetApp: expect.objectContaining({ id: 'cursor' })
+        })
+      )
+    })
+
+    const callsWithCursor = listener.mock.calls.filter(([bridge]) => bridge.targetApp?.id === 'cursor').length
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    const nextCallsWithCursor = listener.mock.calls.filter(([bridge]) => bridge.targetApp?.id === 'cursor').length
+
+    expect(nextCallsWithCursor).toBe(callsWithCursor)
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+  })
+
+  test('rebroadcasts when the same target app later gains an icon', async () => {
+    const captureSource = new FakeCaptureSource()
+    const getTargetApp = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected'
+      } satisfies AppIdentity)
+      .mockResolvedValue({
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      } satisfies AppIdentity)
+    const manager = new ListeningSessionManager(captureSource, {
+      getTargetApp,
+      targetAppPollIntervalMs: 5
+    })
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+
+    await vi.waitFor(() => {
+      expect(manager.getState().targetApp).toEqual(
+        expect.objectContaining({
+          id: 'cursor',
+          iconDataUrl: 'data:image/png;base64,cursor'
+        })
+      )
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+  })
+
+  test('does not rebroadcast the same app when only displayName changes', async () => {
+    const captureSource = new FakeCaptureSource()
+    const getTargetApp = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'cursor',
+        displayName: 'Cursor - file A',
+        platform: 'windows',
+        path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Cursor\\Cursor.exe',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      } satisfies AppIdentity)
+      .mockResolvedValue({
+        id: 'cursor',
+        displayName: 'Cursor - file B',
+        platform: 'windows',
+        path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Cursor\\Cursor.exe',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      } satisfies AppIdentity)
+    const manager = new ListeningSessionManager(captureSource, {
+      getTargetApp,
+      targetAppPollIntervalMs: 5
+    })
+    const listener = vi.fn()
+
+    manager.subscribe(listener)
+    manager.start()
+    await captureSource.waitForCaptureStart()
+
+    await vi.waitFor(() => {
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetApp: expect.objectContaining({ id: 'cursor' })
+        })
+      )
+    })
+
+    const callsWithCursor = listener.mock.calls.filter(([bridge]) => bridge.targetApp?.id === 'cursor').length
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    const nextCallsWithCursor = listener.mock.calls.filter(([bridge]) => bridge.targetApp?.id === 'cursor').length
+
+    expect(nextCallsWithCursor).toBe(callsWithCursor)
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+  })
+
   test('logs callback failures without blocking session shutdown', async () => {
     const captureSource = new FakeCaptureSource()
     const error = new Error('storage failed')
@@ -393,14 +585,14 @@ describe('ListeningSessionManager', () => {
     manager.start()
     await captureSource.waitForCaptureStart()
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'listening' })
+      expectManagerState(manager, { status: 'listening' })
     })
 
     manager.stop()
     captureSource.finish()
 
     await vi.waitFor(() => {
-      expect(manager.getState()).toEqual({ status: 'idle' })
+      expectManagerState(manager, { status: 'idle' })
     })
 
     await vi.waitFor(() => {
