@@ -29,17 +29,23 @@ describe('aboutMeStore', () => {
   })
 
   test('normalizes malformed persisted about me values during hydration', async () => {
+    storeGetQueryMock.mockResolvedValue(null)
+    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const { aboutMeStore } = await import('../about-me-store')
+    await aboutMeStore.getState().hydrate()
+
+    storeGetQueryMock.mockClear()
     storeGetQueryMock.mockResolvedValueOnce({
       nickname: '  Peiqiang  ',
       email: 123,
       occupation: ' Engineer ',
       bio: null
     })
-    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
 
-    const { aboutMeStore } = await import('../about-me-store')
     await aboutMeStore.getState().hydrate()
 
+    expect(storeGetQueryMock).toHaveBeenCalledTimes(1)
     expect(aboutMeStore.getState().data).toEqual({
       nickname: 'Peiqiang',
       email: '',
@@ -49,7 +55,7 @@ describe('aboutMeStore', () => {
   })
 
   test('normalizes external about me updates from store watch events', async () => {
-    storeGetQueryMock.mockResolvedValueOnce(null)
+    storeGetQueryMock.mockResolvedValue(null)
 
     let onData: ((newValue: unknown) => void) | undefined
     storeWatchSubscribeMock.mockImplementation((_input, opts) => {
@@ -58,6 +64,7 @@ describe('aboutMeStore', () => {
     })
 
     const { aboutMeStore } = await import('../about-me-store')
+    await aboutMeStore.getState().hydrate()
 
     onData?.({
       nickname: '  Taylor  ',

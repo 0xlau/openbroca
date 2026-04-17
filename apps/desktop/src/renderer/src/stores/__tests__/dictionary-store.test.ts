@@ -29,6 +29,13 @@ describe('dictionaryStore', () => {
   })
 
   test('normalizes malformed persisted dictionary values during hydration', async () => {
+    storeGetQueryMock.mockResolvedValue(null)
+    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const { dictionaryStore } = await import('../dictionary-store')
+    await dictionaryStore.getState().hydrate()
+
+    storeGetQueryMock.mockClear()
     storeGetQueryMock.mockResolvedValueOnce({
       entries: [
         { id: ' entry-1 ', term: ' Open Broca ', replacement: ' OpenBroca ', usageCount: 2 },
@@ -37,11 +44,10 @@ describe('dictionaryStore', () => {
         { id: 'entry-2', term: '   ', usageCount: 1 }
       ]
     })
-    storeWatchSubscribeMock.mockReturnValue({ unsubscribe: vi.fn() })
 
-    const { dictionaryStore } = await import('../dictionary-store')
     await dictionaryStore.getState().hydrate()
 
+    expect(storeGetQueryMock).toHaveBeenCalledTimes(1)
     expect(dictionaryStore.getState().data).toEqual({
       entries: [
         {
@@ -59,7 +65,7 @@ describe('dictionaryStore', () => {
   })
 
   test('normalizes external dictionary updates from store watch events', async () => {
-    storeGetQueryMock.mockResolvedValueOnce(null)
+    storeGetQueryMock.mockResolvedValue(null)
 
     let onData: ((newValue: unknown) => void) | undefined
     storeWatchSubscribeMock.mockImplementation((_input, opts) => {
@@ -68,6 +74,7 @@ describe('dictionaryStore', () => {
     })
 
     const { dictionaryStore } = await import('../dictionary-store')
+    await dictionaryStore.getState().hydrate()
 
     onData?.({
       entries: [

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { normalizeAboutMeSettings } from '../../shared/about-me'
-import { normalizeDictionarySettings } from '../../shared/dictionary'
+import { defaultDictionarySettings, normalizeDictionarySettings } from '../../shared/dictionary'
 
 describe('shared settings normalization', () => {
   test('normalizes about me fields to trimmed strings', () => {
@@ -43,6 +43,43 @@ describe('shared settings normalization', () => {
           term: 'open broca',
           replacement: 'OpenBroca'
         })
+      ]
+    })
+  })
+
+  test('returns a fresh empty dictionary object for invalid root payloads', () => {
+    const first = normalizeDictionarySettings(null)
+    first.entries.push({
+      id: 'mutated',
+      term: 'mutated',
+      usageCount: 1,
+      createdAt: '',
+      updatedAt: ''
+    })
+
+    const second = normalizeDictionarySettings(undefined)
+
+    expect(first).not.toBe(defaultDictionarySettings)
+    expect(second).not.toBe(defaultDictionarySettings)
+    expect(second).toEqual({ entries: [] })
+  })
+
+  test('normalizes invalid dictionary usageCount values to zero', () => {
+    expect(
+      normalizeDictionarySettings({
+        entries: [
+          { id: 'nan', term: 'NaN', usageCount: Number.NaN },
+          { id: 'inf', term: 'Infinity', usageCount: Number.POSITIVE_INFINITY },
+          { id: 'neg', term: 'Negative', usageCount: -10 },
+          { id: 'ok', term: 'Valid', usageCount: 5 }
+        ]
+      })
+    ).toEqual({
+      entries: [
+        expect.objectContaining({ id: 'nan', usageCount: 0 }),
+        expect.objectContaining({ id: 'inf', usageCount: 0 }),
+        expect.objectContaining({ id: 'neg', usageCount: 0 }),
+        expect.objectContaining({ id: 'ok', usageCount: 5 })
       ]
     })
   })

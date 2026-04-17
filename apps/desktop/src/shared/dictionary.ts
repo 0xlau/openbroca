@@ -19,6 +19,14 @@ function normalizeDictionaryEntryType(value: unknown): DictionaryEntry['type'] {
   return undefined
 }
 
+function normalizeUsageCount(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return value
+  }
+
+  return 0
+}
+
 export interface DictionaryEntry {
   id: string
   term: string
@@ -40,7 +48,7 @@ export const defaultDictionarySettings: DictionarySettings = {
 
 export function normalizeDictionarySettings(raw: unknown): DictionarySettings {
   if (!isRecord(raw) || !Array.isArray(raw.entries)) {
-    return defaultDictionarySettings
+    return { entries: [] }
   }
 
   const entries = raw.entries.flatMap((candidate) => {
@@ -68,7 +76,7 @@ export function normalizeDictionarySettings(raw: unknown): DictionarySettings {
       type: entryType,
       replacement: replacement || undefined,
       note: typeof candidate.note === 'string' ? candidate.note.trim() || undefined : undefined,
-      usageCount: typeof candidate.usageCount === 'number' ? candidate.usageCount : 0,
+      usageCount: normalizeUsageCount(candidate.usageCount),
       createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
       updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : ''
     }
