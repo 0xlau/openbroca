@@ -6,10 +6,27 @@ import { createStore } from 'zustand'
 import type { ListeningSessionBridgeState, ListeningSessionState } from '../../../../../shared/listening-session-state'
 
 vi.mock('@openbroca/ui', () => ({
-  Button: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
+  Button: ({
+    children,
+    onClick
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+  }) => <button onClick={onClick}>{children}</button>,
   cn: (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' '),
   LiveWaveform: ({ active }: { active: boolean }) => (
     <div data-testid="waveform" data-active={String(active)} />
+  ),
+  ShimmeringText: ({
+    children,
+    className
+  }: {
+    children: React.ReactNode
+    className?: string
+  }) => (
+    <span data-testid="shimmering-text" className={className}>
+      {children}
+    </span>
   )
 }))
 
@@ -22,7 +39,12 @@ vi.mock('@renderer/stores/microphone-store', () => ({
   }))
 }))
 
-async function renderForBridgeState(bridge: ListeningSessionBridgeState) {
+async function renderForBridgeState(
+  bridge: ListeningSessionBridgeState,
+  overrides: {
+    cancelProcessing?: ReturnType<typeof vi.fn>
+  } = {}
+) {
   const listeners = new Set<(next: ListeningSessionBridgeState) => void>()
   window.api = {
     ...window.api,
@@ -33,6 +55,7 @@ async function renderForBridgeState(bridge: ListeningSessionBridgeState) {
     },
     listeningSession: {
       getState: vi.fn().mockResolvedValue(bridge),
+      cancelProcessing: overrides.cancelProcessing ?? vi.fn().mockResolvedValue(undefined),
       onStateChange: vi.fn((callback) => {
         listeners.add(callback)
         return () => listeners.delete(callback)
@@ -44,12 +67,14 @@ async function renderForBridgeState(bridge: ListeningSessionBridgeState) {
   const view = render(<FloatListening />)
 
   await waitFor(() => {
-    expect(within(view.container).queryByTestId('waveform')).not.toBeNull()
+    expect(view.container.firstChild).not.toBeNull()
   })
 
   return {
-    waveform: within(view.container).getByTestId('waveform'),
     container: view.container,
+    get waveform() {
+      return within(view.container).queryByTestId('waveform')
+    },
     emit(next: ListeningSessionBridgeState) {
       for (const listener of listeners) {
         listener(next)
@@ -72,14 +97,13 @@ describe('FloatListening', () => {
     })
 
     await waitFor(() => {
-      expect(waveform.getAttribute('data-active')).toBe('true')
+      expect(waveform?.getAttribute('data-active')).toBe('true')
     })
   })
 
   test.each([
     { status: 'idle' },
     { status: 'starting' },
-    { status: 'stopping' },
     { status: 'error', message: 'boom' }
   ] satisfies ListeningSessionState[])('keeps the waveform inactive for %o', async (state) => {
     const { waveform } = await renderForBridgeState({
@@ -88,7 +112,81 @@ describe('FloatListening', () => {
     })
 
     await waitFor(() => {
-      expect(waveform.getAttribute('data-active')).toBe('false')
+      expect(waveform?.getAttribute('data-active')).toBe('false')
+    })
+  })
+
+  test('hides the waveform while stopping', async () => {
+    const { container } = await renderForBridgeState({
+      state: { status: 'stopping' },
+      targetApp: null
+    })
+
+    await waitFor(() => {
+      expect(within(container).queryByTestId('waveform')).toBeNull()
+    })
+  })
+
+  test('renders the processing shell for stopping and processing states', async () => {
+    const { container, emit } = await renderForBridgeState({
+      state: { status: 'stopping' },
+      targetApp: {
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      }
+    })
+
+    await waitFor(() => {
+      expect(within(container).getByText('Thinking...')).toBeTruthy()
+      expect(within(container).queryByTestId('waveform')).toBeNull()
+      expect(within(container).queryByTestId('float-target-app-icon')).toBeNull()
+      expect(within(container).queryByRole('button')).toBeNull()
+    })
+
+    emit({
+      state: { status: 'processing' },
+      targetApp: {
+        id: 'cursor',
+        displayName: 'Cursor',
+        platform: 'macos',
+        bundleId: 'com.todesktop.230313mzl4w4u92',
+        path: '/Applications/Cursor.app',
+        source: 'detected',
+        iconDataUrl: 'data:image/png;base64,cursor'
+      }
+    })
+
+    await waitFor(() => {
+      expect(within(container).getByText('Thinking...')).toBeTruthy()
+      expect(within(container).queryByTestId('waveform')).toBeNull()
+      expect(within(container).queryByTestId('float-target-app-icon')).toBeNull()
+      expect(within(container).getByRole('button')).toBeTruthy()
+    })
+  })
+
+  test('clicking cancel while processing invokes the preload bridge', async () => {
+    const cancelProcessing = vi.fn().mockResolvedValue(undefined)
+    const { container } = await renderForBridgeState(
+      {
+        state: { status: 'processing' },
+        targetApp: null
+      },
+      { cancelProcessing }
+    )
+
+    await waitFor(() => {
+      expect(within(container).getByRole('button')).toBeTruthy()
+    })
+
+    within(container).getByRole('button').click()
+
+    await waitFor(() => {
+      expect(cancelProcessing).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -177,7 +275,7 @@ describe('FloatListening', () => {
     })
 
     await waitFor(() => {
-      expect(waveform.getAttribute('data-active')).toBe('false')
+      expect(waveform?.getAttribute('data-active')).toBe('false')
     })
 
     emit({
@@ -186,7 +284,7 @@ describe('FloatListening', () => {
     })
 
     await waitFor(() => {
-      expect(waveform.getAttribute('data-active')).toBe('true')
+      expect(waveform?.getAttribute('data-active')).toBe('true')
     })
   })
 })
