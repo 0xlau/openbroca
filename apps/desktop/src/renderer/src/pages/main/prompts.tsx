@@ -43,7 +43,11 @@ function insertPlaceholderToken(
 export const Prompts: React.FC = () => {
   const { data: savedPrompts, isHydrated, update } = useStore(promptsStore)
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
+  const lastSyncedTemplateRef = React.useRef<string>(
+    resolveTemplateValue(promptsStore.getState().data.template)
+  )
   const [isSaving, setIsSaving] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
 
   const persistedTemplate = React.useMemo(
     () => resolveTemplateValue(savedPrompts.template),
@@ -65,20 +69,48 @@ export const Prompts: React.FC = () => {
       return
     }
 
+    // Only sync editor text when there are no local unsaved edits.
+    if (template !== lastSyncedTemplateRef.current) {
+      return
+    }
+
     setTemplate(persistedTemplate)
-  }, [isHydrated, persistedTemplate])
+  }, [isHydrated, persistedTemplate, template])
 
   const isDirty = isHydrated && template !== persistedTemplate
+
+  React.useEffect(() => {
+    if (!isHydrated || isSaving || isDirty) {
+      return
+    }
+
+    lastSyncedTemplateRef.current = persistedTemplate
+  }, [isHydrated, isDirty, isSaving, persistedTemplate])
 
   async function saveChanges() {
     if (!isDirty || isSaving) {
       return
     }
 
+    const previousPersistedTemplate = savedPrompts.template
+
     setIsSaving(true)
+    setSaveError(null)
 
     try {
       await update({ template })
+      setSaveError(null)
+    } catch (error) {
+      promptsStore.setState((state) => ({
+        ...state,
+        data: {
+          ...state.data,
+          template: previousPersistedTemplate
+        }
+      }))
+      setSaveError(
+        error instanceof Error ? error.message : 'Failed to save prompt template. Please try again.'
+      )
     } finally {
       setIsSaving(false)
     }
@@ -125,7 +157,16 @@ export const Prompts: React.FC = () => {
           </TypographyMuted>
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => setTemplate(defaultPromptTemplateText)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setTemplate(defaultPromptTemplateText)
+              if (saveError) {
+                setSaveError(null)
+              }
+            }}
+          >
             Use default template
           </Button>
           {isDirty ? (
@@ -137,6 +178,11 @@ export const Prompts: React.FC = () => {
       </div>
 
       <CardContent className="space-y-2 px-0">
+        {saveError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {saveError}
+          </p>
+        ) : null}
         <label htmlFor="prompt-template-editor" className="text-sm font-medium">
           Prompt template
         </label>
@@ -145,7 +191,12 @@ export const Prompts: React.FC = () => {
           ref={textareaRef}
           value={template}
           className="min-h-80 font-mono"
-          onChange={(event) => setTemplate(event.target.value)}
+          onChange={(event) => {
+            setTemplate(event.target.value)
+            if (saveError) {
+              setSaveError(null)
+            }
+          }}
         />
         <TypographyMuted className="text-xs">
           Saves are permissive. Unknown placeholders are allowed.

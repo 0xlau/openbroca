@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createStore } from 'zustand'
 import type { PersistedStoreState } from '@renderer/stores/create-persisted-store'
 
@@ -116,6 +116,63 @@ describe('Prompts', () => {
     })
   })
 
+  test('shows save error and keeps dirty state when update is rejected', async () => {
+    promptsStoreMock = createPromptsStore({ template: 'Persisted template' })
+    const rejectedUpdate = vi.fn(async () => {
+      throw new Error('Failed to save prompt template')
+    })
+    promptsStoreMock.setState((state) => ({ ...state, update: rejectedUpdate }))
+    const { Prompts } = await import('../prompts')
+
+    render(<Prompts />)
+
+    fireEvent.change(screen.getByLabelText('Prompt template'), {
+      target: { value: 'Local unsaved edit' }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(rejectedUpdate).toHaveBeenCalledWith({
+        template: 'Local unsaved edit'
+      })
+    })
+
+    expect(await screen.findByText('Failed to save prompt template')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy()
+    expect((screen.getByLabelText('Prompt template') as HTMLTextAreaElement).value).toBe(
+      'Local unsaved edit'
+    )
+  })
+
+  test('does not overwrite unsaved local edits when persisted state changes externally', async () => {
+    promptsStoreMock = createPromptsStore({ template: 'Persisted template' })
+    const { Prompts } = await import('../prompts')
+
+    render(<Prompts />)
+
+    fireEvent.change(screen.getByLabelText('Prompt template'), {
+      target: { value: 'Locally edited draft' }
+    })
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy()
+
+    act(() => {
+      promptsStoreMock.setState((state) => ({
+        ...state,
+        data: { template: 'Server updated template' }
+      }))
+    })
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('Prompt template') as HTMLTextAreaElement).value).toBe(
+        'Locally edited draft'
+      )
+    })
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy()
+  })
+
   test('resets editor to shared default and requires explicit save for persistence', async () => {
     promptsStoreMock = createPromptsStore({ template: 'Custom persisted template' })
     const { Prompts } = await import('../prompts')
@@ -165,6 +222,10 @@ describe('Prompts', () => {
     fireEvent.click(dictionaryButton)
 
     expect(textarea.value).toBe('Hello {{dictionary}}World')
+    await waitFor(() => {
+      expect(textarea.selectionStart).toBe(20)
+      expect(textarea.selectionEnd).toBe(20)
+    })
 
     const originalSelectionStart = Object.getOwnPropertyDescriptor(
       HTMLTextAreaElement.prototype,
@@ -175,27 +236,29 @@ describe('Prompts', () => {
       'selectionEnd'
     )
 
-    Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', {
-      configurable: true,
-      get() {
-        return null
-      }
-    })
-    Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionEnd', {
-      configurable: true,
-      get() {
-        return null
-      }
-    })
+    try {
+      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', {
+        configurable: true,
+        get() {
+          return null
+        }
+      })
+      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionEnd', {
+        configurable: true,
+        get() {
+          return null
+        }
+      })
 
-    fireEvent.click(screen.getByRole('button', { name: '{{raw_transcript}}' }))
-    expect(textarea.value).toBe('Hello {{dictionary}}World{{raw_transcript}}')
-
-    if (originalSelectionStart) {
-      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', originalSelectionStart)
-    }
-    if (originalSelectionEnd) {
-      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionEnd', originalSelectionEnd)
+      fireEvent.click(screen.getByRole('button', { name: '{{raw_transcript}}' }))
+      expect(textarea.value).toBe('Hello {{dictionary}}World{{raw_transcript}}')
+    } finally {
+      if (originalSelectionStart) {
+        Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', originalSelectionStart)
+      }
+      if (originalSelectionEnd) {
+        Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionEnd', originalSelectionEnd)
+      }
     }
   })
 
