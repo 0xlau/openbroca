@@ -242,7 +242,7 @@ const postRecordingPipeline = new PostRecordingPipeline({
 const listeningSession = new ListeningSessionManager(captureSource, {
   getFrontmostAppSnapshot: () => appIdentityService.getFrontmostApp(),
   getTargetApp: () => focusedInputAppService.getFocusedInputApp(),
-  onRecordingComplete: (recording, signal) => void postRecordingPipeline.process(recording, { signal })
+  onRecordingComplete: (recording, signal) => postRecordingPipeline.process(recording, { signal })
 })
 
 app.whenReady().then(() => {
