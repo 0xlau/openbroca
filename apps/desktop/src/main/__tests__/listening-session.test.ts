@@ -170,7 +170,8 @@ describe('ListeningSessionManager', () => {
       expect(onRecordingComplete).toHaveBeenCalledWith(
         expect.objectContaining({
           format: { sampleRate: 48000, channels: 1, bitDepth: 16 }
-        })
+        }),
+        expect.any(AbortSignal)
       )
     })
   })
@@ -190,6 +191,123 @@ describe('ListeningSessionManager', () => {
     expectManagerState(manager, { status: 'stopping' })
 
     captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+  })
+
+  test('keeps the session alive in processing until recording completion settles', async () => {
+    const captureSource = new FakeCaptureSource()
+    const completion = createDeferred<void>()
+    const states: string[] = []
+    const onRecordingComplete = vi.fn().mockImplementation(async (_recording, signal: AbortSignal) => {
+      expect(signal.aborted).toBe(false)
+      await completion.promise
+    })
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    manager.subscribe((bridge) => {
+      states.push(bridge.state.status)
+    })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    expect(onRecordingComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunks: [expect.any(Uint8Array)]
+      }),
+      expect.any(AbortSignal)
+    )
+
+    completion.resolve()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    expect(states).toEqual(['starting', 'listening', 'stopping', 'processing', 'idle'])
+  })
+
+  test('cancelProcessing aborts post-recording work and returns to idle', async () => {
+    const captureSource = new FakeCaptureSource()
+    const processingSignal = createDeferred<AbortSignal>()
+    const completion = createDeferred<void>()
+    const onRecordingComplete = vi.fn().mockImplementation(async (_recording, signal: AbortSignal) => {
+      processingSignal.resolve(signal)
+      await completion.promise
+    })
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    const signal = await processingSignal.promise
+
+    manager.cancelProcessing()
+
+    await vi.waitFor(() => {
+      expect(signal.aborted).toBe(true)
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    completion.resolve()
+  })
+
+  test('repeated start while processing is ignored', async () => {
+    const captureSource = new FakeCaptureSource()
+    const completion = createDeferred<void>()
+    const onRecordingComplete = vi.fn().mockImplementation(async () => {
+      await completion.promise
+    })
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'processing' })
+    })
+
+    manager.start()
+
+    expect(captureSource.capture).toHaveBeenCalledTimes(1)
+    expectManagerState(manager, { status: 'processing' })
+
+    completion.resolve()
 
     await vi.waitFor(() => {
       expectManagerState(manager, { status: 'idle' })
@@ -311,7 +429,8 @@ describe('ListeningSessionManager', () => {
           chunks: [expect.any(Uint8Array)],
           durationMs: expect.any(Number),
           format: { sampleRate: 16000, channels: 1, bitDepth: 16 }
-        })
+        }),
+        expect.any(AbortSignal)
       )
     })
   })
@@ -353,7 +472,8 @@ describe('ListeningSessionManager', () => {
             id: 'com.recorded.app',
             bundleId: 'com.recorded.bundle'
           })
-        })
+        }),
+        expect.any(AbortSignal)
       )
     })
   })
@@ -394,8 +514,12 @@ describe('ListeningSessionManager', () => {
     debugSpy.mockRestore()
   })
 
-  test('polls target app while the session is active and clears it when idle', async () => {
+  test('polls target app while the session is busy, including processing, and clears it when idle', async () => {
     const captureSource = new FakeCaptureSource()
+    const completion = createDeferred<void>()
+    const onRecordingComplete = vi.fn().mockImplementation(async () => {
+      await completion.promise
+    })
     const getTargetApp = vi.fn().mockResolvedValue({
       id: 'cursor',
       displayName: 'Cursor',
@@ -406,9 +530,12 @@ describe('ListeningSessionManager', () => {
       iconDataUrl: 'data:image/png;base64,cursor'
     } satisfies AppIdentity)
     const manager = new ListeningSessionManager(captureSource, {
+      onRecordingComplete,
       getTargetApp,
       targetAppPollIntervalMs: 5
     })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
 
     manager.start()
     await captureSource.waitForCaptureStart()
@@ -422,8 +549,27 @@ describe('ListeningSessionManager', () => {
       )
     })
 
+    const callsBeforeStop = getTargetApp.mock.calls.length
+
     manager.stop()
     captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(
+        manager,
+        { status: 'processing' },
+        expect.objectContaining({
+          id: 'cursor',
+          iconDataUrl: 'data:image/png;base64,cursor'
+        }) as AppIdentity
+      )
+    })
+
+    await vi.waitFor(() => {
+      expect(getTargetApp.mock.calls.length).toBeGreaterThan(callsBeforeStop)
+    })
+
+    completion.resolve()
 
     await vi.waitFor(() => {
       expectManagerState(manager, { status: 'idle' })

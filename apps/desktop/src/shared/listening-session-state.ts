@@ -5,6 +5,7 @@ export type ListeningSessionState =
   | { status: 'starting' }
   | { status: 'listening' }
   | { status: 'stopping' }
+  | { status: 'processing' }
   | { status: 'error'; message: string }
 
 export type ListeningSessionBridgeState = {
@@ -21,6 +22,19 @@ export function isListeningSessionActive(state: ListeningSessionState): boolean 
   return state.status === 'listening'
 }
 
+export function isListeningSessionBusy(state: ListeningSessionState): boolean {
+  return (
+    state.status === 'starting' ||
+    state.status === 'listening' ||
+    state.status === 'stopping' ||
+    state.status === 'processing'
+  )
+}
+
+export function isProcessingShellState(state: ListeningSessionState): boolean {
+  return state.status === 'stopping' || state.status === 'processing'
+}
+
 export function isTargetAppPollingState(state: ListeningSessionState): boolean {
-  return state.status === 'starting' || state.status === 'listening' || state.status === 'stopping'
+  return isListeningSessionBusy(state)
 }

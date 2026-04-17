@@ -2,6 +2,7 @@ import type { AudioCaptureSource, CaptureOptions } from '@openbroca/audio-captur
 import type { AppIdentity } from '@openbroca/app-identity'
 import {
   INITIAL_LISTENING_SESSION_BRIDGE_STATE,
+  isListeningSessionBusy,
   isTargetAppPollingState,
   type ListeningSessionBridgeState,
   type ListeningSessionState
@@ -13,7 +14,7 @@ interface SessionOptions {
 }
 
 interface ListeningSessionOptions {
-  onRecordingComplete?: (recording: CapturedRecording) => Promise<void> | void
+  onRecordingComplete?: (recording: CapturedRecording, signal: AbortSignal) => Promise<void> | void
   getFrontmostAppSnapshot?: () => Promise<AppIdentity | null>
   getTargetApp?: () => Promise<AppIdentity | null>
   targetAppPollIntervalMs?: number
@@ -59,6 +60,8 @@ function sameAppIdentity(left: AppIdentity | null, right: AppIdentity | null): b
 
 class ListeningSessionManager {
   private abortController: AbortController | null = null
+  private processingAbortController: AbortController | null = null
+  private processingGeneration = 0
   private state: ListeningSessionState = { status: 'idle' }
   private targetApp: AppIdentity | null = null
   private bridgeState: ListeningSessionBridgeState = INITIAL_LISTENING_SESSION_BRIDGE_STATE
@@ -88,11 +91,7 @@ class ListeningSessionManager {
       status: this.state.status,
       deviceId: options?.deviceId ?? null
     })
-    if (
-      this.state.status === 'starting' ||
-      this.state.status === 'listening' ||
-      this.state.status === 'stopping'
-    ) {
+    if (isListeningSessionBusy(this.state)) {
       console.debug('[voice-debug] listening start ignored', {
         status: this.state.status
       })
@@ -119,12 +118,27 @@ class ListeningSessionManager {
       return
     }
 
-    if (this.state.status === 'stopping') {
+    if (this.state.status === 'stopping' || this.state.status === 'processing') {
       return
     }
 
     this.setSessionState({ status: 'stopping' })
     this.abortController?.abort()
+  }
+
+  cancelProcessing(): void {
+    console.debug('[voice-debug] processing cancel requested', {
+      status: this.state.status
+    })
+    if (this.state.status !== 'processing') {
+      return
+    }
+
+    this.processingGeneration += 1
+    const controller = this.processingAbortController
+    this.processingAbortController = null
+    controller?.abort()
+    this.setSessionState({ status: 'idle' })
   }
 
   private async run(opts: SessionOptions & { signal: AbortSignal }): Promise<void> {
@@ -167,7 +181,6 @@ class ListeningSessionManager {
       console.debug('[voice-debug] capture stream ended', {
         chunkCount: chunks.length
       })
-      this.setSessionState({ status: 'idle' })
     } catch (error) {
       console.debug('[voice-debug] listening run failed', {
         aborted: opts.signal.aborted,
@@ -189,11 +202,42 @@ class ListeningSessionManager {
       }
     }
 
-    if (chunks.length > 0) {
-      const endedAt = new Date().toISOString()
-      const endedAtMs = Date.now()
-      const durationMs = Math.max(0, endedAtMs - startedAtMs)
-      let frontmostAppSnapshot: AppIdentity | null = null
+    if (chunks.length === 0) {
+      this.setSessionState({ status: 'idle' })
+      return
+    }
+
+    const endedAt = new Date().toISOString()
+    const endedAtMs = Date.now()
+    const durationMs = Math.max(0, endedAtMs - startedAtMs)
+
+    this.beginProcessing({
+      format,
+      chunks,
+      startedAt,
+      endedAt,
+      durationMs,
+      frontmostAppSnapshot: null
+    })
+  }
+
+  private beginProcessing(recording: CapturedRecording): void {
+    const generation = ++this.processingGeneration
+    const controller = new AbortController()
+    this.processingAbortController = controller
+    this.setSessionState({ status: 'processing' })
+
+    void this.completeRecording(recording, generation, controller)
+  }
+
+  private async completeRecording(
+    recording: CapturedRecording,
+    generation: number,
+    controller: AbortController
+  ): Promise<void> {
+    let frontmostAppSnapshot: AppIdentity | null = null
+
+    try {
       if (this.options.getFrontmostAppSnapshot) {
         try {
           frontmostAppSnapshot = await this.options.getFrontmostAppSnapshot()
@@ -203,24 +247,34 @@ class ListeningSessionManager {
           })
         }
       }
+
+      if (generation !== this.processingGeneration || controller.signal.aborted) {
+        return
+      }
+
       console.debug('[voice-debug] dispatching completed recording', {
-        chunkCount: chunks.length,
-        durationMs,
+        chunkCount: recording.chunks.length,
+        durationMs: recording.durationMs,
         frontmostAppId: frontmostAppSnapshot?.id ?? null
       })
 
-      void Promise.resolve(
-        this.options.onRecordingComplete?.({
-          format,
-          chunks,
-          startedAt,
-          endedAt,
-          durationMs,
+      await this.options.onRecordingComplete?.(
+        {
+          ...recording,
           frontmostAppSnapshot
-        })
-      ).catch((completionError) => {
-        console.error('[listening-session] recording completion failed', completionError)
-      })
+        },
+        controller.signal
+      )
+    } catch (completionError) {
+      console.error('[listening-session] recording completion failed', completionError)
+    } finally {
+      if (this.processingAbortController === controller) {
+        this.processingAbortController = null
+      }
+
+      if (generation === this.processingGeneration && this.state.status === 'processing') {
+        this.setSessionState({ status: 'idle' })
+      }
     }
   }
 
