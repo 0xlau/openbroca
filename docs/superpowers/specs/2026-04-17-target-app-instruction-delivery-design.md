@@ -57,6 +57,67 @@ Current gaps:
 - user feedback for delivery outcomes does not exist
 - auto-enter currently assumes text is already present in the target app, but the app never injects the final text itself
 
+## Codebase Anchors
+
+This design is grounded in the current desktop code layout.
+
+### Prompt Construction Already Has A Matched-Instruction Slot
+
+`buildCleanupSystemPrompt()` in `apps/desktop/src/main/cleanup-prompt.ts` already accepts `matchedInstructionText`.
+
+The prompt-template runtime in `apps/desktop/src/shared/prompt-template.ts` already supports:
+
+- `{{matched_instructions}}`
+- `{{matched_instructions.text}}`
+
+This means the design does not require a new prompt-template primitive. It only requires the runtime to feed the correct instruction text based on target-app matching.
+
+### `targetApp` Is Already A First-Class Bridge State
+
+`ListeningSessionManager` already publishes `ListeningSessionBridgeState` as:
+
+- `state`
+- `targetApp`
+
+That bridge is already exposed through preload, consumed by `listeningSessionStore`, and rendered by `FloatListening`.
+
+This is important because the app already has a concrete runtime notion of "current editable target app." The design should reuse that exact semantic instead of introducing a second one for instructions or delivery.
+
+### Window Infrastructure Is Currently Split Between Main And Floating Only
+
+The current `windows` exports only:
+
+- `createMainWindow`
+- `createFloatingWindow`
+- `getFloatingWindowPosition`
+
+`window-manager.ts` is also currently specialized around main-window plus floating-window concerns. It has no generic notification surface.
+
+That makes a parallel `notify-window` plus `notify-windows.ts` controller the cleaner fit, instead of overloading the existing floating-session controller or the current `WindowManager`.
+
+### History Debug Has No Delivery Slot Yet
+
+`apps/desktop/src/shared/voice-history.ts` defines `VoiceHistoryDebugData` with:
+
+- ASR request/response fields
+- LLM request/response fields
+- timeline
+- errors
+
+`apps/desktop/src/main/history-repository.ts` seeds those fields during `create()`.
+
+There is currently no `delivery` sub-object, so this design requires an explicit debug-schema extension rather than relying on ad hoc fields inside existing LLM summaries.
+
+### Auto-Enter And Focused-Input Heuristics Already Have Focused Tests
+
+The repo already has focused tests for:
+
+- send-key behavior in `apps/desktop/src/main/__tests__/auto-enter.test.ts`
+- macOS and Windows editable-control heuristics in `apps/desktop/src/main/__tests__/focused-input-platforms.test.ts`
+- floating-window placement and single-window behavior in `apps/desktop/src/main/__tests__/window-manager.test.ts`
+
+That existing test shape is the right model for the new delivery and notify-window coverage.
+
 ## Product Decisions
 
 The following decisions are fixed by this design:
@@ -173,6 +234,11 @@ New behavior:
 - after successful LLM completion, call `FinalTextDeliveryService`
 - store structured delivery debug data
 
+Important code-level detail:
+
+- `buildCleanupSystemPrompt()` already sanitizes and injects `matchedInstructionText`
+- the implementation should continue using that existing prompt builder instead of composing a second prompt path inside the pipeline
+
 `PostRecordingPipeline` no longer directly models the final behavior as "LLM success plus optional auto-enter only." It must model the full delivery outcome.
 
 ### 4. `FinalTextDeliveryService`
@@ -217,6 +283,21 @@ Responsibilities:
 
 The first implementation only needs clipboard-fallback feedback, but the UI contract should already allow future button rows.
 
+### 6. Notify Bridge State
+
+The notify window should follow the same broad shape as the listening-session bridge:
+
+- preload exposes a small `notifyWindow` API
+- the notify renderer page consumes a dedicated store
+- main process pushes state updates into that window
+
+Recommended bridge surface:
+
+- `getState()`
+- `onStateChange()`
+
+This is a better fit than hard-coding text into the route or trying to render notifications inside the main app shell. The current renderer root only mounts `ThemeProvider`, `TRPCProvider`, `TooltipProvider`, and `RouterProvider`; there is no existing cross-window notification host to extend.
+
 ## Delivery Policy
 
 ### Prompt-Time Rule Selection
@@ -232,6 +313,8 @@ When recording completes:
    - build the standard cleanup prompt without matched instruction content
 
 The prompt-time matched rule does not change afterward, even if the user changes focus while ASR or LLM work is in progress.
+
+Because the prompt runtime already supports `{{matched_instructions}}`, there is no settings migration here. The runtime input changes, not the prompt-template schema.
 
 ### Delivery-Time Resolution
 
@@ -324,6 +407,12 @@ First-version use case:
 
 The notify window must not block keyboard focus from returning to the third-party app.
 
+Window behavior should mirror the floating window where it matters:
+
+- transparent frameless utility-style surface
+- `showInactive()` style presentation where supported so the third-party app retains focus
+- its own route, likely parallel to `#/float/listening`, instead of being rendered under `MainRoot`
+
 ## Data Model And Debug
 
 History debug data should gain a dedicated delivery section.
@@ -354,6 +443,12 @@ Guidelines:
 - `status` distinguishes normal success from fallback behavior
 
 This data belongs under the existing history debug object instead of becoming top-level history summary fields.
+
+Concrete repo impact:
+
+- `apps/desktop/src/shared/voice-history.ts` must gain the new delivery type
+- `apps/desktop/src/main/history-repository.ts` must seed `delivery` in its default debug object
+- pipeline patches should then update `debug.delivery` instead of hiding delivery outcomes inside `llmResponseSummary`
 
 ## Failure Model
 
@@ -420,10 +515,18 @@ Recommended file touch points:
 - `apps/desktop/src/main/instructions/matcher.ts`
 - `apps/desktop/src/main/post-recording-pipeline.ts`
 - `apps/desktop/src/main/index.ts`
+- `apps/desktop/src/main/history-repository.ts`
 - `apps/desktop/src/main/windows/index.ts`
+- `apps/desktop/src/main/windows/floating-window.ts` as the reference for notify-window behavior
+- `apps/desktop/src/main/window-manager.ts` only if a truly shared utility is extracted; otherwise keep notify control separate
+- `apps/desktop/src/preload/index.ts`
+- `apps/desktop/src/preload/index.d.ts`
 - new delivery service files under `apps/desktop/src/main`
 - new notify-window files under `apps/desktop/src/main/windows`
 - new notify renderer page and route under `apps/desktop/src/renderer/src/pages/notify`
+- new notify renderer store under `apps/desktop/src/renderer/src/stores`
+- `apps/desktop/src/renderer/src/router/index.tsx`
+- `apps/desktop/src/shared/voice-history.ts`
 
 The implementation should stay scoped to the desktop app and should not change `Instructions` editor UX unless a wiring gap forces it.
 
