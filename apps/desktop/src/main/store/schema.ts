@@ -1,4 +1,5 @@
 import type { InstructionsSettings } from '../../shared/instructions'
+import type { PromptTemplateSettings } from '../../shared/prompt-template'
 import type { ProviderSettings } from '../../shared/provider-auth'
 import type { VoiceHistoryState } from '../../shared/voice-history'
 
@@ -8,6 +9,7 @@ export interface StoreSchema {
   aboutMe: Record<string, unknown>
   dictionary: Record<string, unknown>
   instructions: InstructionsSettings
+  prompts: PromptTemplateSettings
   providers: ProviderSettings
   settings: Record<string, unknown>
   voiceHistory: VoiceHistoryState

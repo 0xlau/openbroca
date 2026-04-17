@@ -44,6 +44,7 @@ describe('storeRouter', () => {
     const caller = storeRouter.createCaller({ store } as unknown as Context)
 
     await caller.set({ key: 'settings', value: { theme: 'light' } })
+    await caller.set({ key: 'prompts', value: { template: 'Keep this exactly' } })
     await caller.set({
       key: 'instructions',
       value: {
@@ -67,6 +68,7 @@ describe('storeRouter', () => {
     })
 
     await expect(caller.get({ key: 'settings' })).resolves.toEqual({ theme: 'light' })
+    await expect(caller.get({ key: 'prompts' })).resolves.toEqual({ template: 'Keep this exactly' })
     await expect(caller.get({ key: 'instructions' })).resolves.toEqual({
       rules: [
         {
@@ -257,6 +259,33 @@ describe('storeRouter', () => {
           updatedAt: ''
         }
       ]
+    })
+  })
+
+  test('normalizes prompt template payloads while preserving template whitespace', async () => {
+    const store = new MemoryStore()
+    const caller = storeRouter.createCaller({ store } as unknown as Context)
+
+    await caller.set({
+      key: 'prompts',
+      value: {
+        template: '  Keep leading and trailing spaces  '
+      }
+    })
+
+    await expect(caller.get({ key: 'prompts' })).resolves.toEqual({
+      template: '  Keep leading and trailing spaces  '
+    })
+
+    await caller.set({
+      key: 'prompts',
+      value: {
+        template: 123
+      }
+    })
+
+    await expect(caller.get({ key: 'prompts' })).resolves.toEqual({
+      template: ''
     })
   })
 })

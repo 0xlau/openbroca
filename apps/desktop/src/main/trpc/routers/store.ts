@@ -3,12 +3,14 @@ import { z } from 'zod'
 import { normalizeAboutMeSettings } from '../../../shared/about-me'
 import { normalizeDictionarySettings } from '../../../shared/dictionary'
 import { normalizeInstructionsSettings } from '../../../shared/instructions'
+import { normalizePromptTemplateSettings } from '../../../shared/prompt-template'
 import { publicProcedure, router } from '../trpc'
 
 const allowedStoreKeys = [
   'aboutMe',
   'dictionary',
   'instructions',
+  'prompts',
   'providers',
   'settings',
   'microphone',
@@ -38,6 +40,10 @@ function normalizeStoreValue(key: AllowedStoreKey, value: unknown): unknown {
 
   if (key === 'dictionary') {
     return normalizeDictionarySettings(value)
+  }
+
+  if (key === 'prompts') {
+    return normalizePromptTemplateSettings(value)
   }
 
   return value

@@ -1,5 +1,6 @@
 import ElectronStore from 'electron-store'
 import { defaultInstructionsSettings } from '../../shared/instructions'
+import { defaultPromptTemplateSettings } from '../../shared/prompt-template'
 import { defaultProviderSettings } from '../../shared/provider-auth'
 import { defaultVoiceHistoryState } from '../../shared/voice-history'
 import type { StoreSchema } from './schema'
@@ -13,6 +14,7 @@ export const store = new Store<StoreSchema>({
     aboutMe: {},
     dictionary: {},
     instructions: defaultInstructionsSettings,
+    prompts: defaultPromptTemplateSettings,
     providers: defaultProviderSettings,
     settings: {},
     voiceHistory: defaultVoiceHistoryState
