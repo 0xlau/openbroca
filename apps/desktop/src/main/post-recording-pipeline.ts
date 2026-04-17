@@ -469,6 +469,7 @@ export class PostRecordingPipeline {
         finishReason: result.finishReason,
         contentLength: result.content.length
       })
+      throwIfProcessingAborted()
 
       if (!hasMeaningfulText(result.content)) {
         const message = 'LLM returned empty content'
@@ -501,8 +502,6 @@ export class PostRecordingPipeline {
         return
       }
 
-      pushTimeline('llm', 'completed')
-
       const autoEnterMode = matchedInstruction?.autoEnterMode ?? 'off'
       const autoEnterRequested = autoEnterMode !== 'off'
       let autoEnterSummary: Record<string, unknown> = {
@@ -511,6 +510,7 @@ export class PostRecordingPipeline {
         triggered: false
       }
       if (autoEnterMode !== 'off') {
+        throwIfProcessingAborted()
         if (this.deps.autoEnterService) {
           try {
             await this.deps.autoEnterService.triggerAutoEnter(autoEnterMode)
@@ -520,6 +520,9 @@ export class PostRecordingPipeline {
               triggered: true
             }
           } catch (error) {
+            if (isPipelineAbortError(error, signal)) {
+              throw error
+            }
             const message = error instanceof Error ? error.message : String(error)
             autoEnterSummary = {
               mode: autoEnterMode,
@@ -541,6 +544,8 @@ export class PostRecordingPipeline {
         }
       }
 
+      throwIfProcessingAborted()
+      pushTimeline('llm', 'completed')
       this.deps.historyRepository.update(record.id, {
         status: 'completed',
         finalText: result.content,

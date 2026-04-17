@@ -808,6 +808,119 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
+  test('does not finalize as completed when cancelled after llm resolves and before auto enter', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-late-cancel-llm' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/late-cancel-llm.wav',
+        fileName: 'late-cancel-llm.wav',
+        byteLength: 64
+      })
+    }
+    const controller = new AbortController()
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockImplementation(async () => {
+        queueMicrotask(() => controller.abort())
+        return {
+          content: 'Send this now.',
+          finishReason: 'stop',
+          usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+        }
+      })
+    }
+    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnterMode: 'enter'
+      }),
+      autoEnterService: {
+        triggerAutoEnter
+      }
+    } as never)
+
+    await pipeline.process(
+      {
+        format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+        chunks: [new Uint8Array([1, 2])],
+        startedAt: '2026-04-02T10:00:00.000Z',
+        endedAt: '2026-04-02T10:00:01.000Z',
+        durationMs: 1000
+      },
+      { signal: controller.signal }
+    )
+
+    const lastPatch = repository.update.mock.lastCall?.[1]
+
+    expect(triggerAutoEnter).not.toHaveBeenCalled()
+    expect(
+      repository.update.mock.calls.some(([, patch]) => patch?.status === 'completed')
+    ).toBe(false)
+    expect(lastPatch).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'llm',
+        failureMessage: 'Cancelled by user',
+        debug: expect.objectContaining({
+          rawTranscriptionText: 'send this now',
+          llmRequest: expect.objectContaining({
+            model: 'gpt-5.2-codex',
+            matchedInstruction: expect.objectContaining({
+              ruleId: 'rule-chat',
+              autoEnterMode: 'enter'
+            })
+          }),
+          errors: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'llm',
+              message: 'Cancelled by user'
+            })
+          ]),
+          timeline: expect.arrayContaining([
+            expect.objectContaining({
+              stage: 'asr',
+              status: 'completed'
+            }),
+            expect.objectContaining({
+              stage: 'llm',
+              status: 'started'
+            }),
+            expect.objectContaining({
+              stage: 'llm',
+              status: 'failed',
+              message: 'Cancelled by user'
+            })
+          ])
+        })
+      })
+    )
+  })
+
   test('records matched instruction metadata and triggers auto enter after success', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-auto-enter' })),
