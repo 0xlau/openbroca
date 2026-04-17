@@ -48,7 +48,13 @@ export const FloatListening: React.FC = () => {
 
         {showProcessing ? (
           <div className="flex min-w-0 items-center gap-3">
-            <ShimmeringText className="text-xs text-muted-foreground">Thinking...</ShimmeringText>
+            <ShimmeringText
+              text="Thinking..."
+              className="text-xs"
+              startOnView={false}
+              color="var(--muted-foreground)"
+              shimmerColor="var(--foreground)"
+            />
           </div>
         ) : (
           <LiveWaveform

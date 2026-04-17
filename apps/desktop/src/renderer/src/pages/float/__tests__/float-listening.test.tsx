@@ -24,14 +24,14 @@ vi.mock('@openbroca/ui', () => ({
     <div data-testid="waveform" data-active={String(active)} />
   ),
   ShimmeringText: ({
-    children,
+    text,
     className
   }: {
-    children: React.ReactNode
+    text: string
     className?: string
   }) => (
     <span data-testid="shimmering-text" className={className}>
-      {children}
+      {text}
     </span>
   )
 }))

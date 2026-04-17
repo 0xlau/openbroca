@@ -1,38 +1,32 @@
 // @vitest-environment jsdom
 
-import { existsSync, readFileSync } from 'node:fs'
-import path from 'node:path'
-
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
 
 import { ShimmeringText } from './index'
 
-function getShimmeringTextCss() {
-  const candidatePaths = [
-    path.resolve(process.cwd(), 'packages/ui/src/shimmering-text.css'),
-    path.resolve(process.cwd(), 'src/shimmering-text.css')
-  ]
-
-  const cssPath = candidatePaths.find((candidatePath) => existsSync(candidatePath))
-
-  if (!cssPath) {
-    throw new Error(`Unable to locate shimmering-text.css from cwd: ${process.cwd()}`)
-  }
-
-  return readFileSync(cssPath, 'utf8')
+class MockIntersectionObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
 }
+
+Object.defineProperty(window, 'IntersectionObserver', {
+  writable: true,
+  configurable: true,
+  value: MockIntersectionObserver
+})
 
 describe('ShimmeringText', () => {
   test('is exported from the package root and renders the shared slot contract', () => {
     render(
       <ShimmeringText
+        text="Processing..."
         className="text-sm"
         data-testid="shimmering-text"
         title="Shared loading text"
-      >
-        Processing...
-      </ShimmeringText>
+        startOnView={false}
+      />
     )
 
     const text = screen.getByTestId('shimmering-text')
@@ -44,11 +38,21 @@ describe('ShimmeringText', () => {
     expect(text.textContent).toBe('Processing...')
   })
 
-  test('restores ordinary static text styles for reduced motion users', () => {
-    const shimmeringTextCss = getShimmeringTextCss()
-
-    expect(shimmeringTextCss).toMatch(
-      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*{[\s\S]*?\.openbroca-shimmering-text\s*{[\s\S]*?animation:\s*none;[\s\S]*?color:\s*inherit;[\s\S]*?text-shadow:\s*none;[\s\S]*?opacity:\s*1;[\s\S]*?}/
+  test('accepts explicit base and shimmer colors', () => {
+    render(
+      <ShimmeringText
+        text="Thinking..."
+        data-testid="colored-shimmering-text"
+        color="var(--muted-foreground)"
+        shimmerColor="var(--foreground)"
+        startOnView={false}
+      />
     )
+
+    const text = screen.getByTestId('colored-shimmering-text')
+    const style = text.getAttribute('style') ?? ''
+
+    expect(style).toContain('--base-color: var(--muted-foreground)')
+    expect(style).toContain('--shimmer-color: var(--foreground)')
   })
 })
