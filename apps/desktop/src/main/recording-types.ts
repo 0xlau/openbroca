@@ -8,6 +8,7 @@ export interface CapturedRecording {
   endedAt: string
   durationMs: number
   frontmostAppSnapshot?: AppIdentity | null
+  targetAppSnapshot?: AppIdentity | null
 }
 
 export interface StoredRecording {

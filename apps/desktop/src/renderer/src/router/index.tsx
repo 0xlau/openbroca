@@ -7,6 +7,7 @@ import { Providers } from '@renderer/pages/main/providers'
 import { Prompts } from '@renderer/pages/main/prompts'
 import { MainRoot } from '@renderer/pages/main/main-root'
 import { FloatListening } from '@renderer/pages/float/float-listening'
+import { NotifyWindow } from '@renderer/pages/notify/notify-window'
 import { createHashRouter } from 'react-router'
 
 export const router = createHashRouter([
@@ -26,5 +27,9 @@ export const router = createHashRouter([
   {
     path: '/float/listening',
     element: <FloatListening />
+  },
+  {
+    path: '/notify/window',
+    element: <NotifyWindow />
   }
 ])

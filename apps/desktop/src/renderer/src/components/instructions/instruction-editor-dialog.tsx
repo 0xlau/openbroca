@@ -39,7 +39,7 @@ interface InstructionEditorDialogProps {
   open: boolean
   rule: InstructionRule | null
   detectedApps: AppIdentity[]
-  ownedAppNamesById: Record<string, string>
+  ownedAppNamesByKey: Record<string, string>
   onTransferApp?: (app: InstructionActivationApp) => void
   isSubmitting: boolean
   errorMessage: string | null
@@ -67,7 +67,7 @@ export function InstructionEditorDialog({
   open,
   rule,
   detectedApps,
-  ownedAppNamesById,
+  ownedAppNamesByKey,
   onTransferApp,
   isSubmitting,
   errorMessage,
@@ -142,7 +142,7 @@ export function InstructionEditorDialog({
                   <ActivationAppPicker
                     value={draft.activationApps}
                     detectedApps={detectedApps}
-                    ownedAppNamesById={ownedAppNamesById}
+                    ownedAppNamesByKey={ownedAppNamesByKey}
                     onTransferApp={onTransferApp}
                     onChange={(activationApps) =>
                       setDraft((current) => ({

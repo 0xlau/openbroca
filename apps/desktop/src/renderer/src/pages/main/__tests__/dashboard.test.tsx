@@ -17,11 +17,31 @@ const selectedHistoryRecord: {
   failureMessage: string | null
   debug: {
     rawTranscriptionText: string
+    asrSegments: unknown[]
     asrRequest: Record<string, unknown>
     asrResponseSummary: Record<string, unknown>
     llmRequest: Record<string, unknown>
     llmResponseSummary: Record<string, unknown>
     tokenUsage: Record<string, unknown>
+    frontmostAppSnapshot: Record<string, unknown> | null
+    delivery: {
+      targetAppAtMatch: Record<string, unknown> | null
+      targetAppAtDelivery: Record<string, unknown> | null
+      matchedInstruction: {
+        ruleId: string
+        name: string
+        autoEnterMode: string
+      } | null
+      instructionPromptApplied: boolean
+      ownershipMatchedAtDelivery: boolean
+      method: string
+      status: string
+      outcome: string
+      pasteAttempted: boolean
+      autoSendTriggered: boolean
+      failureMessage?: string
+      fallbackReason?: string
+    }
     timeline: unknown[]
     errors: unknown[]
   }
@@ -37,11 +57,44 @@ const selectedHistoryRecord: {
   failureMessage: null,
   debug: {
     rawTranscriptionText: 'send the report by friday',
+    asrSegments: [{ text: 'send the report by friday', isFinal: true }],
     asrRequest: { language: 'en' },
     asrResponseSummary: { segmentCount: 1 },
     llmRequest: { model: 'gpt-5.2-codex' },
     llmResponseSummary: { finishReason: 'stop' },
     tokenUsage: { promptTokens: 12, completionTokens: 9, totalTokens: 21 },
+    frontmostAppSnapshot: {
+      id: 'com.slack.desktop',
+      displayName: 'Slack',
+      platform: 'macos',
+      bundleId: 'com.slack.desktop'
+    },
+    delivery: {
+      targetAppAtMatch: {
+        id: 'com.openai.chat',
+        displayName: 'ChatGPT',
+        platform: 'macos',
+        bundleId: 'com.openai.chat'
+      },
+      targetAppAtDelivery: {
+        id: 'current-chat-window',
+        displayName: 'ChatGPT',
+        platform: 'macos',
+        bundleId: 'com.openai.chat'
+      },
+      matchedInstruction: {
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        autoEnterMode: 'enter'
+      },
+      instructionPromptApplied: true,
+      ownershipMatchedAtDelivery: true,
+      method: 'paste',
+      status: 'completed',
+      outcome: 'paste-success',
+      pasteAttempted: true,
+      autoSendTriggered: true
+    },
     timeline: [],
     errors: []
   }
@@ -75,6 +128,7 @@ let historyListRecords: HistoryListItem[] = [
 
 const playMock = vi.fn(() => Promise.resolve())
 const pauseMock = vi.fn()
+const clipboardWriteTextMock = vi.fn(() => Promise.resolve())
 
 Object.defineProperty(globalThis.HTMLMediaElement.prototype, 'play', {
   configurable: true,
@@ -175,6 +229,9 @@ vi.mock('@openbroca/ui', () => ({
   }) => (open ? <div data-testid="dialog-root">{children}</div> : null),
   DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+  DialogFooter: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
   DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: ReactNode }) => <h3>{children}</h3>,
   Kbd: ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>,
@@ -229,10 +286,24 @@ vi.mock('recharts', () => ({
 }))
 
 describe('Dashboard', () => {
+  function expectSummaryRow(label: string, expectedValue: string) {
+    const labelNode = screen.getByText(label)
+    const row = labelNode.closest('div')
+    expect(row).toBeTruthy()
+    expect(row?.textContent).toContain(label)
+    expect(row?.textContent).toContain(expectedValue)
+  }
+
   beforeEach(() => {
     cleanup()
     playMock.mockClear()
     pauseMock.mockClear()
+    clipboardWriteTextMock.mockClear()
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: clipboardWriteTextMock
+      }
+    })
     historyListRecords = [
       {
         id: 'record-1',
@@ -283,8 +354,31 @@ describe('Dashboard', () => {
     expect(screen.getByText('Debug')).toBeTruthy()
     expect(screen.getByText('send the report by friday')).toBeTruthy()
     expect(screen.getByText('send the report by friday').className).toContain('min-h-[4.5rem]')
+    expectSummaryRow('Instruction Prompt Applied', 'Yes')
+    expectSummaryRow('Ownership Matched At Delivery', 'Yes')
+    expectSummaryRow('Delivery Method', 'paste')
+    expectSummaryRow('Delivery Outcome', 'paste-success')
+    expectSummaryRow('Paste Attempted', 'Yes')
+    expectSummaryRow('Auto Send Triggered', 'Yes')
+    expectSummaryRow('Fallback Reason', 'None')
+    expectSummaryRow('Matched Instruction', 'Chat')
+    expectSummaryRow('Frontmost App At Capture', 'Slack')
+    expectSummaryRow('Target App At Match', 'ChatGPT')
+    expectSummaryRow('Target App At Delivery', 'ChatGPT')
     const audio = screen.getByLabelText('History audio playback')
     expect(audio.getAttribute('src')).toBe('openbroca-media://history/record-1')
+  })
+
+  test('copies the full debug record as formatted json', async () => {
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /show history details/i }))
+    fireEvent.click(screen.getByRole('button', { name: /copy debug json/i }))
+
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith(
+      JSON.stringify(selectedHistoryRecord, null, 2)
+    )
   })
 
   test('renders failure messages inside a destructive alert', async () => {

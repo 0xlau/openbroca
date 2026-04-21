@@ -23,11 +23,15 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Cancel01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { InstructionActivationApp } from '@renderer/stores/instructions-store'
+import {
+  getInstructionActivationAppStableIdentityKeys,
+  instructionActivationAppsShareStableIdentity
+} from '../../../../shared/instructions'
 
 interface ActivationAppPickerProps {
   value: InstructionActivationApp[]
   detectedApps: AppIdentity[]
-  ownedAppNamesById: Record<string, string>
+  ownedAppNamesByKey: Record<string, string>
   onTransferApp?: (app: InstructionActivationApp) => void
   onChange: (apps: InstructionActivationApp[]) => void
 }
@@ -38,6 +42,19 @@ function getSecondaryIdentity(app: InstructionActivationApp): string {
 
 function toSearchText(app: InstructionActivationApp): string {
   return `${app.displayName} ${app.id} ${app.bundleId ?? ''} ${app.aumid ?? ''} ${app.path ?? ''}`.toLowerCase()
+}
+
+function getOwnerNameForApp(
+  ownedAppNamesByKey: Record<string, string>,
+  app: Pick<InstructionActivationApp, 'id' | 'bundleId' | 'aumid' | 'path'>
+): string | undefined {
+  return getInstructionActivationAppStableIdentityKeys(app)
+    .map((stableIdentityKey) => ownedAppNamesByKey[stableIdentityKey])
+    .find((ownerName) => Boolean(ownerName))
+}
+
+function getActivationAppKey(app: InstructionActivationApp): string {
+  return getInstructionActivationAppStableIdentityKeys(app)[0] ?? app.id
 }
 
 function ActivationAppIcon({
@@ -71,7 +88,7 @@ function ActivationAppIcon({
 export function ActivationAppPicker({
   value,
   detectedApps,
-  ownedAppNamesById,
+  ownedAppNamesByKey,
   onTransferApp,
   onChange
 }: ActivationAppPickerProps) {
@@ -88,7 +105,11 @@ export function ActivationAppPicker({
     )
   }, [])
 
-  const selectedIds = React.useMemo(() => new Set(value.map((app) => app.id)), [value])
+  const selectedOwnershipKeys = React.useMemo(
+    () =>
+      new Set(value.flatMap((app) => getInstructionActivationAppStableIdentityKeys(app))),
+    [value]
+  )
 
   const filteredApps = React.useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase()
@@ -99,8 +120,10 @@ export function ActivationAppPicker({
     return detectedApps.filter((app) => toSearchText(app).includes(keyword))
   }, [detectedApps, searchTerm])
 
-  function removeApp(appId: string) {
-    onChange(value.filter((app) => app.id !== appId))
+  function removeApp(app: InstructionActivationApp) {
+    onChange(
+      value.filter((candidate) => !instructionActivationAppsShareStableIdentity(candidate, app))
+    )
   }
 
   function handleRowKeyDown(
@@ -116,17 +139,26 @@ export function ActivationAppPicker({
   }
 
   function toggleApp(app: InstructionActivationApp) {
-    if (selectedIds.has(app.id)) {
-      onChange(value.filter((candidate) => candidate.id !== app.id))
+    const ownerName = getOwnerNameForApp(ownedAppNamesByKey, app)
+
+    if (
+      getInstructionActivationAppStableIdentityKeys(app).some((stableIdentityKey) =>
+        selectedOwnershipKeys.has(stableIdentityKey)
+      )
+    ) {
+      onChange(value.filter((candidate) => !instructionActivationAppsShareStableIdentity(candidate, app)))
       return
     }
 
-    if (ownedAppNamesById[app.id]) {
+    if (ownerName) {
       setPendingTransferApp(app)
       return
     }
 
-    onChange([...value, app])
+    onChange([
+      ...value.filter((candidate) => !instructionActivationAppsShareStableIdentity(candidate, app)),
+      app
+    ])
   }
 
   function handlePickerOpenChange(nextOpen: boolean) {
@@ -177,9 +209,11 @@ export function ActivationAppPicker({
                         Detected apps
                       </p>
                       {filteredApps.map((app) => {
-                        const ownerName = ownedAppNamesById[app.id]
+                        const ownerName = getOwnerNameForApp(ownedAppNamesByKey, app)
                         const isOwnedByOtherRule = Boolean(ownerName)
-                        const isSelected = selectedIds.has(app.id)
+                        const isSelected = getInstructionActivationAppStableIdentityKeys(app).some(
+                          (stableIdentityKey) => selectedOwnershipKeys.has(stableIdentityKey)
+                        )
 
                         return (
                           <div
@@ -228,10 +262,10 @@ export function ActivationAppPicker({
         {value.length > 0 ? (
           value.map((app) => (
             <Badge
-              key={app.id}
+              key={getActivationAppKey(app)}
               variant="outline"
               className="h-auto items-center cursor-pointer"
-              onClick={() => removeApp(app.id)}
+              onClick={() => removeApp(app)}
             >
               <ActivationAppIcon
                 app={app}
@@ -269,7 +303,7 @@ export function ActivationAppPicker({
             <AlertDialogTitle>Move app to this instruction?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingTransferApp
-                ? `${pendingTransferApp.displayName} will be removed from ${ownedAppNamesById[pendingTransferApp.id]} and added to the instruction you are editing.`
+                ? `${pendingTransferApp.displayName} will be removed from ${getOwnerNameForApp(ownedAppNamesByKey, pendingTransferApp)} and added to the instruction you are editing.`
                 : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -283,7 +317,10 @@ export function ActivationAppPicker({
 
                 onTransferApp?.(pendingTransferApp)
                 onChange([
-                  ...value.filter((candidate) => candidate.id !== pendingTransferApp.id),
+                  ...value.filter(
+                    (candidate) =>
+                      !instructionActivationAppsShareStableIdentity(candidate, pendingTransferApp)
+                  ),
                   pendingTransferApp
                 ])
                 setPendingTransferApp(null)

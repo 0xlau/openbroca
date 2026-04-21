@@ -669,6 +669,146 @@ describe('Instructions', () => {
     })
   })
 
+  test('treats a secondary stable identity match as owned and transferable', async () => {
+    instructionsStoreMock = createInstructionsStore({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding focus',
+          activationApps: [
+            {
+              id: 'manual-cursor-owner',
+              displayName: 'Cursor Manual',
+              platform: 'macos',
+              bundleId: 'com.todesktop.230313mzl4w4u92',
+              source: 'manual'
+            }
+          ],
+          customInstructions: 'Prefer concise technical language.',
+          autoEnterMode: 'enter'
+        }
+      ]
+    })
+
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Cursor transfer' } })
+
+    const cursorRow = screen.getByTestId('activation-app-row-com.todesktop.230313mzl4w4u92')
+    expect(within(cursorRow).getByText('Used by Coding focus')).toBeTruthy()
+
+    fireEvent.click(cursorRow)
+    expect(screen.getByTestId('alert-dialog-root')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Cursor will be removed from Coding focus and added to the instruction you are editing.'
+      )
+    ).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer app' }))
+    const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
+    fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(instructionsStoreMock.getState().replace).toHaveBeenCalledTimes(1)
+    })
+
+    const nextSettings = vi.mocked(instructionsStoreMock.getState().replace).mock.calls[0]?.[0]
+    expect(nextSettings.rules).toHaveLength(2)
+    expect(nextSettings.rules[0]).toMatchObject({
+      id: 'rule-coding',
+      activationApps: []
+    })
+    expect(nextSettings.rules[1]).toMatchObject({
+      name: 'Cursor transfer',
+      activationApps: [
+        expect.objectContaining({
+          id: 'com.todesktop.230313mzl4w4u92',
+          bundleId: 'com.todesktop.230313mzl4w4u92',
+          source: 'detected'
+        })
+      ]
+    })
+  })
+
+  test('treats any overlapping stable identity key as owned and transferable', async () => {
+    detectedApps = [
+      {
+        id: 'detected-cursor-id',
+        displayName: 'Cursor',
+        platform: 'windows',
+        bundleId: 'Cursor.Detected',
+        path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Cursor\\Cursor.exe',
+        source: 'detected'
+      }
+    ]
+
+    instructionsStoreMock = createInstructionsStore({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding focus',
+          activationApps: [
+            {
+              id: 'manual-cursor-owner',
+              displayName: 'Cursor Manual',
+              platform: 'windows',
+              bundleId: 'Cursor.Stable',
+              path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Cursor\\Cursor.exe',
+              source: 'manual'
+            }
+          ],
+          customInstructions: 'Prefer concise technical language.',
+          autoEnterMode: 'enter'
+        }
+      ]
+    })
+
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Cursor transfer' } })
+
+    const cursorRow = screen.getByTestId('activation-app-row-detected-cursor-id')
+    expect(within(cursorRow).getByText('Used by Coding focus')).toBeTruthy()
+
+    fireEvent.click(cursorRow)
+    expect(screen.getByTestId('alert-dialog-root')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer app' }))
+    const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
+    fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(instructionsStoreMock.getState().replace).toHaveBeenCalledTimes(1)
+    })
+
+    const nextSettings = vi.mocked(instructionsStoreMock.getState().replace).mock.calls[0]?.[0]
+    expect(nextSettings.rules).toHaveLength(2)
+    expect(nextSettings.rules[0]).toMatchObject({
+      id: 'rule-coding',
+      activationApps: []
+    })
+    expect(nextSettings.rules[1]).toMatchObject({
+      name: 'Cursor transfer',
+      activationApps: [
+        expect.objectContaining({
+          id: 'detected-cursor-id',
+          bundleId: 'Cursor.Detected',
+          path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Cursor\\Cursor.exe',
+          source: 'detected'
+        })
+      ]
+    })
+  })
+
   test('toggles activation app row selection without closing popover', async () => {
     const { Instructions } = await import('../instructions')
 
@@ -756,5 +896,61 @@ describe('Instructions', () => {
 
     expect(screen.getByText('Coding focus')).toBeTruthy()
     expect(instructionsStoreMock.getState().data.rules).toHaveLength(1)
+  })
+
+  test('keeps persisted ownership unchanged when save fails after a draft transfer', async () => {
+    instructionsStoreMock = createInstructionsStore({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding focus',
+          activationApps: [detectedApps[0]],
+          customInstructions: 'Prefer concise technical language.',
+          autoEnterMode: 'enter'
+        }
+      ]
+    })
+
+    vi.mocked(instructionsStoreMock.getState().replace).mockImplementationOnce(async (nextData) => {
+      instructionsStoreMock.setState((state) => ({
+        ...state,
+        data: nextData
+      }))
+
+      throw new Error('persist failed')
+    })
+
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New instruction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select apps' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Cursor transfer' } })
+    fireEvent.click(screen.getByTestId('activation-app-row-com.todesktop.230313mzl4w4u92'))
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer app' }))
+
+    const createButtons = screen.getAllByRole('button', { name: 'Create instruction' })
+    fireEvent.click(createButtons[createButtons.length - 1] as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(screen.getByText('persist failed')).toBeTruthy()
+    })
+
+    expect(screen.getByRole('button', { name: 'Create instruction' })).toBeTruthy()
+    expect(
+      screen.getByTestId('selected-app-remove-icon-com.todesktop.230313mzl4w4u92')
+    ).toBeTruthy()
+    expect(instructionsStoreMock.getState().data.rules).toEqual([
+      expect.objectContaining({
+        id: 'rule-coding',
+        activationApps: [
+          expect.objectContaining({
+            id: 'com.todesktop.230313mzl4w4u92',
+            displayName: 'Cursor'
+          })
+        ]
+      })
+    ])
   })
 })

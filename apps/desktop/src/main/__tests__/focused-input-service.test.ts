@@ -3,23 +3,23 @@ import { describe, expect, test, vi } from 'vitest'
 import { FocusedInputAppService } from '../focused-input/service'
 
 describe('FocusedInputAppService', () => {
-  test('returns the focused editable app when platform resolution succeeds', async () => {
+  test('getStrictFocusedInputApp prefers focused-input resolution when available', async () => {
     const rawFocusedApp: RawAppIdentity = {
-      displayName: 'Cursor',
-      platform: 'macos',
-      bundleId: 'com.todesktop.230313mzl4w4u92',
-      path: '/Applications/Cursor.app',
+      displayName: 'Visual Studio Code',
+      platform: 'windows',
+      path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
       source: 'detected'
     }
     const hydratedFocusedApp: AppIdentity = {
-      id: 'com.todesktop.230313mzl4w4u92',
-      displayName: 'Cursor',
-      platform: 'macos',
-      bundleId: 'com.todesktop.230313mzl4w4u92',
-      path: '/Applications/Cursor.app',
+      id: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+      displayName: 'Visual Studio Code',
+      platform: 'windows',
+      path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
       source: 'detected'
     }
-    const resolveFocusedInputApp = vi.fn<() => Promise<RawAppIdentity | null>>().mockResolvedValue(rawFocusedApp)
+    const resolveFocusedInputApp = vi
+      .fn<() => Promise<RawAppIdentity | null>>()
+      .mockResolvedValue(rawFocusedApp)
     const hydrateApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(hydratedFocusedApp)
     const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(null)
     const service = new FocusedInputAppService({
@@ -28,27 +28,25 @@ describe('FocusedInputAppService', () => {
       getFrontmostApp
     })
 
-    await expect(service.getFocusedInputApp()).resolves.toEqual(hydratedFocusedApp)
+    await expect(service.getStrictFocusedInputApp()).resolves.toEqual(hydratedFocusedApp)
 
     expect(resolveFocusedInputApp).toHaveBeenCalledTimes(1)
     expect(hydrateApp).toHaveBeenCalledWith({
-      id: 'com.todesktop.230313mzl4w4u92',
-      displayName: 'Cursor',
-      platform: 'macos',
-      bundleId: 'com.todesktop.230313mzl4w4u92',
-      path: '/Applications/Cursor.app',
+      id: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+      displayName: 'Visual Studio Code',
+      platform: 'windows',
+      path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
       source: 'detected'
     })
     expect(getFrontmostApp).not.toHaveBeenCalled()
   })
 
-  test('falls back to frontmost app when focused-input resolution returns null', async () => {
+  test('getStrictFocusedInputApp falls back to the current frontmost app when focused-input is unavailable', async () => {
     const frontmostApp: AppIdentity = {
-      id: 'com.google.Chrome',
-      displayName: 'Google Chrome',
+      id: 'com.tencent.xinWeChat',
+      displayName: 'WeChat',
       platform: 'macos',
-      bundleId: 'com.google.Chrome',
-      path: '/Applications/Google Chrome.app',
+      bundleId: 'com.tencent.xinWeChat',
       source: 'detected'
     }
     const resolveFocusedInputApp = vi.fn<() => Promise<RawAppIdentity | null>>().mockResolvedValue(null)
@@ -60,13 +58,28 @@ describe('FocusedInputAppService', () => {
       getFrontmostApp
     })
 
-    await expect(service.getFocusedInputApp()).resolves.toEqual(frontmostApp)
-
-    expect(hydrateApp).not.toHaveBeenCalled()
+    await expect(service.getStrictFocusedInputApp()).resolves.toEqual(frontmostApp)
+    expect(resolveFocusedInputApp).toHaveBeenCalledTimes(1)
     expect(getFrontmostApp).toHaveBeenCalledTimes(1)
   })
 
-  test('falls back to frontmost app when focused-input resolution throws', async () => {
+  test('getFocusedInputApp proxies the current frontmost app when no focused-input resolver is configured', async () => {
+    const frontmostApp: AppIdentity = {
+      id: 'Code.exe',
+      displayName: 'Visual Studio Code',
+      platform: 'windows',
+      path: 'C:\\Users\\liupeiqiang\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+      source: 'detected'
+    }
+    const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(frontmostApp)
+    const service = new FocusedInputAppService({ getFrontmostApp })
+
+    await expect(service.getFocusedInputApp()).resolves.toEqual(frontmostApp)
+    expect(getFrontmostApp).toHaveBeenCalledTimes(1)
+  })
+
+  test('getFocusedInputApp falls back to frontmost app when focused-input resolution throws', async () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
     const frontmostApp: AppIdentity = {
       id: 'Code.exe',
       displayName: 'Visual Studio Code',
@@ -76,7 +89,7 @@ describe('FocusedInputAppService', () => {
     }
     const resolveFocusedInputApp = vi
       .fn<() => Promise<RawAppIdentity | null>>()
-      .mockRejectedValue(new Error('access denied'))
+      .mockRejectedValue(new Error('focused failed'))
     const hydrateApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(null)
     const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(frontmostApp)
     const service = new FocusedInputAppService({
@@ -87,99 +100,25 @@ describe('FocusedInputAppService', () => {
 
     await expect(service.getFocusedInputApp()).resolves.toEqual(frontmostApp)
 
-    expect(hydrateApp).not.toHaveBeenCalled()
+    expect(resolveFocusedInputApp).toHaveBeenCalledTimes(1)
     expect(getFrontmostApp).toHaveBeenCalledTimes(1)
-  })
-
-  test('falls back to frontmost app when hydration throws', async () => {
-    const rawFocusedApp: RawAppIdentity = {
-      displayName: 'Cursor',
-      platform: 'macos',
-      bundleId: 'com.todesktop.230313mzl4w4u92',
-      path: '/Applications/Cursor.app',
-      source: 'detected'
-    }
-    const frontmostApp: AppIdentity = {
-      id: 'com.google.Chrome',
-      displayName: 'Google Chrome',
-      platform: 'macos',
-      bundleId: 'com.google.Chrome',
-      path: '/Applications/Google Chrome.app',
-      source: 'detected'
-    }
-    const resolveFocusedInputApp = vi.fn<() => Promise<RawAppIdentity | null>>().mockResolvedValue(rawFocusedApp)
-    const hydrateApp = vi.fn<() => Promise<AppIdentity | null>>().mockRejectedValue(new Error('hydrate failed'))
-    const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(frontmostApp)
-    const service = new FocusedInputAppService({
-      resolveFocusedInputApp,
-      hydrateApp,
-      getFrontmostApp
+    expect(debugSpy).toHaveBeenCalledWith('[voice-debug] focused input app resolution failed', {
+      error: 'focused failed'
     })
-
-    await expect(service.getFocusedInputApp()).resolves.toEqual(frontmostApp)
-
-    expect(hydrateApp).toHaveBeenCalledTimes(1)
-    expect(getFrontmostApp).toHaveBeenCalledTimes(1)
-  })
-
-  test('falls back to frontmost app when normalization throws', async () => {
-    const rawFocusedApp: RawAppIdentity = {
-      displayName: 'Unknown App',
-      platform: 'windows',
-      source: 'detected'
-    }
-    const frontmostApp: AppIdentity = {
-      id: 'com.google.Chrome',
-      displayName: 'Google Chrome',
-      platform: 'macos',
-      bundleId: 'com.google.Chrome',
-      path: '/Applications/Google Chrome.app',
-      source: 'detected'
-    }
-    const resolveFocusedInputApp = vi.fn<() => Promise<RawAppIdentity | null>>().mockResolvedValue(rawFocusedApp)
-    const hydrateApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(null)
-    const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(frontmostApp)
-    const service = new FocusedInputAppService({
-      resolveFocusedInputApp,
-      hydrateApp,
-      getFrontmostApp
-    })
-
-    await expect(service.getFocusedInputApp()).resolves.toEqual(frontmostApp)
-
-    expect(hydrateApp).not.toHaveBeenCalled()
-    expect(getFrontmostApp).toHaveBeenCalledTimes(1)
-  })
-
-  test('returns null when both focused-input and frontmost app fail', async () => {
-    const resolveFocusedInputApp = vi.fn<() => Promise<RawAppIdentity | null>>().mockResolvedValue(null)
-    const hydrateApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(null)
-    const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(null)
-    const service = new FocusedInputAppService({
-      resolveFocusedInputApp,
-      hydrateApp,
-      getFrontmostApp
-    })
-
-    await expect(service.getFocusedInputApp()).resolves.toBeNull()
-
-    expect(hydrateApp).not.toHaveBeenCalled()
-    expect(getFrontmostApp).toHaveBeenCalledTimes(1)
+    debugSpy.mockRestore()
   })
 
   test('returns null when getFrontmostApp throws', async () => {
-    const resolveFocusedInputApp = vi.fn<() => Promise<RawAppIdentity | null>>().mockResolvedValue(null)
-    const hydrateApp = vi.fn<() => Promise<AppIdentity | null>>().mockResolvedValue(null)
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
     const getFrontmostApp = vi.fn<() => Promise<AppIdentity | null>>().mockRejectedValue(new Error('frontmost failed'))
-    const service = new FocusedInputAppService({
-      resolveFocusedInputApp,
-      hydrateApp,
-      getFrontmostApp
-    })
+    const service = new FocusedInputAppService({ getFrontmostApp })
 
     await expect(service.getFocusedInputApp()).resolves.toBeNull()
 
-    expect(hydrateApp).not.toHaveBeenCalled()
     expect(getFrontmostApp).toHaveBeenCalledTimes(1)
+    expect(debugSpy).toHaveBeenCalledWith('[voice-debug] frontmost app resolution failed', {
+      error: 'frontmost failed'
+    })
+    debugSpy.mockRestore()
   })
 })

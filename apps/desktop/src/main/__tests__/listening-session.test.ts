@@ -332,7 +332,7 @@ describe('ListeningSessionManager', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const onRecordingComplete = vi.fn().mockImplementation(
       async (_recording, signal: AbortSignal) =>
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>((_resolve, reject) => {
           signal.addEventListener(
             'abort',
             () => {
@@ -629,6 +629,165 @@ describe('ListeningSessionManager', () => {
           frontmostAppSnapshot: expect.objectContaining({
             id: 'com.recorded.app',
             bundleId: 'com.recorded.bundle'
+          })
+        }),
+        expect.any(AbortSignal)
+      )
+    })
+  })
+
+  test('captures target app snapshot before invoking recording completion', async () => {
+    const captureSource = new FakeCaptureSource()
+    const lifecycle: string[] = []
+    const getTargetApp = vi.fn().mockImplementation(async () => {
+      lifecycle.push('getTargetApp')
+      return {
+        id: 'com.openai.chat',
+        displayName: 'ChatGPT',
+        platform: 'macos',
+        bundleId: 'com.openai.chat',
+        source: 'detected'
+      } satisfies AppIdentity
+    })
+    const onRecordingComplete = vi.fn().mockImplementation(async (recording) => {
+      lifecycle.push('onRecordingComplete')
+      expect(recording.targetAppSnapshot).toEqual(
+        expect.objectContaining({
+          id: 'com.openai.chat',
+          bundleId: 'com.openai.chat'
+        })
+      )
+      expect(lifecycle).toEqual(['getTargetApp', 'onRecordingComplete'])
+    })
+    const manager = new ListeningSessionManager(captureSource, {
+      onRecordingComplete,
+      getTargetApp
+    } as never)
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expect(manager.getState().state).toEqual({ status: 'listening' })
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    await vi.waitFor(() => {
+      expect(onRecordingComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetAppSnapshot: expect.objectContaining({
+            id: 'com.openai.chat',
+            bundleId: 'com.openai.chat'
+          })
+        }),
+        expect.any(AbortSignal)
+      )
+    })
+  })
+
+  test('freezes target app snapshot at processing handoff even if target app changes before recording completion dispatch', async () => {
+    const captureSource = new FakeCaptureSource()
+    const frontmostSnapshot = createDeferred<AppIdentity | null>()
+    let currentTargetApp: AppIdentity = {
+      id: 'com.openai.chat',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    }
+    const getTargetApp = vi.fn().mockImplementation(async () => ({ ...currentTargetApp }))
+    let manager!: ListeningSessionManager
+    const onRecordingComplete = vi.fn().mockImplementation(async (recording) => {
+      expect(manager.getState().targetApp).toEqual(
+        expect.objectContaining({
+          id: 'com.cursor.app',
+          bundleId: 'com.cursor.app'
+        })
+      )
+      expect(recording.targetAppSnapshot).toEqual(
+        expect.objectContaining({
+          id: 'com.openai.chat',
+          bundleId: 'com.openai.chat'
+        })
+      )
+    })
+    manager = new ListeningSessionManager(captureSource, {
+      onRecordingComplete,
+      getFrontmostAppSnapshot: () => frontmostSnapshot.promise,
+      getTargetApp,
+      targetAppPollIntervalMs: 5
+    })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+
+    await vi.waitFor(() => {
+      expect(manager.getState().targetApp).toEqual(
+        expect.objectContaining({
+          id: 'com.openai.chat',
+          bundleId: 'com.openai.chat'
+        })
+      )
+    })
+
+    manager.stop()
+    captureSource.finish()
+
+    await vi.waitFor(() => {
+      expectManagerState(
+        manager,
+        { status: 'processing' },
+        expect.objectContaining({
+          id: 'com.openai.chat',
+          bundleId: 'com.openai.chat'
+        }) as AppIdentity
+      )
+    })
+
+    currentTargetApp = {
+      id: 'com.cursor.app',
+      displayName: 'Cursor',
+      platform: 'macos',
+      bundleId: 'com.cursor.app',
+      source: 'detected'
+    }
+
+    await vi.waitFor(() => {
+      expect(manager.getState().targetApp).toEqual(
+        expect.objectContaining({
+          id: 'com.cursor.app',
+          bundleId: 'com.cursor.app'
+        })
+      )
+    })
+
+    frontmostSnapshot.resolve({
+      id: 'com.frontmost.app',
+      displayName: 'Frontmost',
+      platform: 'macos',
+      bundleId: 'com.frontmost.app',
+      source: 'detected'
+    })
+
+    await vi.waitFor(() => {
+      expect(onRecordingComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetAppSnapshot: expect.objectContaining({
+            id: 'com.openai.chat',
+            bundleId: 'com.openai.chat'
+          }),
+          frontmostAppSnapshot: expect.objectContaining({
+            id: 'com.frontmost.app',
+            bundleId: 'com.frontmost.app'
           })
         }),
         expect.any(AbortSignal)

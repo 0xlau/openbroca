@@ -143,7 +143,7 @@ class ListeningSessionManager {
 
   private async run(opts: SessionOptions & { signal: AbortSignal }): Promise<void> {
     let chunks: Uint8Array[] = []
-    let format: ReturnType<AudioCaptureSource['resolveFormat']>
+    let format: ReturnType<AudioCaptureSource['resolveFormat']> | null = null
     let startedAt = ''
     let startedAtMs = 0
     let didLogFirstChunk = false
@@ -213,6 +213,11 @@ class ListeningSessionManager {
       return
     }
 
+    if (!format) {
+      this.setSessionState({ status: 'idle' })
+      return
+    }
+
     const endedAt = new Date().toISOString()
     const endedAtMs = Date.now()
     const durationMs = Math.max(0, endedAtMs - startedAtMs)
@@ -228,12 +233,20 @@ class ListeningSessionManager {
   }
 
   private beginProcessing(recording: CapturedRecording): void {
+    const targetAppSnapshot = this.targetApp ? { ...this.targetApp } : null
     const generation = ++this.processingGeneration
     const controller = new AbortController()
     this.processingAbortController = controller
     this.setSessionState({ status: 'processing' })
 
-    void this.completeRecording(recording, generation, controller)
+    void this.completeRecording(
+      {
+        ...recording,
+        targetAppSnapshot
+      },
+      generation,
+      controller
+    )
   }
 
   private async completeRecording(
@@ -261,7 +274,8 @@ class ListeningSessionManager {
       console.debug('[voice-debug] dispatching completed recording', {
         chunkCount: recording.chunks.length,
         durationMs: recording.durationMs,
-        frontmostAppId: frontmostAppSnapshot?.id ?? null
+        frontmostAppId: frontmostAppSnapshot?.id ?? null,
+        targetAppId: recording.targetAppSnapshot?.id ?? null
       })
 
       await this.options.onRecordingComplete?.(

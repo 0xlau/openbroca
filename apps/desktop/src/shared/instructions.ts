@@ -20,6 +20,51 @@ export const defaultInstructionsSettings: InstructionsSettings = {
   rules: []
 }
 
+function normalizeOptionalText(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const normalized = value.trim()
+  return normalized ? normalized : undefined
+}
+
+export function getInstructionActivationAppStableIdentityKeys(
+  app: Pick<InstructionActivationApp, 'id' | 'bundleId' | 'aumid' | 'path'>
+): string[] {
+  const stableIdentityKeys = new Set<string>()
+
+  const id = normalizeOptionalText(app.id)
+  if (id) {
+    stableIdentityKeys.add(`id:${id}`)
+  }
+
+  const bundleId = normalizeOptionalText(app.bundleId)
+  if (bundleId) {
+    stableIdentityKeys.add(`bundleId:${bundleId}`)
+  }
+
+  const aumid = normalizeOptionalText(app.aumid)
+  if (aumid) {
+    stableIdentityKeys.add(`aumid:${aumid}`)
+  }
+
+  const path = normalizeOptionalText(app.path)
+  if (path) {
+    stableIdentityKeys.add(`path:${path}`)
+  }
+
+  return [...stableIdentityKeys]
+}
+
+export function instructionActivationAppsShareStableIdentity(
+  left: Pick<InstructionActivationApp, 'id' | 'bundleId' | 'aumid' | 'path'>,
+  right: Pick<InstructionActivationApp, 'id' | 'bundleId' | 'aumid' | 'path'>
+): boolean {
+  const leftKeys = new Set(getInstructionActivationAppStableIdentityKeys(left))
+  return getInstructionActivationAppStableIdentityKeys(right).some((key) => leftKeys.has(key))
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -39,7 +84,7 @@ export function normalizeInstructionsSettings(raw: unknown): InstructionsSetting
   }
 
   const rules: InstructionRule[] = []
-  const usedAppIds = new Set<string>()
+  const usedAppOwnershipKeys = new Set<string>()
 
   for (const rawRule of raw.rules) {
     if (!isRecord(rawRule)) {
@@ -60,15 +105,29 @@ export function normalizeInstructionsSettings(raw: unknown): InstructionsSetting
       }
 
       const appId = rawApp.id.trim()
-      if (!appId || usedAppIds.has(appId)) {
+      if (!appId) {
         continue
       }
 
-      usedAppIds.add(appId)
-      activationApps.push({
+      const activationApp: InstructionActivationApp = {
         ...(rawApp as InstructionActivationApp),
-        id: appId
-      })
+        id: appId,
+        bundleId: normalizeOptionalText(rawApp.bundleId),
+        aumid: normalizeOptionalText(rawApp.aumid),
+        path: normalizeOptionalText(rawApp.path)
+      }
+      const stableIdentityKeys = getInstructionActivationAppStableIdentityKeys(activationApp)
+      if (
+        stableIdentityKeys.length === 0 ||
+        stableIdentityKeys.some((stableIdentityKey) => usedAppOwnershipKeys.has(stableIdentityKey))
+      ) {
+        continue
+      }
+
+      for (const stableIdentityKey of stableIdentityKeys) {
+        usedAppOwnershipKeys.add(stableIdentityKey)
+      }
+      activationApps.push(activationApp)
     }
 
     rules.push({

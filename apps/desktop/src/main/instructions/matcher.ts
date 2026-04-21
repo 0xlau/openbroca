@@ -11,22 +11,36 @@ export interface MatchedInstructionRule {
   name: string
   customInstructions: string
   autoEnterMode: AutoEnterMode
+  activationApp: AppIdentity
 }
 
-function appIdentityMatches(ruleApp: AppIdentity, frontmostApp: AppIdentity): boolean {
-  if (ruleApp.id === frontmostApp.id) {
+function createMatchedInstructionRule(
+  match: InstructionsSettings['rules'][number],
+  activationApp: AppIdentity
+): MatchedInstructionRule {
+  return {
+    ruleId: match.id,
+    name: match.name,
+    customInstructions: match.customInstructions,
+    autoEnterMode: match.autoEnterMode ?? 'off',
+    activationApp
+  }
+}
+
+function appIdentityMatches(ruleApp: AppIdentity, targetApp: AppIdentity): boolean {
+  if (ruleApp.id === targetApp.id) {
     return true
   }
 
-  if (ruleApp.bundleId && frontmostApp.bundleId && ruleApp.bundleId === frontmostApp.bundleId) {
+  if (ruleApp.bundleId && targetApp.bundleId && ruleApp.bundleId === targetApp.bundleId) {
     return true
   }
 
-  if (ruleApp.aumid && frontmostApp.aumid && ruleApp.aumid === frontmostApp.aumid) {
+  if (ruleApp.aumid && targetApp.aumid && ruleApp.aumid === targetApp.aumid) {
     return true
   }
 
-  if (ruleApp.path && frontmostApp.path && ruleApp.path === frontmostApp.path) {
+  if (ruleApp.path && targetApp.path && ruleApp.path === targetApp.path) {
     return true
   }
 
@@ -35,28 +49,31 @@ function appIdentityMatches(ruleApp: AppIdentity, frontmostApp: AppIdentity): bo
 
 export function createInstructionMatcher(
   deps: InstructionMatcherDeps
-): (frontmostAppSnapshot?: AppIdentity | null) => Promise<MatchedInstructionRule | null> {
-  return async (frontmostAppSnapshot) => {
-    const frontmostApp =
-      frontmostAppSnapshot === undefined ? await deps.getFrontmostApp() : frontmostAppSnapshot
-    if (!frontmostApp?.id) {
+): (targetAppSnapshot?: AppIdentity | null) => Promise<MatchedInstructionRule | null> {
+  return async (targetAppSnapshot) => {
+    const targetApp =
+      targetAppSnapshot === undefined ? await deps.getFrontmostApp() : targetAppSnapshot
+    if (!targetApp?.id) {
       return null
     }
 
-    const matches = deps
-      .getInstructions()
-      .rules.filter((rule) => rule.activationApps.some((app) => appIdentityMatches(app, frontmostApp)))
+    const matches = deps.getInstructions().rules
+      .map((rule) => {
+        const activationApp = rule.activationApps.find((app) => appIdentityMatches(app, targetApp))
+        return activationApp ? { rule, activationApp } : null
+      })
+      .filter(
+        (
+          match
+        ): match is { rule: InstructionsSettings['rules'][number]; activationApp: AppIdentity } =>
+          Boolean(match)
+      )
 
     if (matches.length !== 1) {
       return null
     }
 
     const [match] = matches
-    return {
-      ruleId: match.id,
-      name: match.name,
-      customInstructions: match.customInstructions,
-      autoEnterMode: match.autoEnterMode ?? 'off'
-    }
+    return createMatchedInstructionRule(match.rule, match.activationApp)
   }
 }

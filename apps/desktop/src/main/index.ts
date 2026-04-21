@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, protocol } from 'electron'
 import { execFile as nodeExecFile } from 'node:child_process'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -32,15 +32,18 @@ import {
   resolveActiveASRSelection,
   resolveActiveLLMSelection
 } from './providers/runtime'
+import { createFinalTextDeliveryService } from './final-text-delivery/service'
+import { createMacPasteText } from './final-text-delivery/platform/macos'
+import { createWindowsPasteText } from './final-text-delivery/platform/windows'
 import { createAutoEnterService } from './send-key/auto-enter'
 import { AppIdentityService } from './app-identity/service'
 import { FocusedInputAppService } from './focused-input/service'
-import { resolveMacFocusedInputApp } from './focused-input/platform/macos'
 import { resolveWindowsFocusedInputApp } from './focused-input/platform/windows'
 import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
 import { normalizeInstructionsSettings } from '../shared/instructions'
+import { createNotifyWindows } from './notify-windows'
 
 const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 const macBundleIconCache = new Map<string, Promise<string | undefined>>()
@@ -210,15 +213,40 @@ const cleanupPromptContextGetters = createNormalizedCleanupPromptContextGetters(
 })
 const focusedInputAppService = new FocusedInputAppService({
   resolveFocusedInputApp:
-    process.platform === 'darwin'
-      ? () => resolveMacFocusedInputApp()
-      : process.platform === 'win32'
-        ? () => resolveWindowsFocusedInputApp()
-        : async () => null,
-  hydrateApp: (app) => appIdentityService.hydrateApp(app),
+    process.platform === 'win32' ? () => resolveWindowsFocusedInputApp() : undefined,
+  hydrateApp: process.platform === 'win32' ? (app) => appIdentityService.hydrateApp(app) : undefined,
   getFrontmostApp: () => appIdentityService.getFrontmostApp()
 })
 const autoEnterService = createAutoEnterService()
+const notifyWindows = createNotifyWindows()
+const pasteText =
+  process.platform === 'darwin'
+    ? createMacPasteText()
+    : process.platform === 'win32'
+      ? createWindowsPasteText()
+    : async () => ({
+        ok: false as const,
+        reason: 'not-available' as const
+      })
+const finalTextDeliveryService = createFinalTextDeliveryService({
+  clipboard: {
+    readText: () => clipboard.readText(),
+    writeText: (text) => clipboard.writeText(text),
+    availableFormats: () => clipboard.availableFormats(),
+    readBuffer: (format) => clipboard.readBuffer(format),
+    writeBuffer: (format, data) => clipboard.writeBuffer(format, data),
+    clear: () => clipboard.clear()
+  },
+  getTargetApp: () => focusedInputAppService.getStrictFocusedInputApp(),
+  pasteText,
+  triggerAutoEnter: (mode) => autoEnterService.triggerAutoEnter(mode),
+  notifyClipboardFallback: async (result) => {
+    await notifyWindows.show({
+      title: 'Copied to clipboard',
+      body: result.failureMessage ?? 'Paste it into the target app'
+    })
+  }
+})
 const postRecordingPipeline = new PostRecordingPipeline({
   historyRepository,
   recordingStorage,
@@ -234,10 +262,11 @@ const postRecordingPipeline = new PostRecordingPipeline({
       store
     }),
   resolveMatchedInstruction,
+  getTargetAppForPrompt: () => appIdentityService.getFrontmostApp(),
   getDictionarySettings: cleanupPromptContextGetters.getDictionarySettings,
   getAboutMeSettings: cleanupPromptContextGetters.getAboutMeSettings,
   getPromptTemplateSettings: cleanupPromptContextGetters.getPromptTemplateSettings,
-  autoEnterService
+  finalTextDeliveryService
 })
 const listeningSession = new ListeningSessionManager(captureSource, {
   getFrontmostAppSnapshot: () => appIdentityService.getFrontmostApp(),
@@ -274,6 +303,7 @@ app.whenReady().then(() => {
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
   ipcMain.handle('listening-session:get-state', () => listeningSession.getState())
   ipcMain.handle('listening-session:cancel-processing', () => listeningSession.cancelProcessing())
+  ipcMain.handle('notify-window:get-state', () => notifyWindows.getState())
   ipcMain.handle('provider-auth:connect', (_event, providerId: string) => oauthService.start(providerId))
   ipcMain.handle('provider-auth:disconnect', (_event, providerId: string) =>
     oauthService.disconnect(providerId)

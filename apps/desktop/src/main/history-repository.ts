@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   defaultVoiceHistoryState,
+  type VoiceHistoryDeliveryDebug,
   type VoiceHistoryDebugData,
   type VoiceHistoryRecord,
   type VoiceHistoryState
@@ -11,12 +12,141 @@ interface HistoryStoreLike {
   set(key: string, value: unknown): void
 }
 
-type VoiceHistoryDebugPatch = Partial<VoiceHistoryDebugData>
+type VoiceHistoryDebugPatch = Omit<Partial<VoiceHistoryDebugData>, 'delivery'> & {
+  delivery?: Partial<VoiceHistoryDeliveryDebug>
+}
 
 export type VoiceHistoryPatch = Partial<
   Omit<VoiceHistoryRecord, 'id' | 'createdAt' | 'updatedAt' | 'debug'>
 > & {
   debug?: VoiceHistoryDebugPatch
+}
+
+function createDefaultDeliveryDebug(): VoiceHistoryDeliveryDebug {
+  return {
+    targetAppAtMatch: null,
+    targetAppAtDelivery: null,
+    matchedInstruction: null,
+    instructionPromptApplied: false,
+    ownershipMatchedAtDelivery: false,
+    method: 'pending',
+    status: 'pending',
+    outcome: 'pending',
+    pasteAttempted: false,
+    autoSendTriggered: false
+  }
+}
+
+function normalizeDeliveryDebug(
+  value: Partial<VoiceHistoryDeliveryDebug> | null | undefined
+): VoiceHistoryDeliveryDebug {
+  const defaults = createDefaultDeliveryDebug()
+
+  if (!value) {
+    return defaults
+  }
+
+  const normalizedMethod =
+    value.method === 'paste' || value.method === 'clipboard' || value.method === 'pending'
+      ? value.method
+      : typeof value.method === 'string' && value.method === 'ax-direct'
+        ? 'paste'
+        : defaults.method
+  const normalizedStatus = value.status ?? defaults.status
+  const normalizedTargetAppAtDelivery = value.targetAppAtDelivery ?? null
+  const normalizedFallbackReason = value.fallbackReason
+  const derivedOutcome =
+    normalizedStatus === 'completed'
+      ? normalizedMethod === 'paste'
+        ? 'paste-success'
+        : defaults.outcome
+      : normalizedStatus === 'fallback'
+        ? 'clipboard-fallback'
+        : normalizedStatus === 'failed'
+          ? 'delivery-failed'
+          : defaults.outcome
+  const isOutcomeCoherent =
+    value.outcome === derivedOutcome ||
+    (value.outcome === 'pending' && normalizedStatus === 'pending')
+  const normalizedOutcome =
+    value.outcome == null || !isOutcomeCoherent
+      ? derivedOutcome
+      : value.outcome
+  const derivedPasteAttempted =
+    normalizedMethod === 'paste' || normalizedOutcome === 'paste-success'
+  const normalizedPasteAttempted =
+    derivedPasteAttempted ? true : value.pasteAttempted ?? defaults.pasteAttempted
+  const normalizedInstructionPromptApplied = value.instructionPromptApplied ?? defaults.instructionPromptApplied
+  const normalizedOwnershipMatchedAtDelivery =
+    value.ownershipMatchedAtDelivery ?? defaults.ownershipMatchedAtDelivery
+
+  const normalized: VoiceHistoryDeliveryDebug = {
+    targetAppAtMatch: value.targetAppAtMatch ?? null,
+    targetAppAtDelivery: normalizedTargetAppAtDelivery,
+    matchedInstruction: value.matchedInstruction ?? null,
+    instructionPromptApplied: normalizedInstructionPromptApplied,
+    ownershipMatchedAtDelivery: normalizedOwnershipMatchedAtDelivery,
+    method: normalizedMethod,
+    status: normalizedStatus,
+    outcome: normalizedOutcome,
+    pasteAttempted: normalizedPasteAttempted,
+    autoSendTriggered: value.autoSendTriggered ?? defaults.autoSendTriggered,
+    ...(typeof value.failureMessage === 'string' ? { failureMessage: value.failureMessage } : {}),
+    ...(typeof normalizedFallbackReason === 'string'
+      ? { fallbackReason: normalizedFallbackReason }
+      : {})
+  }
+
+  const hasIdenticalShape =
+    normalized.targetAppAtMatch === value.targetAppAtMatch &&
+    normalized.targetAppAtDelivery === value.targetAppAtDelivery &&
+    normalized.matchedInstruction === value.matchedInstruction &&
+    normalized.instructionPromptApplied === value.instructionPromptApplied &&
+    normalized.ownershipMatchedAtDelivery === value.ownershipMatchedAtDelivery &&
+    normalized.method === value.method &&
+    normalized.status === value.status &&
+    normalized.outcome === value.outcome &&
+    normalized.pasteAttempted === value.pasteAttempted &&
+    normalized.autoSendTriggered === value.autoSendTriggered &&
+    normalized.failureMessage === value.failureMessage &&
+    normalized.fallbackReason === value.fallbackReason
+
+  return hasIdenticalShape ? (value as VoiceHistoryDeliveryDebug) : normalized
+}
+
+function normalizeFrontmostAppSnapshot(value: VoiceHistoryDebugData['frontmostAppSnapshot']) {
+  return value ?? null
+}
+
+function normalizeDebugData(debug: VoiceHistoryDebugData): VoiceHistoryDebugData {
+  const normalizedDelivery = normalizeDeliveryDebug(debug.delivery)
+  const normalizedFrontmostAppSnapshot = normalizeFrontmostAppSnapshot(debug.frontmostAppSnapshot)
+
+  if (
+    normalizedDelivery === debug.delivery &&
+    normalizedFrontmostAppSnapshot === debug.frontmostAppSnapshot
+  ) {
+    return debug
+  }
+
+  return {
+    ...debug,
+    frontmostAppSnapshot: normalizedFrontmostAppSnapshot,
+    delivery: normalizedDelivery
+  }
+}
+
+function normalizeRecord(record: VoiceHistoryRecord): VoiceHistoryRecord {
+  const normalizedDebug = normalizeDebugData(record.debug)
+
+  if (normalizedDebug === record.debug) {
+    return record
+  }
+
+  return {
+    ...record,
+    debug: normalizedDebug
+  }
 }
 
 export class HistoryRepository {
@@ -34,6 +164,7 @@ export class HistoryRepository {
 
   create(input: Pick<VoiceHistoryRecord, 'status' | 'audioDurationMs' | 'asrProviderId' | 'llmProviderId'>): VoiceHistoryRecord {
     const now = new Date().toISOString()
+
     const record: VoiceHistoryRecord = {
       id: randomUUID(),
       createdAt: now,
@@ -50,6 +181,8 @@ export class HistoryRepository {
         asrResponseSummary: {},
         llmRequest: {},
         llmResponseSummary: {},
+        frontmostAppSnapshot: null,
+        delivery: createDefaultDeliveryDebug(),
         timeline: [],
         errors: []
       }
@@ -68,10 +201,23 @@ export class HistoryRepository {
       }
 
       const { debug, ...rest } = patch
+      const nextDebug = debug
+        ? normalizeDebugData({
+            ...record.debug,
+            ...debug,
+            delivery: debug.delivery
+              ? {
+                  ...record.debug.delivery,
+                  ...debug.delivery
+                }
+              : record.debug.delivery
+          })
+        : record.debug
+
       return {
         ...record,
         ...rest,
-        debug: debug ? { ...record.debug, ...debug } : record.debug,
+        debug: nextDebug,
         updatedAt: new Date().toISOString()
       }
     })
@@ -86,7 +232,23 @@ export class HistoryRepository {
   }
 
   private read(): VoiceHistoryState {
-    return this.store.get<VoiceHistoryState>('voiceHistory') ?? defaultVoiceHistoryState
+    const state = this.store.get<VoiceHistoryState>('voiceHistory') ?? defaultVoiceHistoryState
+    let mutated = false
+    const records = state.records.map((record) => {
+      const normalized = normalizeRecord(record)
+      if (normalized !== record) {
+        mutated = true
+      }
+      return normalized
+    })
+
+    if (!mutated) {
+      return state
+    }
+
+    const normalizedState = { records }
+    this.write(normalizedState)
+    return normalizedState
   }
 
   private write(state: VoiceHistoryState): void {

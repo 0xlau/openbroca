@@ -1,11 +1,12 @@
 import type { TranscriptionSegment } from '@openbroca/providers/asr'
 import type { CompletionRequest } from '@openbroca/providers/llm'
+import type { AppIdentity } from '@openbroca/app-identity'
 import type { CapturedRecording } from './recording-types'
 import { buildRecognitionInput } from './audio-resampler'
 import type { HistoryRepository } from './history-repository'
 import type { MatchedInstructionRule } from './instructions/matcher'
 import type { RecordingStorage } from './recording-storage'
-import type { AutoEnterService } from './send-key/auto-enter'
+import type { FinalTextDeliveryService } from './final-text-delivery/service'
 import { buildCleanupSystemPrompt } from './cleanup-prompt'
 import {
   defaultAboutMeSettings,
@@ -22,6 +23,7 @@ import {
   normalizePromptTemplateSettings,
   type PromptTemplateSettings
 } from '../shared/prompt-template'
+import type { VoiceHistoryDeliveryDebug } from '../shared/voice-history'
 
 export interface CleanupPromptRawGetters {
   getDictionaryRaw: () => unknown
@@ -75,6 +77,14 @@ function createAbortError(signal?: AbortSignal): Error {
   return error
 }
 
+function sameApp(left: AppIdentity, right: AppIdentity): boolean {
+  if (left.id === right.id) return true
+  if (left.bundleId && right.bundleId && left.bundleId === right.bundleId) return true
+  if (left.aumid && right.aumid && left.aumid === right.aumid) return true
+  if (left.path && right.path && left.path === right.path) return true
+  return false
+}
+
 function isPipelineAbortError(error: unknown, signal?: AbortSignal): boolean {
   if (!signal?.aborted) {
     return false
@@ -111,6 +121,35 @@ function isPipelineAbortError(error: unknown, signal?: AbortSignal): boolean {
   return false
 }
 
+function createDeliveryFallback(
+  targetAppAtMatch: CapturedRecording['targetAppSnapshot'] | null,
+  matchedInstruction: MatchedInstructionRule | null,
+  instructionPromptApplied: boolean,
+  failureMessage: string,
+  fallbackReason: VoiceHistoryDeliveryDebug['fallbackReason'] = 'service-unavailable'
+): VoiceHistoryDeliveryDebug {
+  return {
+    targetAppAtMatch: targetAppAtMatch ?? null,
+    targetAppAtDelivery: null,
+    matchedInstruction: matchedInstruction
+      ? {
+          ruleId: matchedInstruction.ruleId,
+          name: matchedInstruction.name,
+          autoEnterMode: matchedInstruction.autoEnterMode
+        }
+      : null,
+    instructionPromptApplied,
+    ownershipMatchedAtDelivery: false,
+    method: 'pending',
+    status: 'failed',
+    outcome: 'delivery-failed',
+    pasteAttempted: false,
+    autoSendTriggered: false,
+    failureMessage,
+    fallbackReason
+  }
+}
+
 export class PostRecordingPipeline {
   constructor(
     private readonly deps: {
@@ -125,12 +164,13 @@ export class PostRecordingPipeline {
         model: string
       }>
       resolveMatchedInstruction?: (
-        frontmostAppSnapshot?: CapturedRecording['frontmostAppSnapshot']
+        targetAppSnapshot?: CapturedRecording['targetAppSnapshot']
       ) => Promise<MatchedInstructionRule | null>
+      getTargetAppForPrompt?: () => Promise<AppIdentity | null>
       getDictionarySettings?: () => DictionarySettings
       getAboutMeSettings?: () => AboutMeSettings
       getPromptTemplateSettings?: () => PromptTemplateSettings
-      autoEnterService?: AutoEnterService
+      finalTextDeliveryService?: FinalTextDeliveryService
     }
   ) {}
 
@@ -152,6 +192,9 @@ export class PostRecordingPipeline {
     }> = []
     const errors: Array<{ stage: 'storage' | 'asr' | 'llm'; message: string; at: string }> = []
     const now = () => new Date().toISOString()
+    const recordingContextDebug = {
+      frontmostAppSnapshot: recording.frontmostAppSnapshot ?? null
+    }
     const resolveStageFailureMessage = (error: unknown) =>
       isPipelineAbortError(error, signal) ? USER_CANCELLATION_MESSAGE : normalizeErrorMessage(error)
 
@@ -183,6 +226,7 @@ export class PostRecordingPipeline {
         failureStage: stage,
         failureMessage: message,
         debug: {
+          ...recordingContextDebug,
           ...debug,
           errors: [...errors],
           timeline: [...timeline]
@@ -211,6 +255,7 @@ export class PostRecordingPipeline {
       this.deps.historyRepository.update(record.id, {
         audioFilePath: stored.audioFilePath,
         debug: {
+          ...recordingContextDebug,
           timeline: [...timeline]
         }
       })
@@ -223,6 +268,7 @@ export class PostRecordingPipeline {
         failureStage: 'storage',
         failureMessage: message,
         debug: {
+          ...recordingContextDebug,
           errors: [...errors],
           timeline: [...timeline]
         }
@@ -254,6 +300,7 @@ export class PostRecordingPipeline {
         failureStage: 'asr',
         failureMessage: message,
         debug: {
+          ...recordingContextDebug,
           errors: [...errors],
           timeline: [...timeline]
         }
@@ -298,6 +345,7 @@ export class PostRecordingPipeline {
           failureStage: 'asr',
           failureMessage: message,
           debug: {
+            ...recordingContextDebug,
             rawTranscriptionText,
             asrSegments,
             asrRequest,
@@ -312,6 +360,7 @@ export class PostRecordingPipeline {
       pushTimeline('asr', 'completed')
       this.deps.historyRepository.update(record.id, {
         debug: {
+          ...recordingContextDebug,
           rawTranscriptionText,
           asrSegments,
           asrRequest,
@@ -330,6 +379,7 @@ export class PostRecordingPipeline {
         failureStage: 'asr',
         failureMessage: message,
         debug: {
+          ...recordingContextDebug,
           rawTranscriptionText,
           asrSegments,
           asrRequest,
@@ -355,11 +405,10 @@ export class PostRecordingPipeline {
     }
 
     let matchedInstruction: MatchedInstructionRule | null = null
+    const targetAppAtMatch = recording.targetAppSnapshot ?? null
     if (this.deps.resolveMatchedInstruction) {
       try {
-        matchedInstruction = await this.deps.resolveMatchedInstruction(
-          recording.frontmostAppSnapshot ?? null
-        )
+        matchedInstruction = await this.deps.resolveMatchedInstruction(targetAppAtMatch)
         console.debug('[voice-debug] matched instruction resolved', {
           ruleId: matchedInstruction?.ruleId ?? null,
           autoEnterMode: matchedInstruction?.autoEnterMode ?? 'off'
@@ -426,6 +475,7 @@ export class PostRecordingPipeline {
         failureStage: 'llm',
         failureMessage: message,
         debug: {
+          ...recordingContextDebug,
           rawTranscriptionText,
           asrSegments,
           asrRequest,
@@ -439,10 +489,32 @@ export class PostRecordingPipeline {
     }
 
     try {
+      let targetAppAtPrompt = targetAppAtMatch
+
+      if (matchedInstruction && this.deps.getTargetAppForPrompt) {
+        try {
+          targetAppAtPrompt = await this.deps.getTargetAppForPrompt()
+        } catch (error) {
+          console.debug('[voice-debug] prompt-time app resolution failed', {
+            error: error instanceof Error ? error.message : String(error),
+            fallbackTargetAppId: targetAppAtMatch?.id ?? null
+          })
+          targetAppAtPrompt = targetAppAtMatch
+        }
+      }
+
+      const instructionPromptApplied = Boolean(
+        matchedInstruction &&
+          matchedInstruction.activationApp &&
+          targetAppAtPrompt &&
+          sameApp(matchedInstruction.activationApp, targetAppAtPrompt)
+      )
       const systemPrompt = buildCleanupSystemPrompt({
         dictionary: this.deps.getDictionarySettings?.() ?? defaultDictionarySettings,
         aboutMe: this.deps.getAboutMeSettings?.() ?? defaultAboutMeSettings,
-        matchedInstructionText: matchedInstruction?.customInstructions ?? null,
+        matchedInstructionText: instructionPromptApplied
+          ? matchedInstruction?.customInstructions ?? null
+          : null,
         template: this.deps.getPromptTemplateSettings?.().template
       })
 
@@ -480,6 +552,7 @@ export class PostRecordingPipeline {
           failureStage: 'llm',
           failureMessage: message,
           debug: {
+            ...recordingContextDebug,
             rawTranscriptionText,
             asrSegments,
             asrRequest,
@@ -502,45 +575,38 @@ export class PostRecordingPipeline {
         return
       }
 
-      const autoEnterMode = matchedInstruction?.autoEnterMode ?? 'off'
-      const autoEnterRequested = autoEnterMode !== 'off'
-      let autoEnterSummary: Record<string, unknown> = {
-        mode: autoEnterMode,
-        requested: autoEnterRequested,
-        triggered: false
-      }
-      if (autoEnterMode !== 'off') {
-        throwIfProcessingAborted()
-        if (this.deps.autoEnterService) {
-          try {
-            await this.deps.autoEnterService.triggerAutoEnter(autoEnterMode)
-            autoEnterSummary = {
-              mode: autoEnterMode,
-              requested: true,
-              triggered: true
-            }
-          } catch (error) {
-            if (isPipelineAbortError(error, signal)) {
-              throw error
-            }
-            const message = error instanceof Error ? error.message : String(error)
-            autoEnterSummary = {
-              mode: autoEnterMode,
-              requested: true,
-              triggered: false,
-              failureMessage: message
-            }
-            console.debug('[voice-debug] auto enter trigger failed', {
-              message
-            })
+      let delivery: VoiceHistoryDeliveryDebug
+      if (!this.deps.finalTextDeliveryService) {
+        delivery = createDeliveryFallback(
+          targetAppAtMatch,
+          matchedInstruction,
+          instructionPromptApplied,
+          'service-unavailable'
+        )
+      } else {
+        try {
+          throwIfProcessingAborted()
+          delivery = await this.deps.finalTextDeliveryService.deliver({
+            text: result.content,
+            matchedInstruction,
+            targetAppAtMatch,
+            instructionPromptApplied
+          })
+        } catch (error) {
+          if (isPipelineAbortError(error, signal)) {
+            throw error
           }
-        } else {
-          autoEnterSummary = {
-            mode: autoEnterMode,
-            requested: true,
-            triggered: false,
-            skipped: 'service-unavailable'
-          }
+
+          const message = normalizeErrorMessage(error)
+          console.debug('[voice-debug] final text delivery failed', {
+            message
+          })
+          delivery = createDeliveryFallback(
+            targetAppAtMatch,
+            matchedInstruction,
+            instructionPromptApplied,
+            message
+          )
         }
       }
 
@@ -550,12 +616,13 @@ export class PostRecordingPipeline {
         status: 'completed',
         finalText: result.content,
         debug: {
+          ...recordingContextDebug,
           llmRequest: buildLLMRequestDebug(),
           llmResponseSummary: {
             finishReason: result.finishReason,
-            matchedInstruction: matchedInstructionDebug,
-            autoEnter: autoEnterSummary
+            matchedInstruction: matchedInstructionDebug
           },
+          delivery,
           tokenUsage: result.usage,
           timeline: [...timeline]
         }
@@ -573,6 +640,7 @@ export class PostRecordingPipeline {
         failureStage: 'llm',
         failureMessage: message,
         debug: {
+          ...recordingContextDebug,
           rawTranscriptionText,
           asrSegments,
           asrRequest,

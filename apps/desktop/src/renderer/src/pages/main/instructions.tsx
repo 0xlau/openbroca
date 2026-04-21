@@ -20,6 +20,10 @@ import {
 import { instructionsStore, type InstructionRule } from '@renderer/stores/instructions-store'
 import { trpc } from '@renderer/trpc'
 import { useStore } from 'zustand'
+import {
+  getInstructionActivationAppStableIdentityKeys,
+  instructionActivationAppsShareStableIdentity
+} from '../../../../shared/instructions'
 
 interface EditorState {
   open: boolean
@@ -39,7 +43,7 @@ function createRuleId(): string {
   return `instruction-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function buildOwnedAppNamesById(
+function buildOwnedAppNamesByKey(
   rules: InstructionRule[],
   excludedRuleId: string | null
 ): Record<string, string> {
@@ -51,11 +55,29 @@ function buildOwnedAppNamesById(
     }
 
     for (const app of rule.activationApps) {
-      mapping[app.id] = rule.name
+      for (const stableIdentityKey of getInstructionActivationAppStableIdentityKeys(app)) {
+        mapping[stableIdentityKey] = rule.name
+      }
     }
   }
 
   return mapping
+}
+
+function removeActivationAppByOwnershipKey(
+  activationApps: InstructionRule['activationApps'],
+  app: InstructionRule['activationApps'][number]
+): InstructionRule['activationApps'] {
+  return activationApps.filter(
+    (candidate) => !instructionActivationAppsShareStableIdentity(candidate, app)
+  )
+}
+
+function replaceActivationAppByOwnershipKey(
+  activationApps: InstructionRule['activationApps'],
+  app: InstructionRule['activationApps'][number]
+): InstructionRule['activationApps'] {
+  return [...removeActivationAppByOwnershipKey(activationApps, app), app]
 }
 
 function toSortedDetectedApps(apps: AppIdentity[] | undefined): AppIdentity[] {
@@ -84,8 +106,8 @@ export const Instructions: React.FC = () => {
 
   const detectedApps = React.useMemo(() => toSortedDetectedApps(detectedAppsRaw), [detectedAppsRaw])
 
-  const ownedAppNamesById = React.useMemo(
-    () => buildOwnedAppNamesById(draftRules ?? data.rules, editorState.rule?.id ?? null),
+  const ownedAppNamesByKey = React.useMemo(
+    () => buildOwnedAppNamesByKey(draftRules ?? data.rules, editorState.rule?.id ?? null),
     [data.rules, draftRules, editorState.rule?.id]
   )
 
@@ -108,7 +130,8 @@ export const Instructions: React.FC = () => {
       customInstructions: value.customInstructions,
       autoEnterMode: value.autoEnterMode
     }
-    const previousRules = cloneRulesSnapshot(draftRules ?? instructionsStore.getState().data.rules)
+    const persistedRules = cloneRulesSnapshot(instructionsStore.getState().data.rules)
+    const previousRules = cloneRulesSnapshot(draftRules ?? persistedRules)
 
     try {
       const nextRules = editingRuleId
@@ -123,7 +146,7 @@ export const Instructions: React.FC = () => {
         ...state,
         data: {
           ...state.data,
-          rules: previousRules
+          rules: persistedRules
         }
       }))
       setDraftRules(previousRules)
@@ -251,7 +274,7 @@ export const Instructions: React.FC = () => {
         open={editorState.open}
         rule={editorState.rule}
         detectedApps={detectedApps}
-        ownedAppNamesById={ownedAppNamesById}
+        ownedAppNamesByKey={ownedAppNamesByKey}
         isSubmitting={isPersisting}
         errorMessage={editorErrorMessage}
         onOpenChange={(open) => {
@@ -272,7 +295,7 @@ export const Instructions: React.FC = () => {
             if (!currentRuleId) {
               return baseRules.map((candidate) => ({
                 ...candidate,
-                activationApps: candidate.activationApps.filter((item) => item.id !== app.id)
+                activationApps: removeActivationAppByOwnershipKey(candidate.activationApps, app)
               }))
             }
 
@@ -280,16 +303,13 @@ export const Instructions: React.FC = () => {
               if (candidate.id === currentRuleId) {
                 return {
                   ...candidate,
-                  activationApps: [
-                    ...candidate.activationApps.filter((item) => item.id !== app.id),
-                    app
-                  ]
+                  activationApps: replaceActivationAppByOwnershipKey(candidate.activationApps, app)
                 }
               }
 
               return {
                 ...candidate,
-                activationApps: candidate.activationApps.filter((item) => item.id !== app.id)
+                activationApps: removeActivationAppByOwnershipKey(candidate.activationApps, app)
               }
             })
           })

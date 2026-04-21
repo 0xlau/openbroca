@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
+import type { NotifyWindowBridgeState } from '../shared/notify-window-state'
 import type { ProviderAuthState } from '../shared/provider-auth'
 
 // Custom APIs for renderer
@@ -17,7 +18,8 @@ const api = {
       ipcRenderer.invoke('provider-auth:disconnect', providerId) as Promise<ProviderAuthState>
   },
   listeningSession: {
-    cancelProcessing: () => ipcRenderer.invoke('listening-session:cancel-processing') as Promise<void>,
+    cancelProcessing: () =>
+      ipcRenderer.invoke('listening-session:cancel-processing') as Promise<void>,
     getState: () =>
       ipcRenderer.invoke('listening-session:get-state') as Promise<ListeningSessionBridgeState>,
     onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => {
@@ -28,6 +30,20 @@ const api = {
 
       return () => {
         ipcRenderer.removeListener('listening-session:state-changed', handler)
+      }
+    }
+  },
+  notifyWindow: {
+    getState: () =>
+      ipcRenderer.invoke('notify-window:get-state') as Promise<NotifyWindowBridgeState>,
+    onStateChange: (callback: (state: NotifyWindowBridgeState) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: NotifyWindowBridgeState) =>
+        callback(state)
+
+      ipcRenderer.on('notify-window:state-changed', handler)
+
+      return () => {
+        ipcRenderer.removeListener('notify-window:state-changed', handler)
       }
     }
   }

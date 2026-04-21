@@ -4,6 +4,32 @@ import {
   PostRecordingPipeline
 } from '../post-recording-pipeline'
 
+function createCompletedDeliveryResult(overrides: Record<string, unknown> = {}) {
+  return {
+    targetAppAtMatch: null,
+    targetAppAtDelivery: {
+      id: 'current-chat-window',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    },
+    matchedInstruction: {
+      ruleId: 'rule-chat',
+      name: 'Chat',
+      autoEnterMode: 'enter'
+    },
+    instructionPromptApplied: true,
+    ownershipMatchedAtDelivery: true,
+    method: 'paste',
+    status: 'completed',
+    outcome: 'paste-success',
+    pasteAttempted: true,
+    autoSendTriggered: true,
+    ...overrides
+  }
+}
+
 describe('createNormalizedCleanupPromptContextGetters', () => {
   test('normalizes malformed raw dictionary/about-me values and prompt template from raw getters', () => {
     const getters = createNormalizedCleanupPromptContextGetters({
@@ -192,7 +218,6 @@ describe('PostRecordingPipeline', () => {
         usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
       })
     }
-
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
@@ -281,7 +306,6 @@ describe('PostRecordingPipeline', () => {
         usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
       })
     }
-
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
       recordingStorage: storage as never,
@@ -344,6 +368,13 @@ describe('PostRecordingPipeline', () => {
         usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
       })
     }
+    const chatApp = {
+      id: 'com.openai.chat',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    } as const
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -356,7 +387,8 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: '  Use short chat-style replies.  ',
-        autoEnterMode: 'off'
+        autoEnterMode: 'off',
+        activationApp: chatApp
       }),
       getDictionarySettings: () => ({
         entries: [
@@ -387,12 +419,275 @@ describe('PostRecordingPipeline', () => {
       chunks: [new Uint8Array([1, 2])],
       startedAt: '2026-04-02T10:00:00.000Z',
       endedAt: '2026-04-02T10:00:01.000Z',
-      durationMs: 1000
+      durationMs: 1000,
+      targetAppSnapshot: chatApp
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
     expect(llmRequest?.messages[0]?.content).toBe(
       'HOTWORDS=- openbroca | NICK=Liu | MATCHED=Use short chat-style replies. | FUTURE= | UNKNOWN='
+    )
+  })
+
+  test('appends matched custom instructions only when prompt-time frontmost app still matches the rule app', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-prompt-app-match' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/prompt-app-match.wav',
+        fileName: 'prompt-app-match.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const wechatApp = {
+      id: 'com.tencent.xinWeChat',
+      displayName: 'WeChat',
+      platform: 'macos',
+      bundleId: 'com.tencent.xinWeChat',
+      source: 'detected'
+    } as const
+    const getTargetAppForPrompt = vi.fn().mockResolvedValue(wechatApp)
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue(createCompletedDeliveryResult())
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-wechat',
+        name: 'WeChat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnterMode: 'off',
+        activationApp: wechatApp
+      }),
+      getTargetAppForPrompt,
+      finalTextDeliveryService
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000,
+      targetAppSnapshot: wechatApp
+    } as never)
+
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(getTargetAppForPrompt).toHaveBeenCalledTimes(1)
+    expect(llmRequest?.messages[0]?.content).toContain('Matched app instructions:')
+    expect(llmRequest?.messages[0]?.content).toContain('Use short chat-style replies.')
+    expect(finalTextDeliveryService.deliver).toHaveBeenCalledWith({
+      text: 'Send this now.',
+      matchedInstruction: expect.objectContaining({
+        ruleId: 'rule-wechat',
+        autoEnterMode: 'off',
+        activationApp: wechatApp
+      }),
+      targetAppAtMatch: wechatApp,
+      instructionPromptApplied: true
+    })
+  })
+
+  test('omits matched custom instructions when prompt-time frontmost app changed before prompt build', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-prompt-app-changed' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/prompt-app-changed.wav',
+        fileName: 'prompt-app-changed.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const wechatApp = {
+      id: 'com.tencent.xinWeChat',
+      displayName: 'WeChat',
+      platform: 'macos',
+      bundleId: 'com.tencent.xinWeChat',
+      source: 'detected'
+    } as const
+    const notesApp = {
+      id: 'com.apple.Notes',
+      displayName: 'Notes',
+      platform: 'macos',
+      bundleId: 'com.apple.Notes',
+      source: 'detected'
+    } as const
+    const getTargetAppForPrompt = vi.fn().mockResolvedValue(notesApp)
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue(createCompletedDeliveryResult())
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-wechat',
+        name: 'WeChat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnterMode: 'off',
+        activationApp: wechatApp
+      }),
+      getTargetAppForPrompt,
+      finalTextDeliveryService
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000,
+      targetAppSnapshot: wechatApp
+    } as never)
+
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(getTargetAppForPrompt).toHaveBeenCalledTimes(1)
+    expect(llmRequest?.messages[0]?.content).not.toContain('Use short chat-style replies.')
+    expect(finalTextDeliveryService.deliver).toHaveBeenCalledWith({
+      text: 'Send this now.',
+      matchedInstruction: expect.objectContaining({
+        ruleId: 'rule-wechat',
+        autoEnterMode: 'off',
+        activationApp: wechatApp
+      }),
+      targetAppAtMatch: wechatApp,
+      instructionPromptApplied: false
+    })
+  })
+
+  test('falls back to target app at match when prompt-time app probe rejects', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-prompt-app-probe-rejects' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/prompt-app-probe-rejects.wav',
+        fileName: 'prompt-app-probe-rejects.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const wechatApp = {
+      id: 'com.tencent.xinWeChat',
+      displayName: 'WeChat',
+      platform: 'macos',
+      bundleId: 'com.tencent.xinWeChat',
+      source: 'detected'
+    } as const
+    const getTargetAppForPrompt = vi
+      .fn<() => Promise<typeof wechatApp | null>>()
+      .mockRejectedValue(new Error('frontmost-app probe failed'))
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-wechat',
+        name: 'WeChat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnterMode: 'off',
+        activationApp: wechatApp
+      }),
+      getTargetAppForPrompt
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000,
+      targetAppSnapshot: wechatApp
+    } as never)
+
+    const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
+    expect(getTargetAppForPrompt).toHaveBeenCalledTimes(1)
+    expect(llmProvider.generate).toHaveBeenCalledTimes(1)
+    expect(llmRequest?.messages[0]?.content).toContain('Use short chat-style replies.')
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-prompt-app-probe-rejects',
+      expect.objectContaining({
+        status: 'completed',
+        finalText: 'Send this now.'
+      })
     )
   })
 
@@ -844,7 +1139,16 @@ describe('PostRecordingPipeline', () => {
         }
       })
     }
-    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue(createCompletedDeliveryResult())
+    }
+    const chatApp = {
+      id: 'com.openai.chat',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    } as const
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -857,11 +1161,10 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: 'Use short chat-style replies.',
-        autoEnterMode: 'enter'
+        autoEnterMode: 'enter',
+        activationApp: chatApp
       }),
-      autoEnterService: {
-        triggerAutoEnter
-      }
+      finalTextDeliveryService
     } as never)
 
     await pipeline.process(
@@ -877,7 +1180,7 @@ describe('PostRecordingPipeline', () => {
 
     const lastPatch = repository.update.mock.lastCall?.[1]
 
-    expect(triggerAutoEnter).not.toHaveBeenCalled()
+    expect(finalTextDeliveryService.deliver).not.toHaveBeenCalled()
     expect(
       repository.update.mock.calls.some(([, patch]) => patch?.status === 'completed')
     ).toBe(false)
@@ -953,7 +1256,16 @@ describe('PostRecordingPipeline', () => {
         usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
       })
     }
-    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue(createCompletedDeliveryResult())
+    }
+    const chatApp = {
+      id: 'com.openai.chat',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    } as const
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -966,11 +1278,10 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: 'Use short chat-style replies.',
-        autoEnterMode: 'enter'
+        autoEnterMode: 'enter',
+        activationApp: chatApp
       }),
-      autoEnterService: {
-        triggerAutoEnter
-      }
+      finalTextDeliveryService
     } as never)
 
     await pipeline.process({
@@ -978,19 +1289,37 @@ describe('PostRecordingPipeline', () => {
       chunks: [new Uint8Array([1, 2])],
       startedAt: '2026-04-02T10:00:00.000Z',
       endedAt: '2026-04-02T10:00:01.000Z',
-      durationMs: 1000
+      durationMs: 1000,
+      targetAppSnapshot: chatApp
     })
 
     const llmRequest = llmProvider.generate.mock.calls[0]?.[0]
     expect(llmRequest?.messages[0]?.content).toContain('Matched app instructions:')
     expect(llmRequest?.messages[0]?.content).toContain('Use short chat-style replies.')
-    expect(triggerAutoEnter).toHaveBeenCalledTimes(1)
+    expect(finalTextDeliveryService.deliver).toHaveBeenCalledWith({
+      text: 'Send this now.',
+      matchedInstruction: expect.objectContaining({
+        ruleId: 'rule-chat',
+        autoEnterMode: 'enter'
+      }),
+      targetAppAtMatch: chatApp,
+      instructionPromptApplied: true
+    })
 
     expect(repository.update).toHaveBeenLastCalledWith(
       'record-auto-enter',
       expect.objectContaining({
         status: 'completed',
         debug: expect.objectContaining({
+          delivery: expect.objectContaining({
+            instructionPromptApplied: true,
+            ownershipMatchedAtDelivery: true,
+            method: 'paste',
+            status: 'completed',
+            outcome: 'paste-success',
+            pasteAttempted: true,
+            autoSendTriggered: true
+          }),
           llmRequest: expect.objectContaining({
             matchedInstruction: expect.objectContaining({
               ruleId: 'rule-chat',
@@ -1034,7 +1363,17 @@ describe('PostRecordingPipeline', () => {
         usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
       })
     }
-    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue(
+        createCompletedDeliveryResult({
+          matchedInstruction: {
+            ruleId: 'rule-chat',
+            name: 'Chat',
+            autoEnterMode: 'mod-enter'
+          }
+        })
+      )
+    }
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -1047,11 +1386,16 @@ describe('PostRecordingPipeline', () => {
         ruleId: 'rule-chat',
         name: 'Chat',
         customInstructions: 'Use short chat-style replies.',
-        autoEnterMode: 'mod-enter'
+        autoEnterMode: 'mod-enter',
+        activationApp: {
+          id: 'com.openai.chat',
+          displayName: 'ChatGPT',
+          platform: 'macos',
+          bundleId: 'com.openai.chat',
+          source: 'detected'
+        }
       }),
-      autoEnterService: {
-        triggerAutoEnter
-      }
+      finalTextDeliveryService
     } as never)
 
     await pipeline.process({
@@ -1062,7 +1406,15 @@ describe('PostRecordingPipeline', () => {
       durationMs: 1000
     })
 
-    expect(triggerAutoEnter).toHaveBeenCalledWith('mod-enter')
+    expect(finalTextDeliveryService.deliver).toHaveBeenCalledWith({
+      text: 'Send this now.',
+      matchedInstruction: expect.objectContaining({
+        ruleId: 'rule-chat',
+        autoEnterMode: 'mod-enter'
+      }),
+      targetAppAtMatch: null,
+      instructionPromptApplied: false
+    })
   })
 
   test('does not trigger auto enter when matched instruction mode is off', async () => {
@@ -1186,7 +1538,7 @@ describe('PostRecordingPipeline', () => {
     expect(triggerAutoEnter).not.toHaveBeenCalled()
   })
 
-  test('resolves matched instruction from recording frontmost snapshot', async () => {
+  test('resolves matched instruction from recording target snapshot', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-snapshot' })),
       update: vi.fn()
@@ -1246,7 +1598,7 @@ describe('PostRecordingPipeline', () => {
       startedAt: '2026-04-02T10:00:00.000Z',
       endedAt: '2026-04-02T10:00:01.000Z',
       durationMs: 1000,
-      frontmostAppSnapshot: {
+      targetAppSnapshot: {
         id: 'com.snapshot.app',
         displayName: 'Snapshot',
         platform: 'macos',
@@ -1276,12 +1628,253 @@ describe('PostRecordingPipeline', () => {
     )
   })
 
+  test('uses target app snapshot for instruction matching and persists delivery debug from the delivery service', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-target-app-delivery' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/target-app-delivery.wav',
+        fileName: 'target-app-delivery.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const targetAppSnapshot = {
+      id: 'com.openai.chat',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    } as const
+    const resolveMatchedInstruction = vi.fn().mockResolvedValue({
+      ruleId: 'rule-chat',
+      name: 'Chat',
+      customInstructions: 'Use short chat-style replies.',
+      autoEnterMode: 'enter',
+      activationApp: targetAppSnapshot
+    })
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue(
+        createCompletedDeliveryResult({
+          targetAppAtMatch: targetAppSnapshot
+        })
+      )
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction,
+      finalTextDeliveryService
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000,
+      frontmostAppSnapshot: {
+        id: 'com.slack.desktop',
+        displayName: 'Slack',
+        platform: 'macos',
+        bundleId: 'com.slack.desktop',
+        source: 'detected'
+      },
+      targetAppSnapshot
+    } as never)
+
+    expect(resolveMatchedInstruction).toHaveBeenCalledWith(targetAppSnapshot)
+    expect(finalTextDeliveryService.deliver).toHaveBeenCalledWith({
+      text: 'Send this now.',
+      matchedInstruction: expect.objectContaining({
+        ruleId: 'rule-chat',
+        autoEnterMode: 'enter',
+        activationApp: targetAppSnapshot
+      }),
+      targetAppAtMatch: targetAppSnapshot,
+      instructionPromptApplied: true
+    })
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-target-app-delivery',
+      expect.objectContaining({
+        status: 'completed',
+        finalText: 'Send this now.',
+        debug: expect.objectContaining({
+          frontmostAppSnapshot: {
+            id: 'com.slack.desktop',
+            displayName: 'Slack',
+            platform: 'macos',
+            bundleId: 'com.slack.desktop',
+            source: 'detected'
+          },
+          delivery: {
+            targetAppAtMatch: targetAppSnapshot,
+            targetAppAtDelivery: {
+              id: 'current-chat-window',
+              displayName: 'ChatGPT',
+              platform: 'macos',
+              bundleId: 'com.openai.chat',
+              source: 'detected'
+            },
+            matchedInstruction: {
+              ruleId: 'rule-chat',
+              name: 'Chat',
+              autoEnterMode: 'enter'
+            },
+            instructionPromptApplied: true,
+            ownershipMatchedAtDelivery: true,
+            method: 'paste',
+            status: 'completed',
+            outcome: 'paste-success',
+            pasteAttempted: true,
+            autoSendTriggered: true
+          }
+        })
+      })
+    )
+  })
+
+  test('records a schema-complete failed delivery when no delivery service is available', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-delivery-service-unavailable' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/delivery-service-unavailable.wav',
+        fileName: 'delivery-service-unavailable.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send this now',
+        segments: [{ text: 'send this now', isFinal: true }]
+      })
+    }
+    const llmProvider = {
+      id: 'openai-codex',
+      displayName: 'OpenAI Codex',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }]),
+      generate: vi.fn().mockResolvedValue({
+        content: 'Send this now.',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 4, totalTokens: 14 }
+      })
+    }
+    const targetAppSnapshot = {
+      id: 'com.openai.chat',
+      displayName: 'ChatGPT',
+      platform: 'macos',
+      bundleId: 'com.openai.chat',
+      source: 'detected'
+    } as const
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.2-codex' }),
+      resolveMatchedInstruction: vi.fn().mockResolvedValue({
+        ruleId: 'rule-chat',
+        name: 'Chat',
+        customInstructions: 'Use short chat-style replies.',
+        autoEnterMode: 'enter',
+        activationApp: targetAppSnapshot
+      })
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000,
+      targetAppSnapshot
+    } as never)
+
+    expect(repository.update).toHaveBeenLastCalledWith(
+      'record-delivery-service-unavailable',
+      expect.objectContaining({
+        status: 'completed',
+        finalText: 'Send this now.',
+        debug: expect.objectContaining({
+          delivery: {
+            targetAppAtMatch: targetAppSnapshot,
+            targetAppAtDelivery: null,
+            matchedInstruction: {
+              ruleId: 'rule-chat',
+              name: 'Chat',
+              autoEnterMode: 'enter'
+            },
+            instructionPromptApplied: true,
+            ownershipMatchedAtDelivery: false,
+            method: 'pending',
+            status: 'failed',
+            outcome: 'delivery-failed',
+            pasteAttempted: false,
+            autoSendTriggered: false,
+            failureMessage: 'service-unavailable',
+            fallbackReason: 'service-unavailable'
+          }
+        })
+      })
+    )
+  })
+
   test('does not trigger auto enter when llm stage fails after request construction', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-auto-enter-llm-failure' })),
       update: vi.fn()
     }
-    const triggerAutoEnter = vi.fn().mockResolvedValue(undefined)
+    const finalTextDeliveryService = {
+      deliver: vi.fn().mockResolvedValue({
+        targetAppAtMatch: null,
+        targetAppAtDelivery: null,
+        matchedInstruction: null,
+        instructionPromptApplied: false,
+        ownershipMatchedAtDelivery: false,
+        method: 'clipboard',
+        status: 'failed',
+        outcome: 'delivery-failed',
+        pasteAttempted: false,
+        autoSendTriggered: false,
+        failureMessage: 'service-unavailable',
+        fallbackReason: 'service-unavailable'
+      })
+    }
 
     const pipeline = new PostRecordingPipeline({
       historyRepository: repository as never,
@@ -1316,9 +1909,7 @@ describe('PostRecordingPipeline', () => {
         customInstructions: 'Use short chat-style replies.',
         autoEnterMode: 'enter'
       }),
-      autoEnterService: {
-        triggerAutoEnter
-      }
+      finalTextDeliveryService
     })
 
     await pipeline.process({
@@ -1329,7 +1920,7 @@ describe('PostRecordingPipeline', () => {
       durationMs: 1000
     })
 
-    expect(triggerAutoEnter).not.toHaveBeenCalled()
+    expect(finalTextDeliveryService.deliver).not.toHaveBeenCalled()
     expect(repository.update).toHaveBeenLastCalledWith(
       'record-auto-enter-llm-failure',
       expect.objectContaining({
