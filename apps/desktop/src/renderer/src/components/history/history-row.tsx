@@ -54,7 +54,13 @@ export function HistoryRow({
       <TypographyMuted className="w-40 shrink-0 text-xs pt-0.75">
         {new Date(item.createdAt).toLocaleString()}
       </TypographyMuted>
-      <TypographySmall className="min-w-0 flex-1 line-clamp-3 leading-normal font-normal">
+      <TypographySmall
+        className={
+          item.status === 'failed'
+            ? 'min-w-0 flex-1 line-clamp-3 leading-normal font-normal text-destructive'
+            : 'min-w-0 flex-1 line-clamp-3 leading-normal font-normal'
+        }
+      >
         {preview}
       </TypographySmall>
       {item.audioFileUrl ? (

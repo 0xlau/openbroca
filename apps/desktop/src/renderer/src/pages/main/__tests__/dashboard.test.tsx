@@ -179,7 +179,11 @@ vi.mock('@renderer/stores/settings-store', () => ({
   settingsStore
 }))
 
-vi.mock('@openbroca/ui', () => ({
+vi.mock('@openbroca/ui', () => {
+  let currentTabsValue: string | undefined
+  let currentOnValueChange: ((value: string) => void) | undefined
+
+  return {
   Alert: ({
     children,
     className,
@@ -237,6 +241,37 @@ vi.mock('@openbroca/ui', () => ({
   Kbd: ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>,
   KbdGroup: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   Separator: () => <hr />,
+  Tabs: ({
+    children,
+    value,
+    onValueChange
+  }: {
+    children: ReactNode
+    value?: string
+    onValueChange?: (value: string) => void
+  }) => {
+    currentTabsValue = value
+    currentOnValueChange = onValueChange
+
+    return <div data-tabs-value={value}>{children}</div>
+  },
+  TabsList: ({ children }: { children: ReactNode }) => <div role="tablist">{children}</div>,
+  TabsTrigger: ({
+    children,
+    value
+  }: {
+    children: ReactNode
+    value: string
+  }) => (
+    <button
+      role="tab"
+      aria-selected={currentTabsValue === value}
+      data-value={value}
+      onClick={() => currentOnValueChange?.(value)}
+    >
+      {children}
+    </button>
+  ),
   TypographyH1: ({
     children,
     className,
@@ -265,7 +300,8 @@ vi.mock('@openbroca/ui', () => ({
     children: ReactNode
     className?: string
   }) => <p className={className}>{children}</p>
-}))
+  }
+})
 
 vi.mock('@hugeicons/react', () => ({
   HugeiconsIcon: () => <span aria-hidden="true">icon</span>
@@ -489,5 +525,35 @@ describe('Dashboard', () => {
     expect(screen.getAllByRole('button', { name: /show history details/i })).toHaveLength(4)
     expect(screen.getByText('LLM failed: upstream 500')).toBeTruthy()
     expect(screen.getByText('Processing...')).toBeTruthy()
+  })
+
+  test('filters history with tabs and styles failed previews in red', async () => {
+    historyListRecords = [
+      historyListRecords[0]!,
+      {
+        id: 'record-failed',
+        createdAt: '2026-04-02T09:59:00.000Z',
+        updatedAt: '2026-04-02T09:59:00.000Z',
+        status: 'failed',
+        audioDurationMs: 1000,
+        finalText: null,
+        audioFileUrl: 'openbroca-media://history/record-failed',
+        failureStage: 'llm',
+        failureMessage: 'upstream 500'
+      }
+    ]
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expect(screen.getByRole('tab', { name: 'All' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Successful' })).toBeTruthy()
+    expect(screen.getByText('LLM failed: upstream 500')).toBeTruthy()
+    expect(screen.getByText('LLM failed: upstream 500').className).toContain('text-destructive')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Successful' }))
+
+    expect(screen.queryByText('LLM failed: upstream 500')).toBeNull()
+    expect(screen.getByText('Send the report by Friday.')).toBeTruthy()
   })
 })

@@ -11,6 +11,9 @@ import {
   Kbd,
   KbdGroup,
   Separator,
+  Tabs,
+  TabsList,
+  TabsTrigger,
   TypographyH1,
   TypographyLarge,
   TypographyMuted
@@ -55,6 +58,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 export const Dashboard: React.FC = () => {
   const settings = useStore(settingsStore, (state) => state.data)
   const [selectedHistoryId, setSelectedHistoryId] = React.useState<string | null>(null)
+  const [historyFilter, setHistoryFilter] = React.useState<'all' | 'valid'>('all')
 
   const { data: appVersion } = trpc.app.getAppVersion.useQuery()
   const historyListQuery = trpc.history.list.useQuery()
@@ -63,8 +67,11 @@ export const Dashboard: React.FC = () => {
     { enabled: selectedHistoryId !== null }
   )
 
-  const historyItems = (historyListQuery.data ?? []).filter(
+  const baseHistoryItems = (historyListQuery.data ?? []).filter(
     (item) => settings.debugMode || item.status === 'failed' || hasMeaningfulText(item.finalText)
+  )
+  const historyItems = baseHistoryItems.filter(
+    (item) => historyFilter === 'all' || item.status !== 'failed'
   )
 
   return (
@@ -114,8 +121,14 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <section className="space-y-3">
-        <div className="px-1">
+        <div className="flex items-center justify-between gap-3 px-1">
           <TypographyLarge>History</TypographyLarge>
+          <Tabs value={historyFilter} onValueChange={(value) => setHistoryFilter(value as 'all' | 'valid')}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="valid">Successful</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
           {historyListQuery.isLoading ? (
