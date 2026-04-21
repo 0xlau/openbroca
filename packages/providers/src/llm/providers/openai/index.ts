@@ -27,9 +27,10 @@ export const openaiDescriptor: LLMProviderDescriptor<OpenAIConfig, OpenAISetting
       key: 'model',
       type: 'model-select',
       label: 'Model',
-      description: 'Choose the default OpenAI model used for chat completions.',
+      description: 'Choose the default OpenAI model used for chat completions, or enter a custom model ID.',
       required: true,
-      dataSource: 'llm-models'
+      dataSource: 'llm-models',
+      allowCustomValue: true
     }
   ],
   getSetupStatus: ({ settings }) => {

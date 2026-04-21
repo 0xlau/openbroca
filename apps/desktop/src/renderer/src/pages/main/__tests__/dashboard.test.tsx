@@ -395,7 +395,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('ASR pipeline failed.')).toBeTruthy()
   })
 
-  test('hides records without meaningful llm output when debug mode is off', async () => {
+  test('keeps failed records visible when debug mode is off, but still hides processing and empty completed records', async () => {
     historyListRecords = [
       historyListRecords[0]!,
       {
@@ -436,8 +436,8 @@ describe('Dashboard', () => {
     const { Dashboard } = await import('../dashboard')
     render(<Dashboard />)
 
-    expect(screen.getAllByRole('button', { name: /show history details/i })).toHaveLength(1)
-    expect(screen.queryByText('upstream 500')).toBeNull()
+    expect(screen.getAllByRole('button', { name: /show history details/i })).toHaveLength(2)
+    expect(screen.getByText('LLM failed: upstream 500')).toBeTruthy()
     expect(screen.queryByText('Processing...')).toBeNull()
   })
 
@@ -487,7 +487,7 @@ describe('Dashboard', () => {
     render(<Dashboard />)
 
     expect(screen.getAllByRole('button', { name: /show history details/i })).toHaveLength(4)
-    expect(screen.getByText('upstream 500')).toBeTruthy()
+    expect(screen.getByText('LLM failed: upstream 500')).toBeTruthy()
     expect(screen.getByText('Processing...')).toBeTruthy()
   })
 })

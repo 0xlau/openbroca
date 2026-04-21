@@ -1005,6 +1005,87 @@ describe('PostRecordingPipeline', () => {
     expect(lastPatch?.finalText).toBeUndefined()
   })
 
+  test('stores raw llm response details when llm generation fails after a nonstandard response', async () => {
+    const repository = {
+      create: vi.fn(() => ({ id: 'record-llm-shape-failure' })),
+      update: vi.fn()
+    }
+    const storage = {
+      save: vi.fn().mockResolvedValue({
+        audioFilePath: '/recordings/llm-shape-failure.wav',
+        fileName: 'llm-shape-failure.wav',
+        byteLength: 64
+      })
+    }
+    const asrProvider = {
+      id: 'deepgram',
+      displayName: 'Deepgram',
+      isConfigured: () => true,
+      recognize: vi.fn().mockResolvedValue({
+        text: 'send the report by friday',
+        segments: [{ text: 'send the report by friday', isFinal: true }]
+      })
+    }
+    const llmError = Object.assign(new Error('Unsupported OpenAI response shape'), {
+      rawResponse: {
+        output: [
+          {
+            content: [{ type: 'refusal', text: 'nope' }]
+          }
+        ]
+      }
+    })
+    const llmProvider = {
+      id: 'openai',
+      displayName: 'OpenAI',
+      isConfigured: () => true,
+      listModels: vi.fn().mockResolvedValue([{ id: 'gpt-5.4', name: 'gpt-5.4' }]),
+      generate: vi.fn().mockRejectedValue(llmError)
+    }
+
+    const pipeline = new PostRecordingPipeline({
+      historyRepository: repository as never,
+      recordingStorage: storage as never,
+      resolveActiveASRSelection: vi.fn().mockResolvedValue({ provider: asrProvider, settings: {} }),
+      resolveActiveLLMSelection: vi
+        .fn()
+        .mockResolvedValue({ provider: llmProvider, model: 'gpt-5.4' })
+    } as never)
+
+    await pipeline.process({
+      format: { sampleRate: 16000, channels: 1, bitDepth: 16 },
+      chunks: [new Uint8Array([1, 2])],
+      startedAt: '2026-04-02T10:00:00.000Z',
+      endedAt: '2026-04-02T10:00:01.000Z',
+      durationMs: 1000
+    })
+
+    const lastPatch = repository.update.mock.lastCall?.[1]
+
+    expect(lastPatch).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        failureStage: 'llm',
+        failureMessage: 'Unsupported OpenAI response shape',
+        debug: expect.objectContaining({
+          llmRequest: expect.objectContaining({
+            model: 'gpt-5.4'
+          }),
+          llmResponseSummary: expect.objectContaining({
+            rawResponse: {
+              output: [
+                {
+                  content: [{ type: 'refusal', text: 'nope' }]
+                }
+              ]
+            },
+            parseError: 'Unsupported OpenAI response shape'
+          })
+        })
+      })
+    )
+  })
+
   test('marks the record as cancelled when LLM provider aborts after ASR succeeds', async () => {
     const repository = {
       create: vi.fn(() => ({ id: 'record-cancel-llm' })),

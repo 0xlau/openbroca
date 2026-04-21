@@ -1,6 +1,14 @@
 import React from 'react'
 import {
   Button,
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  useComboboxAnchor,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -68,11 +76,6 @@ function isModelSelectItem(
   return item.type === 'model-select'
 }
 
-function getStringValue(values: SettingsValues, key: string): string {
-  const value = values[key]
-  return typeof value === 'string' ? value : ''
-}
-
 function normalizeSettingsValue(item: ProviderSettingsItemViewModel, value: SettingsValue) {
   if (item.type === 'toggle') {
     return typeof value === 'boolean' ? value : undefined
@@ -101,6 +104,14 @@ function canSaveSettings(
     const value = normalizeSettingsValue(item, values[item.key] ?? '')
 
     if (isModelSelectItem(item)) {
+      if (item.allowCustomValue) {
+        if (!item.required && value === undefined) {
+          return true
+        }
+
+        return typeof value === 'string'
+      }
+
       if (modelsLoading || modelsError || !models?.length) {
         return false
       }
@@ -125,6 +136,7 @@ function SettingsField({
   inputId,
   value,
   modelOptions,
+  portalContainer,
   modelsLoading,
   modelsError,
   fieldError,
@@ -134,41 +146,101 @@ function SettingsField({
   inputId: string
   value: SettingsValue
   modelOptions: Array<{ id: string; name: string }> | undefined
+  portalContainer?: HTMLElement | null
   modelsLoading: boolean
   modelsError: unknown
   fieldError?: string
   onChange: (nextValue: SettingsValue) => void
 }) {
   const renderDescription = item.description || fieldError
+  const modelSearchValue = typeof value === 'string' ? value : ''
+  const modelPickerAnchorRef = useComboboxAnchor()
+  const selectedModelOption =
+    isModelSelectItem(item) && item.allowCustomValue && typeof value === 'string'
+      ? (modelOptions?.find((model) => model.id === value) ?? null)
+      : null
 
   return (
     <div className="space-y-2">
       <Label htmlFor={inputId}>{item.label}</Label>
       {isModelSelectItem(item) ? (
-        modelsLoading ? (
-          <TypographyMuted className="text-sm">Loading models...</TypographyMuted>
-        ) : modelsError ? (
-          <TypographyMuted className="text-sm">Unable to load models.</TypographyMuted>
-        ) : !modelOptions?.length ? (
-          <TypographyMuted className="text-sm">
-            No models are available for this provider.
-          </TypographyMuted>
+        item.allowCustomValue ? (
+          <>
+            <Combobox
+              inline
+              items={modelOptions ?? []}
+              value={selectedModelOption}
+              inputValue={modelSearchValue}
+              onValueChange={(nextValue) => onChange(nextValue?.id ?? '')}
+              onInputValueChange={(nextValue) => onChange(nextValue)}
+              itemToStringLabel={(model) => model.name}
+              itemToStringValue={(model) => model.id}
+              isItemEqualToValue={(itemValue, selectedValue) => itemValue.id === selectedValue.id}
+            >
+              <div ref={modelPickerAnchorRef}>
+                <ComboboxInput
+                  id={inputId}
+                  placeholder={`Choose ${item.label.toLowerCase()} or enter a custom value`}
+                />
+              </div>
+              <ComboboxContent
+                anchor={modelPickerAnchorRef}
+                align="start"
+                className="p-2"
+                portalContainer={portalContainer}
+              >
+                <ComboboxEmpty>No matching models.</ComboboxEmpty>
+                <ComboboxList className="max-h-[min(50vh,320px)]">
+                  <ComboboxCollection>
+                    {(model, index) => (
+                      <ComboboxItem key={model.id} value={model} index={index}>
+                        {model.name}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxCollection>
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+            {modelsLoading ? (
+              <TypographyMuted className="text-sm">Loading models...</TypographyMuted>
+            ) : modelsError ? (
+              <TypographyMuted className="text-sm">
+                Unable to load models. Enter a model ID manually.
+              </TypographyMuted>
+            ) : !modelOptions?.length ? (
+              <TypographyMuted className="text-sm">
+                No models are available for this provider yet. Enter a model ID manually.
+              </TypographyMuted>
+            ) : null}
+          </>
         ) : (
-          <Select
-            value={typeof value === 'string' && value ? value : undefined}
-            onValueChange={onChange}
-          >
-            <SelectTrigger id={inputId} className="w-full">
-              <SelectValue placeholder={`Choose ${item.label.toLowerCase()}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {modelOptions.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {model.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            {modelsLoading ? (
+              <TypographyMuted className="text-sm">Loading models...</TypographyMuted>
+            ) : modelsError ? (
+              <TypographyMuted className="text-sm">Unable to load models.</TypographyMuted>
+            ) : !modelOptions?.length ? (
+              <TypographyMuted className="text-sm">
+                No models are available for this provider.
+              </TypographyMuted>
+            ) : (
+              <Select
+                value={typeof value === 'string' && value ? value : undefined}
+                onValueChange={onChange}
+              >
+                <SelectTrigger id={inputId} className="w-full">
+                  <SelectValue placeholder={`Choose ${item.label.toLowerCase()}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelOptions.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </>
         )
       ) : null}
       {isSelectItem(item) ? (
@@ -218,6 +290,19 @@ export function ProviderSettingsDialog({
 }) {
   const [values, setValues] = React.useState<SettingsValues>({})
   const [isSaving, setIsSaving] = React.useState(false)
+  const formRef = React.useRef<HTMLFormElement>(null)
+  const [portalContainer, setPortalContainer] = React.useState<HTMLElement | null>(null)
+
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setPortalContainer(null)
+      return
+    }
+
+    setPortalContainer(
+      (formRef.current?.closest('[data-slot="dialog-content"]') as HTMLElement | null) ?? null
+    )
+  }, [open])
 
   React.useEffect(() => {
     if (!open) {
@@ -269,7 +354,7 @@ export function ProviderSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         {provider ? (
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form ref={formRef} className="space-y-6" onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>Settings for {provider.displayName}</DialogTitle>
               <DialogDescription>
@@ -292,6 +377,7 @@ export function ProviderSettingsDialog({
                   inputId={`provider-settings-${provider.id}-${item.key}`}
                   value={values[item.key] ?? ''}
                   modelOptions={models}
+                  portalContainer={portalContainer}
                   modelsLoading={modelsLoading}
                   modelsError={modelsError}
                   fieldError={setupStatus?.fieldErrors?.[item.key]}

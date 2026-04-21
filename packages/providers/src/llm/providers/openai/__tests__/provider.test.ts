@@ -4,9 +4,14 @@ import { OpenAILLMProvider } from '../provider.ts'
 
 const createMock = vi.fn()
 const listMock = vi.fn()
+const openAIConstructorMock = vi.fn()
 
 vi.mock('openai', () => ({
   default: vi.fn(class MockOpenAI {
+    constructor(config: unknown) {
+      openAIConstructorMock(config)
+    }
+
     chat = {
       completions: {
         create: createMock,
@@ -22,6 +27,7 @@ describe('OpenAILLMProvider', () => {
   beforeEach(() => {
     createMock.mockReset()
     listMock.mockReset()
+    openAIConstructorMock.mockReset()
   })
 
   it('generate uses the non-streaming OpenAI path and maps usage', async () => {
@@ -87,6 +93,51 @@ describe('OpenAILLMProvider', () => {
       finishReason: 'stop',
       usage: undefined,
     })
+  })
+
+  it('generate falls back to responses-style payloads from compatible endpoints', async () => {
+    createMock.mockResolvedValue({
+      output: [
+        {
+          content: [
+            { type: 'output_text', text: 'hello from fallback' }
+          ]
+        }
+      ],
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        total_tokens: 15,
+      },
+    })
+
+    const provider = new OpenAILLMProvider({ apiKey: 'sk-test' })
+
+    await expect(provider.generate({
+      model: 'gpt-5.4',
+      messages: [{ role: 'user', content: 'hi' }],
+    })).resolves.toEqual({
+      content: 'hello from fallback',
+      finishReason: 'stop',
+      usage: {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+      },
+    })
+  })
+
+  it('normalizes root base URLs to the OpenAI-compatible /v1 endpoint', async () => {
+    new OpenAILLMProvider({
+      apiKey: 'sk-test',
+      baseUrl: 'https://sub2api.example.com'
+    })
+
+    expect(openAIConstructorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: 'https://sub2api.example.com/v1'
+      })
+    )
   })
 
   it('complete yields normalized streaming chunks', async () => {

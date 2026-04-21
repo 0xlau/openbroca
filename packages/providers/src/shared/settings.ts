@@ -33,6 +33,7 @@ export interface ProviderSelectSettingsItem extends ProviderSettingsItemBase {
 export interface ProviderModelSelectSettingsItem extends ProviderSettingsItemBase {
   type: 'model-select'
   dataSource: 'llm-models'
+  allowCustomValue?: boolean
 }
 
 export type ProviderSettingsItem =

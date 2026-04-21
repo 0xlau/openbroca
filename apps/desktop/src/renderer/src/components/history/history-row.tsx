@@ -7,6 +7,14 @@ import type { AppRouter } from '../../../../main/trpc/router'
 
 type HistoryListItem = inferRouterOutputs<AppRouter>['history']['list'][number]
 
+function formatFailureStage(stage: HistoryListItem['failureStage']): string {
+  if (typeof stage !== 'string' || stage.length === 0) {
+    return 'Failed'
+  }
+
+  return `${stage.toUpperCase()} failed`
+}
+
 export function HistoryRow({
   item,
   onOpenDetails
@@ -14,7 +22,12 @@ export function HistoryRow({
   item: HistoryListItem
   onOpenDetails: (id: string) => void
 }) {
-  const preview = item.finalText ?? item.failureMessage ?? 'Processing...'
+  const preview =
+    item.status === 'failed'
+      ? item.failureMessage
+        ? `${formatFailureStage(item.failureStage)}: ${item.failureMessage}`
+        : formatFailureStage(item.failureStage)
+      : item.finalText ?? 'Processing...'
   const audioRef = React.useRef<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = React.useState(false)
 

@@ -74,7 +74,8 @@ describe('openaiDescriptor', () => {
         type: 'model-select',
         label: 'Model',
         required: true,
-        dataSource: 'llm-models'
+        dataSource: 'llm-models',
+        allowCustomValue: true
       })
     ])
 

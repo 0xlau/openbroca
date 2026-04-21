@@ -58,6 +58,10 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+function formatFailureStage(stage: unknown): string {
+  return readString(stage)?.toUpperCase() ?? 'UNKNOWN'
+}
+
 export function DebugDialogs({
   open,
   onOpenChange,
@@ -108,7 +112,7 @@ export function DebugDialogs({
               {record.failureMessage ? (
                 <Alert variant="destructive">
                   <HugeiconsIcon icon={AlertCircleIcon} strokeWidth={2} />
-                  <AlertTitle>Failed</AlertTitle>
+                  <AlertTitle>{`${formatFailureStage(record.failureStage)} failed`}</AlertTitle>
                   <AlertDescription className="whitespace-pre-wrap">
                     {record.failureMessage}
                   </AlertDescription>
@@ -163,6 +167,10 @@ export function DebugDialogs({
                   <TypographyMuted>Pipeline Context</TypographyMuted>
                   <div className="mt-1 grid gap-3 md:grid-cols-2">
                     <SummaryRow label="Record Status" value={record.status} />
+                    <SummaryRow
+                      label="Failure Stage"
+                      value={record.failureStage ? formatFailureStage(record.failureStage) : 'None'}
+                    />
                     <SummaryRow
                       label="ASR Provider"
                       value={record.asrProviderId ?? 'Unavailable'}

@@ -64,7 +64,7 @@ export const Dashboard: React.FC = () => {
   )
 
   const historyItems = (historyListQuery.data ?? []).filter(
-    (item) => settings.debugMode || hasMeaningfulText(item.finalText)
+    (item) => settings.debugMode || item.status === 'failed' || hasMeaningfulText(item.finalText)
   )
 
   return (

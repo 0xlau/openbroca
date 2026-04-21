@@ -65,6 +65,22 @@ function normalizeErrorMessage(error: unknown): string {
   return 'Post-recording pipeline failed'
 }
 
+function buildLLMErrorResponseSummary(error: unknown): Record<string, unknown> | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined
+  }
+
+  const rawResponse = Reflect.get(error, 'rawResponse')
+  if (rawResponse === undefined) {
+    return undefined
+  }
+
+  return {
+    parseError: normalizeErrorMessage(error),
+    rawResponse
+  }
+}
+
 function createAbortError(signal?: AbortSignal): Error {
   const reason = signal?.reason
 
@@ -481,6 +497,9 @@ export class PostRecordingPipeline {
           asrRequest,
           asrResponseSummary: { segmentCount: asrSegments.length },
           llmRequest: buildLLMRequestDebug(),
+          ...(buildLLMErrorResponseSummary(error)
+            ? { llmResponseSummary: buildLLMErrorResponseSummary(error) }
+            : {}),
           errors: [...errors],
           timeline: [...timeline]
         }
@@ -646,6 +665,9 @@ export class PostRecordingPipeline {
           asrRequest,
           asrResponseSummary: { segmentCount: asrSegments.length },
           llmRequest: buildLLMRequestDebug(),
+          ...(buildLLMErrorResponseSummary(error)
+            ? { llmResponseSummary: buildLLMErrorResponseSummary(error) }
+            : {}),
           errors: [...errors],
           timeline: [...timeline]
         }

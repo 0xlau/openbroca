@@ -32,6 +32,7 @@ type ProviderFixture = {
         description?: string
         required?: boolean
         dataSource: 'llm-models'
+        allowCustomValue?: boolean
       }
     | {
         key: string
@@ -82,7 +83,8 @@ const openAIProviderFixture: ProviderFixture = {
       label: 'Model',
       description: 'Choose a model',
       required: true,
-      dataSource: 'llm-models'
+      dataSource: 'llm-models',
+      allowCustomValue: true
     }
   ],
   connectionOptions: [
@@ -151,11 +153,23 @@ const TooltipContext = React.createContext<{
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 } | null>(null)
+const PopoverContext = React.createContext<{
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+} | null>(null)
 const SelectContext = React.createContext<{
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
   value?: string
   setValue: (value: string) => void
+} | null>(null)
+const ComboboxContext = React.createContext<{
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+  items: Array<{ id: string; name: string }>
+  inputValue: string
+  setInputValue: (value: string) => void
+  setValue: (item: { id: string; name: string } | null) => void
 } | null>(null)
 
 vi.mock('@renderer/stores/provider-store', () => ({
@@ -229,7 +243,11 @@ vi.mock('@openbroca/ui', () => ({
   ),
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
     open ? <div data-testid="dialog-root">{children}</div> : null,
-  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogContent: ({ children, ...props }: React.ComponentProps<'div'>) => (
+    <div data-slot="dialog-content" {...props}>
+      {children}
+    </div>
+  ),
   DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -241,6 +259,159 @@ vi.mock('@openbroca/ui', () => ({
     <label htmlFor={htmlFor}>{children}</label>
   ),
   Separator: () => <hr />,
+  Combobox: ({
+    items = [],
+    inputValue,
+    onInputValueChange,
+    onValueChange,
+    children
+  }: {
+    items?: Array<{ id: string; name: string }>
+    inputValue?: string
+    onInputValueChange?: (value: string) => void
+    onValueChange?: (value: { id: string; name: string } | null) => void
+    children: React.ReactNode
+  }) => {
+    const [open, setOpen] = React.useState(false)
+    const [internalInputValue, setInternalInputValue] = React.useState(inputValue ?? '')
+    const resolvedInputValue = inputValue ?? internalInputValue
+
+    const setResolvedInputValue = (nextValue: string) => {
+      if (inputValue === undefined) {
+        setInternalInputValue(nextValue)
+      }
+      onInputValueChange?.(nextValue)
+    }
+
+    return (
+      <ComboboxContext.Provider
+        value={{
+          open,
+          setOpen,
+          items,
+          inputValue: resolvedInputValue,
+          setInputValue: setResolvedInputValue,
+          setValue: (item) => onValueChange?.(item)
+        }}
+      >
+        {children}
+      </ComboboxContext.Provider>
+    )
+  },
+  ComboboxInput: ({
+    value,
+    onChange,
+    ...props
+  }: React.ComponentProps<'input'>) => {
+    const context = React.useContext(ComboboxContext)
+    return (
+      <input
+        role="textbox"
+        value={value ?? context?.inputValue ?? ''}
+        onFocus={() => context?.setOpen(true)}
+        onClick={() => context?.setOpen(true)}
+        onChange={(event) => {
+          context?.setInputValue(event.target.value)
+          onChange?.(event)
+        }}
+        {...props}
+      />
+    )
+  },
+  ComboboxContent: ({
+    children,
+    portalContainer
+  }: {
+    children: React.ReactNode
+    portalContainer?: HTMLElement | null
+  }) => {
+    const context = React.useContext(ComboboxContext)
+    return context?.open ? <div data-portal-container={portalContainer ? 'set' : 'unset'}>{children}</div> : null
+  },
+  ComboboxList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ComboboxCollection: ({
+    children
+  }: {
+    children: (item: { id: string; name: string }, index: number) => React.ReactNode
+  }) => {
+    const context = React.useContext(ComboboxContext)
+    return <>{(context?.items ?? []).map((item, index) => children(item, index))}</>
+  },
+  ComboboxItem: ({
+    children,
+    value
+  }: {
+    children: React.ReactNode
+    value: { id: string; name: string }
+  }) => {
+    const context = React.useContext(ComboboxContext)
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          context?.setInputValue(value.id)
+          context?.setValue(value)
+          context?.setOpen(false)
+        }}
+      >
+        {children}
+      </button>
+    )
+  },
+  ComboboxEmpty: ({ children }: { children: React.ReactNode }) => {
+    const context = React.useContext(ComboboxContext)
+    return (context?.items?.length ?? 0) === 0 ? <p>{children}</p> : null
+  },
+  useComboboxAnchor: () => React.useRef<HTMLDivElement | null>(null),
+  Popover: ({
+    open,
+    defaultOpen,
+    onOpenChange,
+    children
+  }: {
+    open?: boolean
+    defaultOpen?: boolean
+    onOpenChange?: (open: boolean) => void
+    children: React.ReactNode
+  }) => {
+    const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false)
+    const isControlled = open !== undefined
+    const currentOpen = isControlled ? open : internalOpen
+
+    return (
+      <PopoverContext.Provider
+        value={{
+          open: currentOpen,
+          setOpen: (nextValue) => {
+            const resolvedValue =
+              typeof nextValue === 'function'
+                ? (nextValue as (current: boolean) => boolean)(currentOpen)
+                : nextValue
+
+            if (!isControlled) {
+              setInternalOpen(resolvedValue)
+            }
+            onOpenChange?.(resolvedValue)
+          }
+        }}
+      >
+        {children}
+      </PopoverContext.Provider>
+    )
+  },
+  PopoverAnchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PopoverContent: ({
+    children,
+    portalContainer,
+    ...props
+  }: React.ComponentProps<'div'> & { portalContainer?: HTMLElement | null }) => {
+    const context = React.useContext(PopoverContext)
+    return context?.open ? (
+      <div data-portal-container={portalContainer ? 'set' : 'unset'} {...props}>
+        {children}
+      </div>
+    ) : null
+  },
   Select: ({
     value,
     defaultValue,
@@ -648,8 +819,9 @@ describe('Providers page', () => {
     expect(screen.getByRole('heading', { name: 'Settings for OpenAI' })).toBeTruthy()
     expect(screen.getByText('Select a model to finish setup.')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByText('gpt-4.1'))
+    fireEvent.change(screen.getByLabelText('Model'), {
+      target: { value: 'gpt-4.1' }
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }))
 
     await waitFor(() => {
@@ -661,6 +833,142 @@ describe('Providers page', () => {
     })
 
     expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('providerModels')
+  })
+
+  test('shows dropdown suggestions for openai custom model input', async () => {
+    llmProviders = [openAIProviderFixture]
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+    llmModelsByProvider.openai = [
+      { id: 'gpt-4.1', name: 'gpt-4.1' },
+      { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }
+    ]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerSettings: {},
+        activeProviders: {}
+      }
+    })
+
+    await renderProviders()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings for OpenAI' }))
+    fireEvent.focus(screen.getByLabelText('Model'))
+
+    expect(screen.getByRole('button', { name: 'gpt-4.1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'gpt-4.1-mini' })).toBeTruthy()
+  })
+
+  test('renders openai custom model dropdown inside the dialog portal container', async () => {
+    llmProviders = [openAIProviderFixture]
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+    llmModelsByProvider.openai = [
+      { id: 'gpt-4.1', name: 'gpt-4.1' }
+    ]
+
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerSettings: {},
+        activeProviders: {}
+      }
+    })
+
+    await renderProviders()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings for OpenAI' }))
+    fireEvent.focus(screen.getByLabelText('Model'))
+
+    await waitFor(() => {
+      expect(
+        screen
+          .getByRole('button', { name: 'gpt-4.1' })
+          .closest('[data-portal-container]')
+          ?.getAttribute('data-portal-container')
+      ).toBe('set')
+    })
+  })
+
+  test('allows saving a custom model value for openai settings', async () => {
+    llmProviders = [openAIProviderFixture]
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+    llmModelsByProvider.openai = [
+      { id: 'gpt-4.1', name: 'gpt-4.1' },
+      { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' }
+    ]
+
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerSettings: {},
+        activeProviders: {}
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings for OpenAI' }))
+
+    fireEvent.change(screen.getByLabelText('Model'), {
+      target: { value: 'gpt-4.1-nano-custom' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        providerSettings: {
+          openai: { model: 'gpt-4.1-nano-custom' }
+        }
+      })
+    })
   })
 
   test('shows a unified settings button for connected ASR providers with settings items', async () => {
