@@ -1,6 +1,5 @@
-import { Badge, Button, Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from '@openbroca/ui'
+import { Badge, Button, Card, CardAction, CardContent, CardHeader, CardTitle } from '@openbroca/ui'
 import type { InstructionRule } from '@renderer/stores/instructions-store'
-import type { AutoEnterMode } from '../../../../shared/instructions'
 
 interface InstructionCardProps {
   rule: InstructionRule
@@ -34,19 +33,8 @@ function InstructionCardAppIcon({
 }
 
 export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: InstructionCardProps) {
-  const appCountLabel = `${rule.activationApps.length} ${rule.activationApps.length === 1 ? 'app' : 'apps'}`
-  const instructionPreview = rule.customInstructions.trim() || 'No custom instructions.'
-  const autoEnterMode: AutoEnterMode = rule.autoEnterMode ?? (rule.autoEnter ? 'enter' : 'off')
-  const autoEnterBadgeLabel =
-    autoEnterMode === 'off'
-      ? 'Auto enter Off'
-      : autoEnterMode === 'mod-enter'
-        ? 'Auto enter Cmd/Ctrl + Enter'
-        : 'Auto enter Enter'
-  const autoEnterEnabled = autoEnterMode !== 'off'
-
   return (
-    <Card className="h-full gap-4" size="sm">
+    <Card className="gap-4 self-start" size="sm" data-testid={`instruction-card-${rule.id}`}>
       <CardHeader>
         <CardTitle className="truncate">{rule.name}</CardTitle>
         <CardAction className="flex items-center gap-1">
@@ -73,12 +61,7 @@ export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: In
         </CardAction>
       </CardHeader>
 
-      <CardContent className="flex flex-1 flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{appCountLabel}</Badge>
-          <Badge variant={autoEnterEnabled ? 'default' : 'outline'}>{autoEnterBadgeLabel}</Badge>
-        </div>
-
+      <CardContent className="flex flex-col gap-3">
         {rule.activationApps.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {rule.activationApps.map((app) => (
@@ -92,8 +75,6 @@ export function InstructionCard({ rule, disabled = false, onEdit, onDelete }: In
           <p className="text-sm text-muted-foreground">No activation apps selected.</p>
         )}
       </CardContent>
-
-      <CardFooter className="border-t text-sm text-muted-foreground">{instructionPreview}</CardFooter>
     </Card>
   )
 }

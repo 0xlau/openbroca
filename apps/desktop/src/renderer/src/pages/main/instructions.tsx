@@ -217,11 +217,8 @@ export const Instructions: React.FC = () => {
       {!isHydrated ? (
         <TypographyMuted>Loading instructions...</TypographyMuted>
       ) : (
-        <section className="flex flex-1 flex-col">
-          <div
-            className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
-            data-testid="instructions-grid"
-          >
+        <section>
+          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="instructions-grid">
             {data.rules.length > 0 ? (
               data.rules.map((rule) => (
                 <InstructionCard

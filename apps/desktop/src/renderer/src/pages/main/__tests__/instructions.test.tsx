@@ -431,12 +431,41 @@ describe('Instructions', () => {
 
     expect(screen.getByRole('heading', { name: 'Instructions' })).toBeTruthy()
     expect(screen.getByText('Coding focus')).toBeTruthy()
-    expect(screen.getByText('Auto enter Enter')).toBeTruthy()
-    expect(screen.getByText('Auto enter Cmd/Ctrl + Enter')).toBeTruthy()
+    expect(screen.queryByText('Activation apps')).toBeNull()
+    expect(screen.queryByText('Auto enter Enter')).toBeNull()
+    expect(screen.queryByText('Auto enter Cmd/Ctrl + Enter')).toBeNull()
+    expect(screen.queryByText('Prefer concise technical language.')).toBeNull()
+    expect(screen.queryByText('Use reader-friendly style.')).toBeNull()
     expect(screen.getByTestId('instructions-grid')).toBeTruthy()
     expect(
       screen.getByTestId('instruction-card-app-icon-placeholder-com.todesktop.230313mzl4w4u92')
     ).toBeTruthy()
+  })
+
+  test('uses content-sized instruction cards inside the grid', async () => {
+    instructionsStoreMock = createInstructionsStore({
+      rules: [
+        {
+          id: 'rule-coding',
+          name: 'Coding focus',
+          activationApps: [detectedApps[0]],
+          customInstructions: 'Prefer concise technical language.',
+          autoEnterMode: 'enter'
+        }
+      ]
+    })
+
+    const { Instructions } = await import('../instructions')
+
+    render(<Instructions />)
+
+    const grid = screen.getByTestId('instructions-grid')
+    expect(grid.className).toContain('items-start')
+    expect(grid.className).not.toContain('flex-1')
+
+    const card = screen.getByTestId('instruction-card-rule-coding')
+    expect(card?.className).toContain('self-start')
+    expect(card?.className).not.toContain('h-full')
   })
 
   test('uses the same full-height empty layout as dictionary', async () => {
