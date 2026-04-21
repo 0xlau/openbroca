@@ -99,4 +99,18 @@ describe('AboutMe', () => {
     expect(container.firstElementChild?.className).toContain('max-w-5xl')
     expect(container.firstElementChild?.className).toContain('mx-auto')
   })
+
+  test('renders occupation and bio as textareas with at least three visible rows', async () => {
+    const { AboutMe } = await import('../about-me')
+
+    render(<AboutMe />)
+
+    const occupationField = screen.getByLabelText('My occupation')
+    const bioField = screen.getByLabelText('More about me')
+
+    expect(occupationField.tagName).toBe('TEXTAREA')
+    expect(bioField.tagName).toBe('TEXTAREA')
+    expect(occupationField.getAttribute('rows')).toBe('3')
+    expect(bioField.getAttribute('rows')).toBe('3')
+  })
 })

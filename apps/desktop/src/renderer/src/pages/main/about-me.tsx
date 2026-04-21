@@ -9,6 +9,7 @@ import {
   FieldGroup,
   FieldLabel,
   Input,
+  Textarea,
   TypographyH3,
   TypographyMuted
 } from '@openbroca/ui'
@@ -149,9 +150,10 @@ export const AboutMe: React.FC = () => {
                   description="You can list more than one role, separated by commas, like engineer, founder, or researcher. This works better when the reply depends on your current perspective or responsibilities."
                   htmlFor={field.name}
                 >
-                  <Input
+                  <Textarea
                     id={field.name}
                     name={field.name}
+                    rows={3}
                     value={field.state.value}
                     placeholder="Engineer"
                     onBlur={field.handleBlur}
@@ -168,9 +170,10 @@ export const AboutMe: React.FC = () => {
                   description="You can include multiple interests, preferences, goals, or values, separated by commas or semicolons. This works better when you want more personalized suggestions, writing style, or trade-off decisions."
                   htmlFor={field.name}
                 >
-                  <Input
+                  <Textarea
                     id={field.name}
                     name={field.name}
+                    rows={3}
                     value={field.state.value}
                     placeholder="Clear trade-offs, concise writing, local-first tools, indie product building"
                     onBlur={field.handleBlur}
