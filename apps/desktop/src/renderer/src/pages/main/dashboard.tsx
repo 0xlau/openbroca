@@ -27,6 +27,7 @@ import {
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts'
 import { useStore } from 'zustand'
 import { settingsStore } from '@renderer/stores/settings-store'
+import { shortcutsStore } from '@renderer/stores/shortcuts-store'
 
 const chartConfig = {
   tokens: {
@@ -78,6 +79,8 @@ function formatDuration(ms: number) {
   return `${hours}h ${minutes}m`
 }
 
+const SINGLE_MODIFIER_ACCELERATORS = new Set(['Command', 'Control', 'Option', 'Shift'])
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl p-4 ring-1 ring-foreground/10">
@@ -87,12 +90,25 @@ function StatCard({ label, value }: { label: string; value: string }) {
   )
 }
 
+function ShortcutHint({ accelerator }: { accelerator: string }) {
+  return (
+    <>
+      {SINGLE_MODIFIER_ACCELERATORS.has(accelerator) ? 'Double Tap ' : null}
+      <KbdGroup>
+        {accelerator.split('+').map((token) => (
+          <Kbd key={token}>{token}</Kbd>
+        ))}
+      </KbdGroup>
+    </>
+  )
+}
+
 export const Dashboard: React.FC = () => {
   const settings = useStore(settingsStore, (state) => state.data)
+  const shortcuts = useStore(shortcutsStore, (state) => state.data)
   const [selectedHistoryId, setSelectedHistoryId] = React.useState<string | null>(null)
   const [historyFilter, setHistoryFilter] = React.useState<'all' | 'valid'>('all')
 
-  const { data: appVersion } = trpc.app.getAppVersion.useQuery()
   const historyListQuery = trpc.history.list.useQuery()
   const historyStatsQuery = trpc.history.stats.useQuery()
   const selectedDetailQuery = trpc.history.getById.useQuery(
@@ -163,12 +179,9 @@ export const Dashboard: React.FC = () => {
             Wake your Broca, let thoughts speak
           </TypographyH1>
           <TypographyMuted>
-            Press{' '}
-            <KbdGroup>
-              <Kbd>Fn</Kbd>
-            </KbdGroup>{' '}
-            to start and stop dictation. Or hold to say something short.
-            {appVersion && ` · v${appVersion}`}
+            <ShortcutHint accelerator={shortcuts.quickAccelerator} /> to start and stop
+            dictation. Or <ShortcutHint accelerator={shortcuts.holdAccelerator} /> to say something
+            short.
           </TypographyMuted>
         </div>
       </div>

@@ -327,6 +327,52 @@ describe('ListeningSessionManager', () => {
     completion.resolve()
   })
 
+  test('cancelCapture discards buffered audio and returns to idle without processing', async () => {
+    const captureSource = new FakeCaptureSource()
+    const onRecordingComplete = vi.fn().mockResolvedValue(undefined)
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.cancelCapture()
+    captureSource.finishWithAbortError()
+
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'idle' })
+    })
+
+    expect(onRecordingComplete).not.toHaveBeenCalled()
+  })
+
+  test('cancelCapture also discards buffered audio when the capture stream ends cleanly after abort', async () => {
+    const captureSource = new FakeCaptureSource()
+    const onRecordingComplete = vi.fn().mockResolvedValue(undefined)
+    const manager = new ListeningSessionManager(captureSource, { onRecordingComplete })
+
+    captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
+
+    manager.start()
+    await captureSource.waitForCaptureStart()
+    await vi.waitFor(() => {
+      expectManagerState(manager, { status: 'listening' })
+    })
+
+    manager.cancelCapture()
+    captureSource.finish()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expectManagerState(manager, { status: 'idle' })
+    expect(onRecordingComplete).not.toHaveBeenCalled()
+  })
+
   test('cancelProcessing does not report abort-like completion failures as errors', async () => {
     const captureSource = new FakeCaptureSource()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)

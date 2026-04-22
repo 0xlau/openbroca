@@ -27,6 +27,9 @@ describe('listeningSessionStore', () => {
         close: vi.fn()
       },
       listeningSession: {
+        cancelCapture: vi.fn(),
+        cancelProcessing: vi.fn(),
+        finishCapture: vi.fn(),
         getState,
         onStateChange
       }
@@ -56,6 +59,9 @@ describe('listeningSessionStore', () => {
         close: vi.fn()
       },
       listeningSession: {
+        cancelCapture: vi.fn(),
+        cancelProcessing: vi.fn(),
+        finishCapture: vi.fn(),
         getState,
         onStateChange
       }
@@ -82,6 +88,9 @@ describe('listeningSessionStore', () => {
         close: vi.fn()
       },
       listeningSession: {
+        cancelCapture: vi.fn(),
+        cancelProcessing: vi.fn(),
+        finishCapture: vi.fn(),
         getState: vi.fn().mockResolvedValue({
           state: { status: 'starting' },
           targetApp: null

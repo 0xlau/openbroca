@@ -18,8 +18,12 @@ const api = {
       ipcRenderer.invoke('provider-auth:disconnect', providerId) as Promise<ProviderAuthState>
   },
   listeningSession: {
+    cancelCapture: () =>
+      ipcRenderer.invoke('listening-session:cancel-capture') as Promise<void>,
     cancelProcessing: () =>
       ipcRenderer.invoke('listening-session:cancel-processing') as Promise<void>,
+    finishCapture: () =>
+      ipcRenderer.invoke('listening-session:finish-capture') as Promise<void>,
     getState: () =>
       ipcRenderer.invoke('listening-session:get-state') as Promise<ListeningSessionBridgeState>,
     onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => {

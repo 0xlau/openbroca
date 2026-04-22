@@ -126,6 +126,23 @@ class ListeningSessionManager {
     this.abortController?.abort()
   }
 
+  cancelCapture(): void {
+    console.debug('[voice-debug] capture cancel requested', {
+      status: this.state.status
+    })
+    if (
+      this.state.status !== 'starting' &&
+      this.state.status !== 'listening' &&
+      this.state.status !== 'stopping'
+    ) {
+      return
+    }
+
+    this.abortController?.abort()
+    this.abortController = null
+    this.setSessionState({ status: 'idle' })
+  }
+
   cancelProcessing(): void {
     console.debug('[voice-debug] processing cancel requested', {
       status: this.state.status
@@ -186,16 +203,7 @@ class ListeningSessionManager {
         aborted: opts.signal.aborted,
         error: normalizeErrorMessage(error)
       })
-      if (isAbortLikeError(error, opts.signal)) {
-        if (this.state.status === 'stopping' && chunks.length > 0) {
-          console.debug('[voice-debug] stop completed with buffered audio', {
-            chunkCount: chunks.length
-          })
-        } else {
-          this.setSessionState({ status: 'idle' })
-          return
-        }
-      } else {
+      if (!isAbortLikeError(error, opts.signal)) {
         this.setSessionState({
           status: 'error',
           message: normalizeErrorMessage(error)
@@ -205,6 +213,19 @@ class ListeningSessionManager {
     } finally {
       if (this.abortController?.signal === opts.signal || opts.signal.aborted) {
         this.abortController = null
+      }
+    }
+
+    if (opts.signal.aborted) {
+      if (this.state.status === 'stopping' && chunks.length > 0) {
+        console.debug('[voice-debug] stop completed with buffered audio', {
+          chunkCount: chunks.length
+        })
+      } else {
+        if (this.state.status !== 'idle') {
+          this.setSessionState({ status: 'idle' })
+        }
+        return
       }
     }
 

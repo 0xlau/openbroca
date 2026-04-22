@@ -14,7 +14,10 @@ import { store } from './store'
 import { llmRegistry, asrRegistry } from './providers'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
-import { bindFloatingSessionController } from './floating-session-controller'
+import {
+  bindFloatingSessionController,
+  type FloatingSessionController
+} from './floating-session-controller'
 import { RtAudioCaptureSource } from '@openbroca/audio-capture'
 import { ListeningSessionManager } from './listening-session'
 import { HistoryRepository } from './history-repository'
@@ -43,11 +46,12 @@ import { OAuthService } from './auth/oauth-service'
 import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
 import { normalizeInstructionsSettings } from '../shared/instructions'
+import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
+import { normalizeShortcutSettings } from '../shared/shortcuts'
 import { createNotifyWindows } from './notify-windows'
 
-const DEFAULT_ACCELERATOR = 'CommandOrControl+Space'
 const macBundleIconCache = new Map<string, Promise<string | undefined>>()
-let unbindFloatingSessionController: (() => void) | null = null
+let floatingSessionController: FloatingSessionController | null = null
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -60,11 +64,6 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ])
-
-function getAccelerator(): string {
-  const shortcuts = store.get('shortcuts') as { floatingWindowAccelerator?: string } | undefined
-  return shortcuts?.floatingWindowAccelerator ?? DEFAULT_ACCELERATOR
-}
 
 function deriveMacBundlePath(filePath?: string): string | undefined {
   if (!filePath) {
@@ -274,6 +273,24 @@ const listeningSession = new ListeningSessionManager(captureSource, {
   onRecordingComplete: (recording, signal) => postRecordingPipeline.process(recording, { signal })
 })
 
+function getListeningSessionBridgeState(): ListeningSessionBridgeState {
+  return {
+    ...listeningSession.getState(),
+    captureMode: floatingSessionController?.getCaptureMode() ?? null
+  }
+}
+
+function broadcastListeningSessionState(): void {
+  const bridgeState = getListeningSessionBridgeState()
+  console.debug('[voice-debug] broadcasting listening state', bridgeState)
+
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send('listening-session:state-changed', bridgeState)
+    }
+  }
+}
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
 
@@ -301,39 +318,39 @@ app.whenReady().then(() => {
     win?.isMaximized() ? win.unmaximize() : win?.maximize()
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
-  ipcMain.handle('listening-session:get-state', () => listeningSession.getState())
+  ipcMain.handle('listening-session:get-state', () => getListeningSessionBridgeState())
+  ipcMain.handle('listening-session:cancel-capture', () => listeningSession.cancelCapture())
   ipcMain.handle('listening-session:cancel-processing', () => listeningSession.cancelProcessing())
+  ipcMain.handle('listening-session:finish-capture', () => floatingSessionController?.finishCapture())
   ipcMain.handle('notify-window:get-state', () => notifyWindows.getState())
   ipcMain.handle('provider-auth:connect', (_event, providerId: string) => oauthService.start(providerId))
   ipcMain.handle('provider-auth:disconnect', (_event, providerId: string) =>
     oauthService.disconnect(providerId)
   )
 
-  listeningSession.subscribe((state) => {
-    console.debug('[voice-debug] broadcasting listening state', state)
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('listening-session:state-changed', state)
-      }
-    }
-  })
-
-  windowManager.createMain()
-
-  unbindFloatingSessionController = bindFloatingSessionController({
-    accelerator: getAccelerator(),
+  floatingSessionController = bindFloatingSessionController({
+    shortcutSettings: normalizeShortcutSettings(store.get('shortcuts'), process.platform),
     getSelectedDeviceId: () => {
       const mic = store.get('microphone') as { selectedDeviceId?: number | null } | undefined
       return mic?.selectedDeviceId
+    },
+    onCaptureModeChange: () => {
+      broadcastListeningSessionState()
     },
     listeningSession,
     shortcutManager,
     windowManager
   })
 
-  // Re-register when accelerator config changes
-  store.onDidChange('shortcuts', () => {
-    shortcutManager.updateAccelerator(getAccelerator())
+  listeningSession.subscribe(() => {
+    broadcastListeningSessionState()
+  })
+
+  windowManager.createMain()
+
+  store.onDidChange('shortcuts', (rawValue) => {
+    const nextSettings = normalizeShortcutSettings(rawValue, process.platform)
+    floatingSessionController?.updateShortcuts(nextSettings)
   })
 
   app.on('activate', () => {
@@ -344,8 +361,8 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
-  unbindFloatingSessionController?.()
-  unbindFloatingSessionController = null
+  floatingSessionController?.dispose()
+  floatingSessionController = null
   void oauthService.dispose()
   listeningSession.stop()
   shortcutManager.stop()

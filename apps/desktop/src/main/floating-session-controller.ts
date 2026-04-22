@@ -1,4 +1,9 @@
-import { isProcessingShellState, type ListeningSessionBridgeState } from '../shared/listening-session-state'
+import type { ShortcutSettings } from '../shared/shortcuts'
+import {
+  isProcessingShellState,
+  type ListeningSessionBridgeState,
+  type ListeningSessionCaptureMode
+} from '../shared/listening-session-state'
 import {
   FLOATING_LISTENING_SIZE,
   FLOATING_PROCESSING_SIZE
@@ -20,15 +25,32 @@ type FloatingWindowManagerLike = {
 }
 
 type ShortcutManagerLike = {
-  start: (accelerator: string, onDown: () => void, onUp: () => void) => void
+  startCaptureBindings: (options: {
+    quickAccelerator: string
+    toHoldKey: string
+    holdAccelerator: string
+    onQuickDown: () => void
+    onQuickUp: () => void
+    onToHoldDown: () => void
+    onHoldDown: () => void
+  }) => void
+  updateCaptureBindings: (settings: ShortcutSettings) => void
 }
 
 interface BindFloatingSessionControllerOptions {
-  accelerator: string
+  shortcutSettings: ShortcutSettings
   getSelectedDeviceId?: () => number | null | undefined
+  onCaptureModeChange?: (mode: ListeningSessionCaptureMode) => void
   listeningSession: FloatingSessionLike
   shortcutManager: ShortcutManagerLike
   windowManager: FloatingWindowManagerLike
+}
+
+export type FloatingSessionController = {
+  finishCapture: () => void
+  updateShortcuts: (nextSettings: ShortcutSettings) => void
+  getCaptureMode: () => ListeningSessionCaptureMode
+  dispose: () => void
 }
 
 function isCaptureActive(status: FloatingSessionStatus): boolean {
@@ -53,45 +75,123 @@ function syncFloatingWindow(
 
 export function bindFloatingSessionController(
   options: BindFloatingSessionControllerOptions
-): () => void {
-  const { accelerator, getSelectedDeviceId, listeningSession, shortcutManager, windowManager } = options
+): FloatingSessionController {
+  const {
+    shortcutSettings,
+    getSelectedDeviceId,
+    onCaptureModeChange,
+    listeningSession,
+    shortcutManager,
+    windowManager
+  } = options
+  let captureMode: ListeningSessionCaptureMode = null
 
-  const handleFloatingHidden = () => {
+  const setCaptureMode = (nextMode: ListeningSessionCaptureMode) => {
+    if (captureMode === nextMode) {
+      return
+    }
+
+    captureMode = nextMode
+    onCaptureModeChange?.(captureMode)
+  }
+
+  const startCapture = (mode: Exclude<ListeningSessionCaptureMode, null>) => {
+    if (listeningSession.getState().state.status !== 'idle') {
+      return
+    }
+
+    setCaptureMode(mode)
+    const deviceId = getSelectedDeviceId?.()
+    listeningSession.start(deviceId == null ? undefined : { deviceId })
+  }
+
+  const stopSustainedCapture = () => {
+    if (captureMode !== 'latched' && captureMode !== 'hold') {
+      return
+    }
+
+    setCaptureMode(null)
     if (isCaptureActive(listeningSession.getState().state.status)) {
       listeningSession.stop()
     }
   }
 
+  const handleFloatingHidden = () => {
+    if (isCaptureActive(listeningSession.getState().state.status)) {
+      setCaptureMode(null)
+      listeningSession.stop()
+    }
+  }
+
   const unsubscribe = listeningSession.subscribe((state) => {
+    if (state.state.status === 'idle' || state.state.status === 'error') {
+      setCaptureMode(null)
+    }
     syncFloatingWindow(windowManager, state)
   })
 
   windowManager.setFloatingHiddenHandler(handleFloatingHidden)
   syncFloatingWindow(windowManager, listeningSession.getState())
 
-  shortcutManager.start(
-    accelerator,
-    () => {
+  shortcutManager.startCaptureBindings({
+    ...shortcutSettings,
+    onQuickDown: () => {
+      if (captureMode === 'latched') {
+        stopSustainedCapture()
+        return
+      }
+
       if (listeningSession.getState().state.status === 'error') {
         listeningSession.stop()
       }
 
-      if (listeningSession.getState().state.status !== 'idle') {
+      startCapture('quick')
+    },
+    onQuickUp: () => {
+      if (captureMode !== 'quick') {
         return
       }
 
-      const deviceId = getSelectedDeviceId?.()
-      listeningSession.start(deviceId == null ? undefined : { deviceId })
-    },
-    () => {
+      setCaptureMode(null)
       if (isCaptureActive(listeningSession.getState().state.status)) {
         listeningSession.stop()
       }
-    }
-  )
+    },
+    onToHoldDown: () => {
+      if (captureMode === 'quick') {
+        setCaptureMode('latched')
+      }
+    },
+    onHoldDown: () => {
+      if (captureMode === 'hold') {
+        stopSustainedCapture()
+        return
+      }
 
-  return () => {
-    unsubscribe()
-    windowManager.setFloatingHiddenHandler(null)
+      if (listeningSession.getState().state.status === 'error') {
+        listeningSession.stop()
+      }
+
+      startCapture('hold')
+    }
+  })
+
+  return {
+    finishCapture: stopSustainedCapture,
+    updateShortcuts(nextSettings) {
+      if (captureMode !== null && isCaptureActive(listeningSession.getState().state.status)) {
+        setCaptureMode(null)
+        listeningSession.stop()
+      }
+
+      shortcutManager.updateCaptureBindings(nextSettings)
+    },
+    getCaptureMode() {
+      return captureMode
+    },
+    dispose() {
+      unsubscribe()
+      windowManager.setFloatingHiddenHandler(null)
+    }
   }
 }

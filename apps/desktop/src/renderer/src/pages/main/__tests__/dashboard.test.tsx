@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createStore } from 'zustand'
+import type { ShortcutSettings } from '../../../../../shared/shortcuts'
+import type { ShortcutSettings } from '../../../../../shared/shortcuts'
 
 const selectedHistoryRecord: {
   id: string
@@ -228,6 +230,22 @@ const settingsStore = createStore(() => ({
 
 vi.mock('@renderer/stores/settings-store', () => ({
   settingsStore
+}))
+
+const shortcutsStore = createStore(() => ({
+  data: {
+    quickAccelerator: 'Command',
+    toHoldKey: 'Space',
+    holdAccelerator: 'Command+Space'
+  } satisfies ShortcutSettings,
+  isHydrated: true,
+  update: async () => undefined,
+  replace: async () => undefined,
+  hydrate: async () => undefined
+}))
+
+vi.mock('@renderer/stores/shortcuts-store', () => ({
+  shortcutsStore
 }))
 
 vi.mock('@openbroca/ui', () => {
@@ -622,6 +640,28 @@ describe('Dashboard', () => {
     expect(lastBarChartData).toBe(historyStats.dailyTokenUsage)
     expect(screen.queryByText('Failed to load stats.')).toBeNull()
     expect(screen.queryByText('Failed to load')).toBeNull()
+  })
+
+  test('renders the dashboard shortcut hint from the live shortcut settings', async () => {
+    shortcutsStore.setState((state) => ({
+      ...state,
+      data: {
+        quickAccelerator: 'Control',
+        toHoldKey: 'Space',
+        holdAccelerator: 'Control+Shift+Space'
+      }
+    }))
+    const { Dashboard } = await import('../dashboard')
+
+    render(<Dashboard />)
+
+    expect(screen.getAllByText('Control')).toHaveLength(2)
+    expect(screen.getByText(/double tap/i)).toBeTruthy()
+    expect(screen.getByText('Shift')).toBeTruthy()
+    expect(screen.getAllByText('Space')).toHaveLength(1)
+    expect(screen.getByText(/to start and stop dictation\./i)).toBeTruthy()
+    expect(screen.getByText(/to say something short\./i)).toBeTruthy()
+    expect(screen.queryByText('Fn')).toBeNull()
   })
 
   test('renders history rows with inline controls and opens details in a dialog', async () => {

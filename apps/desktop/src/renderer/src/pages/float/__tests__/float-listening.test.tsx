@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, render, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { createStore } from 'zustand'
 import type { ListeningSessionBridgeState, ListeningSessionState } from '../../../../../shared/listening-session-state'
 
@@ -9,13 +9,15 @@ vi.mock('@openbroca/ui', () => ({
   Button: ({
     children,
     onClick,
-    className
+    className,
+    ...props
   }: {
     children: React.ReactNode
     onClick?: () => void
     className?: string
+    [key: string]: unknown
   }) => (
-    <button onClick={onClick} className={className}>
+    <button onClick={onClick} className={className} {...props}>
       {children}
     </button>
   ),
@@ -48,7 +50,9 @@ vi.mock('@renderer/stores/microphone-store', () => ({
 async function renderForBridgeState(
   bridge: ListeningSessionBridgeState,
   overrides: {
+    cancelCapture?: ReturnType<typeof vi.fn>
     cancelProcessing?: ReturnType<typeof vi.fn>
+    finishCapture?: ReturnType<typeof vi.fn>
   } = {}
 ) {
   const listeners = new Set<(next: ListeningSessionBridgeState) => void>()
@@ -61,7 +65,9 @@ async function renderForBridgeState(
     },
     listeningSession: {
       getState: vi.fn().mockResolvedValue(bridge),
+      cancelCapture: overrides.cancelCapture ?? vi.fn().mockResolvedValue(undefined),
       cancelProcessing: overrides.cancelProcessing ?? vi.fn().mockResolvedValue(undefined),
+      finishCapture: overrides.finishCapture ?? vi.fn().mockResolvedValue(undefined),
       onStateChange: vi.fn((callback) => {
         listeners.add(callback)
         return () => listeners.delete(callback)
@@ -209,6 +215,108 @@ describe('FloatListening', () => {
 
     await waitFor(() => {
       expect(cancelProcessing).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  test.each([
+    { name: 'latched', captureMode: 'latched' as const },
+    { name: 'hold', captureMode: 'hold' as const }
+  ])('shows a confirm button while listening in %s capture mode', async ({ captureMode }) => {
+    const { container } = await renderForBridgeState({
+      state: { status: 'listening' },
+      captureMode,
+      targetApp: null
+    })
+
+    await waitFor(() => {
+      expect(within(container).getByRole('button', { name: 'Confirm capture' })).toBeTruthy()
+    })
+  })
+
+  test.each([
+    { name: 'latched', captureMode: 'latched' as const },
+    { name: 'hold', captureMode: 'hold' as const }
+  ])('shows a cancel button while listening in %s capture mode', async ({ captureMode }) => {
+    const { container } = await renderForBridgeState({
+      state: { status: 'listening' },
+      captureMode,
+      targetApp: null
+    })
+
+    await waitFor(() => {
+      expect(within(container).getByRole('button', { name: 'Cancel capture' })).toBeTruthy()
+    })
+  })
+
+  test.each([
+    {
+      name: 'quick listening',
+      bridge: {
+        state: { status: 'listening' },
+        captureMode: 'quick' as const,
+        targetApp: null
+      }
+    },
+    {
+      name: 'processing',
+      bridge: {
+        state: { status: 'processing' },
+        captureMode: 'latched' as const,
+        targetApp: null
+      }
+    }
+  ])('hides the confirm button for %s', async ({ bridge }) => {
+    const { container } = await renderForBridgeState(bridge)
+
+    await waitFor(() => {
+      expect(within(container).queryByRole('button', { name: 'Confirm capture' })).toBeNull()
+    })
+  })
+
+  test('clicking confirm finishes capture through the preload bridge', async () => {
+    const finishCapture = vi.fn().mockResolvedValue(undefined)
+    const { container } = await renderForBridgeState(
+      {
+        state: { status: 'listening' },
+        captureMode: 'latched',
+        targetApp: null
+      },
+      { finishCapture }
+    )
+
+    await waitFor(() => {
+      expect(within(container).getByRole('button', { name: 'Confirm capture' })).toBeTruthy()
+    })
+
+    fireEvent.click(within(container).getByRole('button', { name: 'Confirm capture' }))
+
+    await waitFor(() => {
+      expect(finishCapture).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  test.each([
+    { name: 'latched', captureMode: 'latched' as const },
+    { name: 'hold', captureMode: 'hold' as const }
+  ])('clicking cancel in %s mode cancels capture through the preload bridge', async ({ captureMode }) => {
+    const cancelCapture = vi.fn().mockResolvedValue(undefined)
+    const { container } = await renderForBridgeState(
+      {
+        state: { status: 'listening' },
+        captureMode,
+        targetApp: null
+      },
+      { cancelCapture }
+    )
+
+    await waitFor(() => {
+      expect(within(container).getByRole('button', { name: 'Cancel capture' })).toBeTruthy()
+    })
+
+    fireEvent.click(within(container).getByRole('button', { name: 'Cancel capture' }))
+
+    await waitFor(() => {
+      expect(cancelCapture).toHaveBeenCalledTimes(1)
     })
   })
 

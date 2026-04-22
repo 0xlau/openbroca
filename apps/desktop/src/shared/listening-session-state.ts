@@ -8,7 +8,10 @@ export type ListeningSessionState =
   | { status: 'processing' }
   | { status: 'error'; message: string }
 
+export type ListeningSessionCaptureMode = 'quick' | 'latched' | 'hold' | null
+
 export type ListeningSessionBridgeState = {
+  captureMode?: ListeningSessionCaptureMode
   state: ListeningSessionState
   targetApp: AppIdentity | null
 }

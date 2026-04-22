@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { Button, LiveWaveform, ShimmeringText } from '@openbroca/ui'
 import '@renderer/styles/float-listening.css'
-import { Cancel01Icon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Delete02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { microphoneStore } from '@renderer/stores/microphone-store'
 import { listeningSessionStore } from '@renderer/stores/listening-session-store'
@@ -19,10 +19,28 @@ export const FloatListening: React.FC = () => {
   const { bridge } = useStore(listeningSessionStore)
   const { state, targetApp } = bridge
   const showProcessing = isProcessingShellState(state)
-  const showCancel = state.status === 'processing'
+  const showConfirm =
+    state.status === 'listening' &&
+    (bridge.captureMode === 'latched' || bridge.captureMode === 'hold')
+  const showCaptureCancel =
+    state.status === 'listening' &&
+    (bridge.captureMode === 'latched' || bridge.captureMode === 'hold')
+  const showProcessingCancel = state.status === 'processing'
 
   return (
     <div className={cn('flex gap-2', showProcessing && 'w-full max-w-full')}>
+      {showConfirm ? (
+        <Button
+          aria-label="Confirm capture"
+          className="shrink-0"
+          size="icon"
+          variant="secondary"
+          onClick={() => void window.api.listeningSession.finishCapture()}
+        >
+          <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+        </Button>
+      ) : null}
+
       <div
         className={cn(
           'bg-background text-foreground h-9 flex items-center rounded-full border gap-2',
@@ -72,8 +90,21 @@ export const FloatListening: React.FC = () => {
         )}
       </div>
 
-      {showCancel ? (
+      {showCaptureCancel ? (
         <Button
+          aria-label="Cancel capture"
+          className="shrink-0"
+          size="icon"
+          variant="destructive"
+          onClick={() => void window.api.listeningSession.cancelCapture()}
+        >
+          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+        </Button>
+      ) : null}
+
+      {showProcessingCancel ? (
+        <Button
+          aria-label="Cancel processing"
           className="shrink-0"
           size="icon"
           variant="secondary"

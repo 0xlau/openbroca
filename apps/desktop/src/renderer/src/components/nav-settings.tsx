@@ -1,12 +1,17 @@
 'use client'
 
-import { Blockchain01Icon, TextSelectIcon } from '@hugeicons/core-free-icons'
+import { Blockchain01Icon, KeyboardIcon, TextSelectIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { SidebarNavLink } from '@renderer/components/sidebar-nav-link'
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from '@openbroca/ui'
 import { NavItem } from '@renderer/types/nav'
 
 const navItems: NavItem[] = [
+  {
+    name: 'Shortcuts',
+    url: '/shortcuts',
+    icon: <HugeiconsIcon icon={KeyboardIcon} strokeWidth={2} />
+  },
   {
     name: 'Providers',
     url: '/providers',

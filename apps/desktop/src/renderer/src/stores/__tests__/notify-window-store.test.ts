@@ -32,7 +32,9 @@ describe('notifyWindowStore', () => {
         disconnect: vi.fn()
       },
       listeningSession: {
+        cancelCapture: vi.fn(),
         cancelProcessing: vi.fn(),
+        finishCapture: vi.fn(),
         getState: vi.fn().mockResolvedValue({
           state: { status: 'idle' },
           targetApp: null
