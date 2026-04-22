@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { PermissionGateSnapshot } from '../main/permission-gate/types'
 import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
 import type { NotifyWindowBridgeState } from '../shared/notify-window-state'
 import type { ProviderAuthState } from '../shared/provider-auth'
@@ -16,6 +17,16 @@ const api = {
       ipcRenderer.invoke('provider-auth:connect', providerId) as Promise<ProviderAuthState>,
     disconnect: (providerId: string) =>
       ipcRenderer.invoke('provider-auth:disconnect', providerId) as Promise<ProviderAuthState>
+  },
+  permissions: {
+    getSnapshot: () =>
+      ipcRenderer.invoke('permissions:get-snapshot') as Promise<PermissionGateSnapshot>,
+    requestMicrophone: () =>
+      ipcRenderer.invoke('permissions:request-microphone') as Promise<PermissionGateSnapshot>,
+    openDesktopControlSettings: () =>
+      ipcRenderer.invoke('permissions:open-desktop-control-settings') as Promise<PermissionGateSnapshot>,
+    refresh: () => ipcRenderer.invoke('permissions:refresh') as Promise<PermissionGateSnapshot>,
+    quitApp: () => ipcRenderer.invoke('permissions:quit-app') as Promise<void>
   },
   listeningSession: {
     cancelCapture: () =>

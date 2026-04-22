@@ -1,5 +1,10 @@
 import { BrowserWindow, screen, type Rectangle } from 'electron'
-import { createMainWindow, createFloatingWindow, getFloatingWindowPosition } from './windows'
+import {
+  createMainWindow,
+  createFloatingWindow,
+  createPermissionOnboardingWindow,
+  getFloatingWindowPosition
+} from './windows'
 
 type FloatingWindowSize = Pick<Rectangle, 'width' | 'height'>
 
@@ -11,6 +16,7 @@ interface WindowManagerOptions {
 class WindowManager {
   private mainWindow: BrowserWindow | null = null
   private floatingWindow: BrowserWindow | null = null
+  private onboardingWindow: BrowserWindow | null = null
   private readonly createFloatingWindow: (size?: FloatingWindowSize) => BrowserWindow
   private onFloatingHidden: (() => void) | null
 
@@ -29,6 +35,24 @@ class WindowManager {
 
   getMain(): BrowserWindow | null {
     return this.mainWindow
+  }
+
+  createPermissionOnboarding(): BrowserWindow {
+    this.onboardingWindow = createPermissionOnboardingWindow()
+    this.onboardingWindow.on('closed', () => {
+      this.onboardingWindow = null
+    })
+    return this.onboardingWindow
+  }
+
+  getPermissionOnboarding(): BrowserWindow | null {
+    return this.onboardingWindow
+  }
+
+  closePermissionOnboarding(): void {
+    if (this.onboardingWindow && !this.onboardingWindow.isDestroyed()) {
+      this.onboardingWindow.close()
+    }
   }
 
   showFloating(size?: FloatingWindowSize): void {
@@ -92,6 +116,10 @@ class WindowManager {
     if (this.floatingWindow && !this.floatingWindow.isDestroyed()) {
       this.floatingWindow.destroy()
       this.floatingWindow = null
+    }
+    if (this.onboardingWindow && !this.onboardingWindow.isDestroyed()) {
+      this.onboardingWindow.destroy()
+      this.onboardingWindow = null
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.destroy()

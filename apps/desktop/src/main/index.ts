@@ -15,6 +15,11 @@ import { llmRegistry, asrRegistry } from './providers'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
 import {
+  requestDesktopControlPermission,
+  requestMicrophonePermission,
+  resolvePermissionGateSnapshot
+} from './permission-gate/service'
+import {
   bindFloatingSessionController,
   type FloatingSessionController
 } from './floating-session-controller'
@@ -291,7 +296,56 @@ function broadcastListeningSessionState(): void {
   }
 }
 
-app.whenReady().then(() => {
+function ensurePermissionOnboardingWindow(): void {
+  const existingWindow = windowManager.getPermissionOnboarding()
+  if (existingWindow && !existingWindow.isDestroyed()) {
+    return
+  }
+
+  const onboardingWindow = windowManager.createPermissionOnboarding()
+  onboardingWindow.on('closed', () => {
+    if (!windowManager.getMain()) {
+      app.quit()
+    }
+  })
+}
+
+function ensureCaptureEntryPointsReady(): void {
+  if (floatingSessionController) {
+    return
+  }
+
+  floatingSessionController = bindFloatingSessionController({
+    shortcutSettings: normalizeShortcutSettings(store.get('shortcuts'), process.platform),
+    getSelectedDeviceId: () => {
+      const mic = store.get('microphone') as { selectedDeviceId?: number | null } | undefined
+      return mic?.selectedDeviceId
+    },
+    onCaptureModeChange: () => {
+      broadcastListeningSessionState()
+    },
+    listeningSession,
+    shortcutManager,
+    windowManager
+  })
+}
+
+async function refreshPermissionGateAndMaybeAdvance() {
+  const snapshot = await resolvePermissionGateSnapshot()
+  if (snapshot.canEnterMainWindow) {
+    ensureCaptureEntryPointsReady()
+    if (!windowManager.getMain()) {
+      windowManager.createMain()
+    }
+    windowManager.closePermissionOnboarding()
+    return snapshot
+  }
+
+  ensurePermissionOnboardingWindow()
+  return snapshot
+}
+
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
 
   app.on('browser-window-created', (_, window) => {
@@ -318,6 +372,17 @@ app.whenReady().then(() => {
     win?.isMaximized() ? win.unmaximize() : win?.maximize()
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
+  ipcMain.handle('permissions:get-snapshot', () => resolvePermissionGateSnapshot())
+  ipcMain.handle('permissions:request-microphone', async () => {
+    await requestMicrophonePermission()
+    return refreshPermissionGateAndMaybeAdvance()
+  })
+  ipcMain.handle('permissions:open-desktop-control-settings', async () => {
+    requestDesktopControlPermission()
+    return refreshPermissionGateAndMaybeAdvance()
+  })
+  ipcMain.handle('permissions:refresh', () => refreshPermissionGateAndMaybeAdvance())
+  ipcMain.handle('permissions:quit-app', () => app.quit())
   ipcMain.handle('listening-session:get-state', () => getListeningSessionBridgeState())
   ipcMain.handle('listening-session:cancel-capture', () => listeningSession.cancelCapture())
   ipcMain.handle('listening-session:cancel-processing', () => listeningSession.cancelProcessing())
@@ -328,34 +393,20 @@ app.whenReady().then(() => {
     oauthService.disconnect(providerId)
   )
 
-  floatingSessionController = bindFloatingSessionController({
-    shortcutSettings: normalizeShortcutSettings(store.get('shortcuts'), process.platform),
-    getSelectedDeviceId: () => {
-      const mic = store.get('microphone') as { selectedDeviceId?: number | null } | undefined
-      return mic?.selectedDeviceId
-    },
-    onCaptureModeChange: () => {
-      broadcastListeningSessionState()
-    },
-    listeningSession,
-    shortcutManager,
-    windowManager
-  })
-
   listeningSession.subscribe(() => {
     broadcastListeningSessionState()
   })
 
-  windowManager.createMain()
+  await refreshPermissionGateAndMaybeAdvance()
 
   store.onDidChange('shortcuts', (rawValue) => {
     const nextSettings = normalizeShortcutSettings(rawValue, process.platform)
     floatingSessionController?.updateShortcuts(nextSettings)
   })
 
-  app.on('activate', () => {
-    if (!windowManager.getMain()) {
-      windowManager.createMain()
+  app.on('activate', async () => {
+    if (!windowManager.getMain() && !windowManager.getPermissionOnboarding()) {
+      await refreshPermissionGateAndMaybeAdvance()
     }
   })
 })

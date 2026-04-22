@@ -11,6 +11,14 @@ vi.mock('@openbroca/ui', () => ({
 }))
 
 describe('NotifyWindow', () => {
+  const permissionsBridge = {
+    getSnapshot: vi.fn(),
+    requestMicrophone: vi.fn(),
+    openDesktopControlSettings: vi.fn(),
+    refresh: vi.fn(),
+    quitApp: vi.fn()
+  }
+
   beforeEach(() => {
     vi.resetModules()
   })
@@ -26,6 +34,7 @@ describe('NotifyWindow', () => {
         connect: vi.fn(),
         disconnect: vi.fn()
       },
+      permissions: permissionsBridge,
       listeningSession: {
         cancelCapture: vi.fn(),
         cancelProcessing: vi.fn(),
@@ -71,6 +80,7 @@ describe('NotifyWindow', () => {
         connect: vi.fn(),
         disconnect: vi.fn()
       },
+      permissions: permissionsBridge,
       listeningSession: {
         cancelCapture: vi.fn(),
         cancelProcessing: vi.fn(),

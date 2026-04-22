@@ -9,6 +9,7 @@ import { Shortcuts } from '@renderer/pages/main/shortcuts'
 import { MainRoot } from '@renderer/pages/main/main-root'
 import { FloatListening } from '@renderer/pages/float/float-listening'
 import { NotifyWindow } from '@renderer/pages/notify/notify-window'
+import { PermissionOnboarding } from '@renderer/pages/onboarding/permissions'
 import { createHashRouter } from 'react-router'
 
 export const router = createHashRouter([
@@ -33,5 +34,9 @@ export const router = createHashRouter([
   {
     path: '/notify/window',
     element: <NotifyWindow />
+  },
+  {
+    path: '/onboarding/permissions',
+    element: <PermissionOnboarding />
   }
 ])

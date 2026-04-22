@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ListeningSessionBridgeState } from '../../shared/listening-session-state'
+import type { PermissionGateSnapshot } from '../../main/permission-gate/types'
 
 const invoke = vi.fn()
 const on = vi.fn()
@@ -27,6 +28,13 @@ function getExposedApi() {
     providerAuth: {
       connect: (providerId: string) => Promise<unknown>
       disconnect: (providerId: string) => Promise<void>
+    }
+    permissions: {
+      getSnapshot: () => Promise<PermissionGateSnapshot>
+      requestMicrophone: () => Promise<PermissionGateSnapshot>
+      openDesktopControlSettings: () => Promise<PermissionGateSnapshot>
+      refresh: () => Promise<PermissionGateSnapshot>
+      quitApp: () => Promise<void>
     }
     listeningSession: {
       cancelCapture: () => Promise<void>
@@ -102,6 +110,145 @@ describe('preload listeningSession bridge', () => {
     await api.providerAuth.disconnect('openai-codex')
 
     expect(invoke).toHaveBeenCalledWith('provider-auth:disconnect', 'openai-codex')
+  })
+
+  test('fetches the permission onboarding snapshot', async () => {
+    const snapshot: PermissionGateSnapshot = {
+      platform: 'darwin',
+      shouldGate: true,
+      canEnterMainWindow: false,
+      permissions: [
+        {
+          key: 'microphone',
+          title: 'Microphone',
+          description: 'Required to capture your voice.',
+          status: 'missing'
+        },
+        {
+          key: 'desktopControl',
+          title: 'Desktop Control',
+          description: 'Required to paste the final text into your current app.',
+          status: 'needs-manual-step'
+        }
+      ]
+    }
+    invoke.mockResolvedValueOnce(snapshot)
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    const result = await api.permissions.getSnapshot()
+
+    expect(invoke).toHaveBeenCalledWith('permissions:get-snapshot')
+    expect(result).toEqual(snapshot)
+  })
+
+  test('requests microphone access through the permissions bridge', async () => {
+    const snapshot: PermissionGateSnapshot = {
+      platform: 'darwin',
+      shouldGate: true,
+      canEnterMainWindow: false,
+      permissions: [
+        {
+          key: 'microphone',
+          title: 'Microphone',
+          description: 'Required to capture your voice.',
+          status: 'granted'
+        },
+        {
+          key: 'desktopControl',
+          title: 'Desktop Control',
+          description: 'Required to paste the final text into your current app.',
+          status: 'needs-manual-step'
+        }
+      ]
+    }
+    invoke.mockResolvedValueOnce(snapshot)
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    const result = await api.permissions.requestMicrophone()
+
+    expect(invoke).toHaveBeenCalledWith('permissions:request-microphone')
+    expect(result).toEqual(snapshot)
+  })
+
+  test('opens desktop control settings through the permissions bridge', async () => {
+    const snapshot: PermissionGateSnapshot = {
+      platform: 'darwin',
+      shouldGate: false,
+      canEnterMainWindow: true,
+      permissions: [
+        {
+          key: 'microphone',
+          title: 'Microphone',
+          description: 'Required to capture your voice.',
+          status: 'granted'
+        },
+        {
+          key: 'desktopControl',
+          title: 'Desktop Control',
+          description: 'Required to paste the final text into your current app.',
+          status: 'granted'
+        }
+      ]
+    }
+    invoke.mockResolvedValueOnce(snapshot)
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    const result = await api.permissions.openDesktopControlSettings()
+
+    expect(invoke).toHaveBeenCalledWith('permissions:open-desktop-control-settings')
+    expect(result).toEqual(snapshot)
+  })
+
+  test('refreshes the permission gate through the permissions bridge', async () => {
+    const snapshot: PermissionGateSnapshot = {
+      platform: 'darwin',
+      shouldGate: false,
+      canEnterMainWindow: true,
+      permissions: [
+        {
+          key: 'microphone',
+          title: 'Microphone',
+          description: 'Required to capture your voice.',
+          status: 'granted'
+        },
+        {
+          key: 'desktopControl',
+          title: 'Desktop Control',
+          description: 'Required to paste the final text into your current app.',
+          status: 'granted'
+        }
+      ]
+    }
+    invoke.mockResolvedValueOnce(snapshot)
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    const result = await api.permissions.refresh()
+
+    expect(invoke).toHaveBeenCalledWith('permissions:refresh')
+    expect(result).toEqual(snapshot)
+  })
+
+  test('quits the app through the permissions bridge', async () => {
+    enableContextIsolation()
+
+    await import('../index')
+
+    const api = getExposedApi()
+    await api.permissions.quitApp()
+
+    expect(invoke).toHaveBeenCalledWith('permissions:quit-app')
   })
 
   test('subscribers receive listening session state updates', async () => {

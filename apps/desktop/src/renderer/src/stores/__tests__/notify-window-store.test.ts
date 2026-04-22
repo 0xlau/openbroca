@@ -4,6 +4,14 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { NotifyWindowBridgeState } from '../../../../../shared/notify-window-state'
 
 describe('notifyWindowStore', () => {
+  const permissionsBridge = {
+    getSnapshot: vi.fn(),
+    requestMicrophone: vi.fn(),
+    openDesktopControlSettings: vi.fn(),
+    refresh: vi.fn(),
+    quitApp: vi.fn()
+  }
+
   afterEach(() => {
     vi.resetModules()
   })
@@ -31,6 +39,7 @@ describe('notifyWindowStore', () => {
         connect: vi.fn(),
         disconnect: vi.fn()
       },
+      permissions: permissionsBridge,
       listeningSession: {
         cancelCapture: vi.fn(),
         cancelProcessing: vi.fn(),

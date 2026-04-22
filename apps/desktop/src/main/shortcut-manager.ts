@@ -19,10 +19,9 @@ const MODIFIER_KEY_CODES: Record<ModifierKind, number> = {
   alt: 56,
   meta: 3675
 }
-const ALPHANUMERIC_KEY_NAME_TO_CODE = [
-  ...'abcdefghijklmnopqrstuvwxyz',
-  ...'0123456789'
-].reduce<Record<string, number>>((acc, keyName) => {
+const ALPHANUMERIC_KEY_NAME_TO_CODE = [...'abcdefghijklmnopqrstuvwxyz', ...'0123456789'].reduce<
+  Record<string, number>
+>((acc, keyName) => {
   const uiohookName = /[a-z]/.test(keyName) ? keyName.toUpperCase() : keyName
   const keyCode = UIOHOOK_KEY_RECORD[uiohookName]
   if (typeof keyCode === 'number') {

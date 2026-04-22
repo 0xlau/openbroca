@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
 vi.mock('../windows', () => ({
   createMainWindow: vi.fn(),
   createFloatingWindow: vi.fn(),
+  createPermissionOnboardingWindow: vi.fn(),
   getFloatingWindowPosition: vi.fn()
 }))
 
@@ -119,5 +120,59 @@ describe('WindowManager', () => {
 
     expect(windows.getFloatingWindowPosition).not.toHaveBeenCalled()
     expect(setBounds).toHaveBeenCalledWith({ x: 410, y: 622, width: 360, height: 38 })
+  })
+
+  test('creates and tracks a permission onboarding window', async () => {
+    const windows = await import('../windows')
+    const { WindowManager } = await import('../window-manager')
+    let closedHandler: (() => void) | undefined
+    const onboardingWindow = {
+      on: vi.fn((event: string, handler: () => void) => {
+        if (event === 'closed') {
+          closedHandler = handler
+        }
+      }),
+      isDestroyed: () => false,
+      close: vi.fn()
+    }
+
+    vi.mocked(windows.createPermissionOnboardingWindow).mockReturnValue(onboardingWindow as never)
+
+    const manager = new WindowManager()
+
+    expect(manager.createPermissionOnboarding()).toBe(onboardingWindow)
+    expect(manager.getPermissionOnboarding()).toBe(onboardingWindow)
+
+    closedHandler?.()
+
+    expect(manager.getPermissionOnboarding()).toBeNull()
+  })
+
+  test('keeps tracking the onboarding window until the closed lifecycle completes', async () => {
+    const windows = await import('../windows')
+    const { WindowManager } = await import('../window-manager')
+    let closedHandler: (() => void) | undefined
+    const onboardingWindow = {
+      on: vi.fn((event: string, handler: () => void) => {
+        if (event === 'closed') {
+          closedHandler = handler
+        }
+      }),
+      isDestroyed: () => false,
+      close: vi.fn()
+    }
+
+    vi.mocked(windows.createPermissionOnboardingWindow).mockReturnValue(onboardingWindow as never)
+
+    const manager = new WindowManager()
+    manager.createPermissionOnboarding()
+    manager.closePermissionOnboarding()
+
+    expect(onboardingWindow.close).toHaveBeenCalledTimes(1)
+    expect(manager.getPermissionOnboarding()).toBe(onboardingWindow)
+
+    closedHandler?.()
+
+    expect(manager.getPermissionOnboarding()).toBeNull()
   })
 })
