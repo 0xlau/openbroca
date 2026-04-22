@@ -112,6 +112,26 @@ type HistoryListItem = {
   failureMessage?: string | null
 }
 
+type HistoryStats = {
+  dailyTokenUsage: Array<{
+    date: string
+    dayLabel: string
+    tokens: number
+  }>
+  totalDictationTimeMs: number
+  wordsDictated: number
+  timeSavedMs: number
+  avgDictationSpeedWpm: number
+  completedDictations: number
+  activeDays: number
+}
+
+type HistoryStatsQueryState = {
+  data?: HistoryStats
+  isLoading?: boolean
+  isError?: boolean
+}
+
 let historyListRecords: HistoryListItem[] = [
   {
     id: 'record-1',
@@ -125,6 +145,34 @@ let historyListRecords: HistoryListItem[] = [
     failureMessage: null
   }
 ]
+
+let historyStats: HistoryStats = {
+  dailyTokenUsage: [
+    { date: '2026-04-16', dayLabel: 'Wed', tokens: 10 },
+    { date: '2026-04-17', dayLabel: 'Thu', tokens: 2500 },
+    { date: '2026-04-18', dayLabel: 'Fri', tokens: 0 },
+    { date: '2026-04-19', dayLabel: 'Sat', tokens: 12_500 },
+    { date: '2026-04-20', dayLabel: 'Sun', tokens: 300 },
+    { date: '2026-04-21', dayLabel: 'Mon', tokens: 99 },
+    { date: '2026-04-22', dayLabel: 'Tue', tokens: 7_654 }
+  ],
+  totalDictationTimeMs: 7_320_000,
+  wordsDictated: 18_432,
+  timeSavedMs: 4_500_000,
+  avgDictationSpeedWpm: 142,
+  completedDictations: 128,
+  activeDays: 23
+}
+
+let historyStatsQueryState: HistoryStatsQueryState = {
+  data: historyStats,
+  isLoading: false,
+  isError: false
+}
+
+let lastBarChartData: Array<{ date: string; dayLabel: string; tokens: number }> | undefined
+let lastXAxisDataKey: string | undefined
+let lastBarDataKey: string | undefined
 
 const playMock = vi.fn(() => Promise.resolve())
 const pauseMock = vi.fn()
@@ -152,6 +200,9 @@ vi.mock('@renderer/trpc', () => ({
         useQuery: () => ({
           data: historyListRecords
         })
+      },
+      stats: {
+        useQuery: () => historyStatsQueryState
       },
       getById: {
         useQuery: (_input: { id: string }, opts?: { enabled?: boolean }) => ({
@@ -214,6 +265,36 @@ vi.mock('@openbroca/ui', () => {
     <button className={className} {...props}>
       {children}
     </button>
+  ),
+  Card: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className} data-slot="card">
+      {children}
+    </div>
+  ),
+  CardContent: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className} data-slot="card-content">
+      {children}
+    </div>
+  ),
+  CardDescription: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className} data-slot="card-description">
+      {children}
+    </div>
+  ),
+  CardFooter: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className} data-slot="card-footer">
+      {children}
+    </div>
+  ),
+  CardHeader: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className} data-slot="card-header">
+      {children}
+    </div>
+  ),
+  CardTitle: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className} data-slot="card-title">
+      {children}
+    </div>
   ),
   ChartContainer: ({
     children,
@@ -315,9 +396,31 @@ vi.mock('@hugeicons/core-free-icons', () => ({
 }))
 
 vi.mock('recharts', () => ({
-  Bar: () => <div>Bar</div>,
-  BarChart: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  XAxis: () => <div>XAxis</div>,
+  Bar: ({ dataKey }: { dataKey?: string }) => {
+    lastBarDataKey = dataKey
+    return <div>Bar</div>
+  },
+  BarChart: ({
+    children,
+    data
+  }: {
+    children: ReactNode
+    data?: Array<{ date: string; dayLabel: string; tokens: number }>
+  }) => (
+    <div
+      data-testid="bar-chart"
+      ref={() => {
+        lastBarChartData = data
+      }}
+    >
+      {children}
+    </div>
+  ),
+  CartesianGrid: () => <div>CartesianGrid</div>,
+  XAxis: ({ dataKey }: { dataKey?: string }) => {
+    lastXAxisDataKey = dataKey
+    return <div>XAxis</div>
+  },
   YAxis: () => <div>YAxis</div>
 }))
 
@@ -353,6 +456,31 @@ describe('Dashboard', () => {
         failureMessage: null
       }
     ]
+    historyStats = {
+      dailyTokenUsage: [
+        { date: '2026-04-16', dayLabel: 'Wed', tokens: 10 },
+        { date: '2026-04-17', dayLabel: 'Thu', tokens: 2500 },
+        { date: '2026-04-18', dayLabel: 'Fri', tokens: 0 },
+        { date: '2026-04-19', dayLabel: 'Sat', tokens: 12_500 },
+        { date: '2026-04-20', dayLabel: 'Sun', tokens: 300 },
+        { date: '2026-04-21', dayLabel: 'Mon', tokens: 99 },
+        { date: '2026-04-22', dayLabel: 'Tue', tokens: 7_654 }
+      ],
+      totalDictationTimeMs: 7_320_000,
+      wordsDictated: 18_432,
+      timeSavedMs: 4_500_000,
+      avgDictationSpeedWpm: 142,
+      completedDictations: 128,
+      activeDays: 23
+    }
+    historyStatsQueryState = {
+      data: historyStats,
+      isLoading: false,
+      isError: false
+    }
+    lastBarChartData = undefined
+    lastXAxisDataKey = undefined
+    lastBarDataKey = undefined
     selectedHistoryRecord.finalText = 'Send the report by Friday.'
     selectedHistoryRecord.failureMessage = null
     selectedHistoryRecord.debug.rawTranscriptionText = 'send the report by friday'
@@ -369,6 +497,131 @@ describe('Dashboard', () => {
 
     expect(container.firstElementChild?.className).toContain('max-w-5xl')
     expect(container.firstElementChild?.className).toContain('mx-auto')
+  })
+
+  test('renders dashboard metrics from history stats query data', async () => {
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expect(screen.getByText('Daily Token Usage')).toBeTruthy()
+    expect(screen.getByText('Daily LLM token consumption over the last 7 days.')).toBeTruthy()
+    expect(screen.getByText('This chart shows the number of LLM tokens consumed each day.')).toBeTruthy()
+    expectSummaryRow('Total Dictation Time', '2h 2m')
+    expectSummaryRow('Words Dictated', '18,432')
+    expectSummaryRow('Time Saved', '1h 15m')
+    expectSummaryRow('Avg Dictation Speed', '142 wpm')
+    expectSummaryRow('Completed Dictations', '128')
+    expectSummaryRow('Active Days', '23')
+    expect(screen.getByTestId('bar-chart')).toBeTruthy()
+    expect(lastBarChartData).toBe(historyStats.dailyTokenUsage)
+    expect(lastXAxisDataKey).toBe('dayLabel')
+    expect(lastBarDataKey).toBe('tokens')
+  })
+
+  test('renders zeroed dashboard metrics for empty stats', async () => {
+    historyStats = {
+      dailyTokenUsage: [
+        { date: '2026-04-16', dayLabel: 'Wed', tokens: 0 },
+        { date: '2026-04-17', dayLabel: 'Thu', tokens: 0 },
+        { date: '2026-04-18', dayLabel: 'Fri', tokens: 0 },
+        { date: '2026-04-19', dayLabel: 'Sat', tokens: 0 },
+        { date: '2026-04-20', dayLabel: 'Sun', tokens: 0 },
+        { date: '2026-04-21', dayLabel: 'Mon', tokens: 0 },
+        { date: '2026-04-22', dayLabel: 'Tue', tokens: 0 }
+      ],
+      totalDictationTimeMs: 0,
+      wordsDictated: 0,
+      timeSavedMs: 0,
+      avgDictationSpeedWpm: 0,
+      completedDictations: 0,
+      activeDays: 0
+    }
+    historyStatsQueryState = {
+      data: historyStats,
+      isLoading: false,
+      isError: false
+    }
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expectSummaryRow('Total Dictation Time', '0m')
+    expectSummaryRow('Words Dictated', '0')
+    expectSummaryRow('Time Saved', '0m')
+    expectSummaryRow('Avg Dictation Speed', '0 wpm')
+    expectSummaryRow('Completed Dictations', '0')
+    expectSummaryRow('Active Days', '0')
+  })
+
+  test('rounds non-zero under-one-minute durations up to 1m', async () => {
+    historyStats = {
+      ...historyStats,
+      totalDictationTimeMs: 15_000,
+      timeSavedMs: 45_000
+    }
+    historyStatsQueryState = {
+      data: historyStats,
+      isLoading: false,
+      isError: false
+    }
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expectSummaryRow('Total Dictation Time', '1m')
+    expectSummaryRow('Time Saved', '1m')
+  })
+
+  test('shows stats loading state instead of implying zero values', async () => {
+    historyStatsQueryState = {
+      data: undefined,
+      isLoading: true,
+      isError: false
+    }
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expectSummaryRow('Total Dictation Time', 'Loading...')
+    expectSummaryRow('Words Dictated', 'Loading...')
+    expect(screen.getByText('Loading stats...')).toBeTruthy()
+    expect(screen.queryByText('0 wpm')).toBeNull()
+    expect(screen.queryByTestId('bar-chart')).toBeNull()
+  })
+
+  test('shows stats error state instead of implying zero values', async () => {
+    historyStatsQueryState = {
+      data: undefined,
+      isLoading: false,
+      isError: true
+    }
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expectSummaryRow('Total Dictation Time', 'Failed to load')
+    expectSummaryRow('Words Dictated', 'Failed to load')
+    expect(screen.getByText('Failed to load stats.')).toBeTruthy()
+    expect(screen.queryByText('0m')).toBeNull()
+    expect(screen.queryByTestId('bar-chart')).toBeNull()
+  })
+
+  test('keeps rendering stats when cached data exists during a refetch error', async () => {
+    historyStatsQueryState = {
+      data: historyStats,
+      isLoading: false,
+      isError: true
+    }
+
+    const { Dashboard } = await import('../dashboard')
+    render(<Dashboard />)
+
+    expectSummaryRow('Total Dictation Time', '2h 2m')
+    expectSummaryRow('Words Dictated', '18,432')
+    expect(screen.getByTestId('bar-chart')).toBeTruthy()
+    expect(lastBarChartData).toBe(historyStats.dailyTokenUsage)
+    expect(screen.queryByText('Failed to load stats.')).toBeNull()
+    expect(screen.queryByText('Failed to load')).toBeNull()
   })
 
   test('renders history rows with inline controls and opens details in a dialog', async () => {

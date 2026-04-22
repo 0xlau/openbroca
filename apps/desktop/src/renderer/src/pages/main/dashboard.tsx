@@ -4,6 +4,12 @@ import { HistoryRow } from '@renderer/components/history/history-row'
 import { trpc } from '@renderer/trpc'
 import { hasMeaningfulText } from '../../../../shared/meaningful-text'
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   type ChartConfig,
   ChartContainer,
   ChartTooltip,
@@ -18,19 +24,9 @@ import {
   TypographyLarge,
   TypographyMuted
 } from '@openbroca/ui'
-import { Bar, BarChart, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts'
 import { useStore } from 'zustand'
 import { settingsStore } from '@renderer/stores/settings-store'
-
-const tokenUsageData = [
-  { day: 'Mon', tokens: 4200 },
-  { day: 'Tue', tokens: 6800 },
-  { day: 'Wed', tokens: 3100 },
-  { day: 'Thu', tokens: 8500 },
-  { day: 'Fri', tokens: 7200 },
-  { day: 'Sat', tokens: 2300 },
-  { day: 'Sun', tokens: 5100 }
-]
 
 const chartConfig = {
   tokens: {
@@ -39,12 +35,48 @@ const chartConfig = {
   }
 } satisfies ChartConfig
 
-const statsData = [
-  { label: 'Total Dictation Time', value: '3h 42m' },
-  { label: 'Words Dictated', value: '18,432' },
-  { label: 'Time Saved', value: '1h 15m' },
-  { label: 'Avg Dictation Speed', value: '142 wpm' }
-]
+type HistoryStatsData = {
+  dailyTokenUsage: Array<{
+    date: string
+    dayLabel: string
+    tokens: number
+  }>
+  completedDictations: number
+  activeDays: number
+  totalDictationTimeMs: number
+  wordsDictated: number
+  timeSavedMs: number
+  avgDictationSpeedWpm: number
+}
+
+const EMPTY_STATS: HistoryStatsData = {
+  dailyTokenUsage: [],
+  completedDictations: 0,
+  activeDays: 0,
+  totalDictationTimeMs: 0,
+  wordsDictated: 0,
+  timeSavedMs: 0,
+  avgDictationSpeedWpm: 0
+}
+
+function formatDuration(ms: number) {
+  if (ms <= 0) {
+    return '0m'
+  }
+
+  const totalMinutes = Math.floor(ms / 60_000)
+  if (totalMinutes === 0) {
+    return '1m'
+  }
+
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours === 0) {
+    return `${minutes}m`
+  }
+
+  return `${hours}h ${minutes}m`
+}
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -62,10 +94,56 @@ export const Dashboard: React.FC = () => {
 
   const { data: appVersion } = trpc.app.getAppVersion.useQuery()
   const historyListQuery = trpc.history.list.useQuery()
+  const historyStatsQuery = trpc.history.stats.useQuery()
   const selectedDetailQuery = trpc.history.getById.useQuery(
     { id: selectedHistoryId ?? '' },
     { enabled: selectedHistoryId !== null }
   )
+  const hasStatsData = historyStatsQuery.data !== undefined
+  const statsState = hasStatsData
+    ? 'ready'
+    : historyStatsQuery.isLoading
+      ? 'loading'
+      : historyStatsQuery.isError
+        ? 'error'
+        : 'ready'
+  const stats = statsState === 'ready' ? (historyStatsQuery.data ?? EMPTY_STATS) : null
+  const statsData =
+    statsState === 'ready'
+      ? [
+          { label: 'Completed Dictations', value: stats.completedDictations.toLocaleString() },
+          { label: 'Active Days', value: stats.activeDays.toLocaleString() },
+          { label: 'Total Dictation Time', value: formatDuration(stats.totalDictationTimeMs) },
+          { label: 'Words Dictated', value: stats.wordsDictated.toLocaleString() },
+          { label: 'Time Saved', value: formatDuration(stats.timeSavedMs) },
+          { label: 'Avg Dictation Speed', value: `${stats.avgDictationSpeedWpm} wpm` }
+        ]
+      : [
+          {
+            label: 'Completed Dictations',
+            value: statsState === 'loading' ? 'Loading...' : 'Failed to load'
+          },
+          {
+            label: 'Active Days',
+            value: statsState === 'loading' ? 'Loading...' : 'Failed to load'
+          },
+          {
+            label: 'Total Dictation Time',
+            value: statsState === 'loading' ? 'Loading...' : 'Failed to load'
+          },
+          {
+            label: 'Words Dictated',
+            value: statsState === 'loading' ? 'Loading...' : 'Failed to load'
+          },
+          {
+            label: 'Time Saved',
+            value: statsState === 'loading' ? 'Loading...' : 'Failed to load'
+          },
+          {
+            label: 'Avg Dictation Speed',
+            value: statsState === 'loading' ? 'Loading...' : 'Failed to load'
+          }
+        ]
 
   const baseHistoryItems = (historyListQuery.data ?? []).filter(
     (item) => settings.debugMode || item.status === 'failed' || hasMeaningfulText(item.finalText)
@@ -96,22 +174,42 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className="flex gap-6">
-        <div className="flex flex-1 flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
-          <TypographyLarge>Daily Token Usage</TypographyLarge>
-          <ChartContainer config={chartConfig} className="h-48 w-full">
-            <BarChart data={tokenUsageData}>
-              <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 12 }}
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="tokens" fill="var(--color-tokens)" radius={4} />
-            </BarChart>
-          </ChartContainer>
-        </div>
+        <Card size="sm" className="flex flex-1 gap-0">
+          <CardHeader className="border-b">
+            <CardTitle>Daily Token Usage</CardTitle>
+            <CardDescription>Daily LLM token consumption over the last 7 days.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <ChartContainer config={chartConfig} className="h-48 w-full">
+              {statsState === 'ready' ? (
+                <BarChart accessibilityLayer data={stats.dailyTokenUsage}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="dayLabel"
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Bar dataKey="tokens" fill="var(--color-tokens)" radius={8} />
+                </BarChart>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <TypographyMuted>
+                    {statsState === 'loading' ? 'Loading stats...' : 'Failed to load stats.'}
+                  </TypographyMuted>
+                </div>
+              )}
+            </ChartContainer>
+          </CardContent>
+          <CardFooter className="flex-col items-start gap-1 border-t text-sm">
+            <div className="font-medium leading-none">LLM token consumption</div>
+            <div className="leading-none text-muted-foreground">
+              This chart shows the number of LLM tokens consumed each day.
+            </div>
+          </CardFooter>
+        </Card>
 
         <div className="flex-1 grid grid-cols-2 gap-4">
           {statsData.map((stat) => (
