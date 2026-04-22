@@ -216,12 +216,6 @@ export const Dashboard: React.FC = () => {
               )}
             </ChartContainer>
           </CardContent>
-          <CardFooter className="flex-col items-start gap-1 border-t text-sm">
-            <div className="font-medium leading-none">LLM token consumption</div>
-            <div className="leading-none text-muted-foreground">
-              This chart shows the number of LLM tokens consumed each day.
-            </div>
-          </CardFooter>
         </Card>
 
         <div className="flex-1 grid grid-cols-2 gap-4">
