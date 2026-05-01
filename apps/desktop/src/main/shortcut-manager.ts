@@ -13,6 +13,7 @@ interface ParsedAccelerator {
 
 const UIOHOOK_KEY_RECORD = UiohookKey as unknown as Record<string, number | undefined>
 const MODIFIER_DOUBLE_TAP_THRESHOLD_MS = 250
+const MODIFIER_DOUBLE_TAP_CONFIRM_DELAY_MS = 50
 const MODIFIER_KEY_CODES: Record<ModifierKind, number> = {
   ctrl: 29,
   shift: 42,
@@ -175,6 +176,12 @@ class ShortcutManager {
   private holdIsDown = false
   private lastQuickModifierTapAt: number | null = null
   private lastHoldModifierTapAt: number | null = null
+  private quickModifierPhysicallyDown = false
+  private quickModifierGestureContaminated = false
+  private holdModifierPhysicallyDown = false
+  private holdModifierGestureContaminated = false
+  private quickModifierFireTimer: ReturnType<typeof setTimeout> | null = null
+  private holdModifierFireTimer: ReturnType<typeof setTimeout> | null = null
   private started = false
 
   private shouldFireModifierOnlyKeydown(
@@ -192,12 +199,57 @@ class ShortcutManager {
     this.holdIsDown = false
     this.lastQuickModifierTapAt = null
     this.lastHoldModifierTapAt = null
+    this.quickModifierPhysicallyDown = false
+    this.quickModifierGestureContaminated = false
+    this.holdModifierPhysicallyDown = false
+    this.holdModifierGestureContaminated = false
+    this.cancelQuickFireTimer()
+    this.cancelHoldFireTimer()
+  }
+
+  private cancelQuickFireTimer(): void {
+    if (this.quickModifierFireTimer !== null) {
+      clearTimeout(this.quickModifierFireTimer)
+      this.quickModifierFireTimer = null
+    }
+  }
+
+  private cancelHoldFireTimer(): void {
+    if (this.holdModifierFireTimer !== null) {
+      clearTimeout(this.holdModifierFireTimer)
+      this.holdModifierFireTimer = null
+    }
   }
 
   private handleKeydown = (e: UiohookKeyboardEvent): void => {
+    if (this.parsedQuick?.modifierOnly) {
+      if (e.keycode === this.parsedQuick.keyCode) {
+        if (!this.quickModifierPhysicallyDown) {
+          this.quickModifierPhysicallyDown = true
+          this.quickModifierGestureContaminated = false
+        }
+      } else if (this.quickModifierPhysicallyDown) {
+        this.quickModifierGestureContaminated = true
+        this.cancelQuickFireTimer()
+      }
+    }
+
+    if (this.parsedHold?.modifierOnly) {
+      if (e.keycode === this.parsedHold.keyCode) {
+        if (!this.holdModifierPhysicallyDown) {
+          this.holdModifierPhysicallyDown = true
+          this.holdModifierGestureContaminated = false
+        }
+      } else if (this.holdModifierPhysicallyDown) {
+        this.holdModifierGestureContaminated = true
+        this.cancelHoldFireTimer()
+      }
+    }
+
     if (this.parsedQuick && this.onQuickDown) {
       if (this.parsedQuick.modifierOnly) {
         if (
+          this.quickModifierFireTimer === null &&
           this.shouldFireModifierOnlyKeydown(
             e,
             this.parsedQuick,
@@ -205,9 +257,19 @@ class ShortcutManager {
             this.lastQuickModifierTapAt
           )
         ) {
-          this.quickIsDown = true
           this.lastQuickModifierTapAt = null
-          this.onQuickDown()
+          this.quickModifierFireTimer = setTimeout(() => {
+            this.quickModifierFireTimer = null
+            if (
+              this.quickModifierGestureContaminated ||
+              !this.quickModifierPhysicallyDown ||
+              this.quickIsDown
+            ) {
+              return
+            }
+            this.quickIsDown = true
+            this.onQuickDown?.()
+          }, MODIFIER_DOUBLE_TAP_CONFIRM_DELAY_MS)
         }
       } else if (matchesKeydown(e, this.parsedQuick) && !this.quickIsDown) {
         this.quickIsDown = true
@@ -225,6 +287,7 @@ class ShortcutManager {
     if (this.parsedHold && this.onHoldDown) {
       if (this.parsedHold.modifierOnly) {
         if (
+          this.holdModifierFireTimer === null &&
           this.shouldFireModifierOnlyKeydown(
             e,
             this.parsedHold,
@@ -232,9 +295,19 @@ class ShortcutManager {
             this.lastHoldModifierTapAt
           )
         ) {
-          this.holdIsDown = true
           this.lastHoldModifierTapAt = null
-          this.onHoldDown()
+          this.holdModifierFireTimer = setTimeout(() => {
+            this.holdModifierFireTimer = null
+            if (
+              this.holdModifierGestureContaminated ||
+              !this.holdModifierPhysicallyDown ||
+              this.holdIsDown
+            ) {
+              return
+            }
+            this.holdIsDown = true
+            this.onHoldDown?.()
+          }, MODIFIER_DOUBLE_TAP_CONFIRM_DELAY_MS)
         }
       } else if (matchesKeydown(e, this.parsedHold) && !this.holdIsDown) {
         this.holdIsDown = true
@@ -246,10 +319,18 @@ class ShortcutManager {
   private handleKeyup = (e: UiohookKeyboardEvent): void => {
     if (this.parsedQuick && e.keycode === this.parsedQuick.keyCode) {
       if (this.parsedQuick.modifierOnly) {
+        const wasContaminated = this.quickModifierGestureContaminated
+        const fireWasPending = this.quickModifierFireTimer !== null
+        this.quickModifierPhysicallyDown = false
+        this.quickModifierGestureContaminated = false
+        this.cancelQuickFireTimer()
+
         if (this.quickIsDown) {
           this.quickIsDown = false
           this.lastQuickModifierTapAt = null
           this.onQuickUp?.()
+        } else if (fireWasPending || wasContaminated) {
+          this.lastQuickModifierTapAt = null
         } else {
           this.lastQuickModifierTapAt = Date.now()
         }
@@ -265,8 +346,16 @@ class ShortcutManager {
 
     if (this.parsedHold && e.keycode === this.parsedHold.keyCode) {
       if (this.parsedHold.modifierOnly) {
+        const wasContaminated = this.holdModifierGestureContaminated
+        const fireWasPending = this.holdModifierFireTimer !== null
+        this.holdModifierPhysicallyDown = false
+        this.holdModifierGestureContaminated = false
+        this.cancelHoldFireTimer()
+
         if (this.holdIsDown) {
           this.holdIsDown = false
+          this.lastHoldModifierTapAt = null
+        } else if (fireWasPending || wasContaminated) {
           this.lastHoldModifierTapAt = null
         } else {
           this.lastHoldModifierTapAt = Date.now()

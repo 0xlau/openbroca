@@ -452,6 +452,7 @@ describe('shortcutManager capture bindings', () => {
     dispatchKeyup(ctrlEvent)
     vi.advanceTimersByTime(100)
     dispatchKeydown(ctrlEvent)
+    vi.advanceTimersByTime(50)
 
     expect(onQuickDown).toHaveBeenCalledTimes(1)
 
@@ -505,6 +506,7 @@ describe('shortcutManager capture bindings', () => {
     vi.advanceTimersByTime(100)
     dispatchKeydown(shiftEvent)
     dispatchKeydown(shiftEvent)
+    vi.advanceTimersByTime(50)
 
     expect(onHoldDown).toHaveBeenCalledTimes(1)
   })
@@ -534,6 +536,95 @@ describe('shortcutManager capture bindings', () => {
     expect(onHoldDown).toHaveBeenCalledTimes(1)
   })
 
+  test('modifier-only quick keyup with another key pressed does not record a tap', async () => {
+    const { shortcutManager } = await import('../shortcut-manager')
+    const onQuickDown = vi.fn()
+
+    shortcutManager.startCaptureBindings({
+      quickAccelerator: 'Command',
+      toHoldKey: 'Tab',
+      holdAccelerator: 'Shift+Enter',
+      onQuickDown,
+      onQuickUp: vi.fn(),
+      onToHoldDown: vi.fn(),
+      onHoldDown: vi.fn()
+    })
+
+    const metaEvent = createKeyboardEvent(UIOHOOK_META, { metaKey: true })
+    const kEventWithMeta = createKeyboardEvent(UIOHOOK_K, { metaKey: true })
+
+    dispatchKeydown(metaEvent)
+    dispatchKeydown(kEventWithMeta)
+    dispatchKeyup(kEventWithMeta)
+    dispatchKeyup(metaEvent)
+    vi.advanceTimersByTime(100)
+    dispatchKeydown(metaEvent)
+
+    expect(onQuickDown).not.toHaveBeenCalled()
+  })
+
+  test('modifier-only quick contaminated second tap clears prior tap and subsequent single press does not trigger', async () => {
+    const { shortcutManager } = await import('../shortcut-manager')
+    const onQuickDown = vi.fn()
+
+    shortcutManager.startCaptureBindings({
+      quickAccelerator: 'Command',
+      toHoldKey: 'Tab',
+      holdAccelerator: 'Shift+Enter',
+      onQuickDown,
+      onQuickUp: vi.fn(),
+      onToHoldDown: vi.fn(),
+      onHoldDown: vi.fn()
+    })
+
+    const metaEvent = createKeyboardEvent(UIOHOOK_META, { metaKey: true })
+    const kEventWithMeta = createKeyboardEvent(UIOHOOK_K, { metaKey: true })
+
+    dispatchKeydown(metaEvent)
+    dispatchKeyup(metaEvent)
+    vi.advanceTimersByTime(50)
+
+    dispatchKeydown(metaEvent)
+    dispatchKeydown(kEventWithMeta)
+    dispatchKeyup(kEventWithMeta)
+    dispatchKeyup(metaEvent)
+    vi.advanceTimersByTime(60)
+
+    expect(onQuickDown).not.toHaveBeenCalled()
+
+    dispatchKeydown(metaEvent)
+    vi.advanceTimersByTime(60)
+
+    expect(onQuickDown).not.toHaveBeenCalled()
+  })
+
+  test('modifier-only hold ignores keyup that came with other keys', async () => {
+    const { shortcutManager } = await import('../shortcut-manager')
+    const onHoldDown = vi.fn()
+
+    shortcutManager.startCaptureBindings({
+      quickAccelerator: 'CommandOrControl+Space',
+      toHoldKey: 'Tab',
+      holdAccelerator: 'Shift',
+      onQuickDown: vi.fn(),
+      onQuickUp: vi.fn(),
+      onToHoldDown: vi.fn(),
+      onHoldDown
+    })
+
+    const shiftEvent = createKeyboardEvent(UIOHOOK_SHIFT, { shiftKey: true })
+    const kEventWithShift = createKeyboardEvent(UIOHOOK_K, { shiftKey: true })
+
+    dispatchKeydown(shiftEvent)
+    dispatchKeydown(kEventWithShift)
+    dispatchKeyup(kEventWithShift)
+    dispatchKeyup(shiftEvent)
+    vi.advanceTimersByTime(100)
+    dispatchKeydown(shiftEvent)
+
+    expect(onHoldDown).not.toHaveBeenCalled()
+  })
+
   test('single-letter toHold still works while modifier-only quick is active', async () => {
     const { shortcutManager } = await import('../shortcut-manager')
     const onQuickDown = vi.fn()
@@ -555,9 +646,72 @@ describe('shortcutManager capture bindings', () => {
     dispatchKeyup(ctrlEvent)
     vi.advanceTimersByTime(100)
     dispatchKeydown(ctrlEvent)
+    vi.advanceTimersByTime(50)
     dispatchKeydown(createKeyboardEvent(UIOHOOK_P, { ctrlKey: true }))
 
     expect(onQuickDown).toHaveBeenCalledTimes(1)
     expect(onToHoldDown).toHaveBeenCalledTimes(1)
+  })
+
+  test('clean modifier tap followed quickly by modifier+other does not trigger', async () => {
+    const { shortcutManager } = await import('../shortcut-manager')
+    const onQuickDown = vi.fn()
+    const onQuickUp = vi.fn()
+
+    shortcutManager.startCaptureBindings({
+      quickAccelerator: 'Command',
+      toHoldKey: 'Tab',
+      holdAccelerator: 'Shift+Enter',
+      onQuickDown,
+      onQuickUp,
+      onToHoldDown: vi.fn(),
+      onHoldDown: vi.fn()
+    })
+
+    const metaEvent = createKeyboardEvent(UIOHOOK_META, { metaKey: true })
+    const kEventWithMeta = createKeyboardEvent(UIOHOOK_K, { metaKey: true })
+
+    dispatchKeydown(metaEvent)
+    dispatchKeyup(metaEvent)
+    vi.advanceTimersByTime(50)
+
+    dispatchKeydown(metaEvent)
+    vi.advanceTimersByTime(20)
+    dispatchKeydown(kEventWithMeta)
+    vi.advanceTimersByTime(60)
+    dispatchKeyup(kEventWithMeta)
+    dispatchKeyup(metaEvent)
+
+    expect(onQuickDown).not.toHaveBeenCalled()
+    expect(onQuickUp).not.toHaveBeenCalled()
+  })
+
+  test('modifier-only quick does not fire if released during confirm window', async () => {
+    const { shortcutManager } = await import('../shortcut-manager')
+    const onQuickDown = vi.fn()
+    const onQuickUp = vi.fn()
+
+    shortcutManager.startCaptureBindings({
+      quickAccelerator: 'Command',
+      toHoldKey: 'Tab',
+      holdAccelerator: 'Shift+Enter',
+      onQuickDown,
+      onQuickUp,
+      onToHoldDown: vi.fn(),
+      onHoldDown: vi.fn()
+    })
+
+    const metaEvent = createKeyboardEvent(UIOHOOK_META, { metaKey: true })
+
+    dispatchKeydown(metaEvent)
+    dispatchKeyup(metaEvent)
+    vi.advanceTimersByTime(50)
+    dispatchKeydown(metaEvent)
+    vi.advanceTimersByTime(20)
+    dispatchKeyup(metaEvent)
+    vi.advanceTimersByTime(100)
+
+    expect(onQuickDown).not.toHaveBeenCalled()
+    expect(onQuickUp).not.toHaveBeenCalled()
   })
 })
