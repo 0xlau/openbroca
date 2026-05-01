@@ -14,6 +14,7 @@ import { store } from './store'
 import { llmRegistry, asrRegistry, registerLocalASRProviders } from './providers'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
+import { TrayManager } from './tray-manager'
 import {
   requestDesktopControlPermission,
   requestMicrophonePermission,
@@ -57,6 +58,7 @@ import { createNotifyWindows } from './notify-windows'
 
 const macBundleIconCache = new Map<string, Promise<string | undefined>>()
 let floatingSessionController: FloatingSessionController | null = null
+let trayManager: TrayManager | null = null
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -336,6 +338,7 @@ async function refreshPermissionGateAndMaybeAdvance() {
     ensureCaptureEntryPointsReady()
     if (!windowManager.getMain()) {
       windowManager.createMain()
+      trayManager?.notifyMainWindowChanged()
     }
     windowManager.closePermissionOnboarding()
     return snapshot
@@ -401,6 +404,16 @@ app.whenReady().then(async () => {
     broadcastListeningSessionState()
   })
 
+  trayManager = new TrayManager({
+    windowManager,
+    captureSource,
+    store,
+    onShowMainRequested: async () => {
+      await refreshPermissionGateAndMaybeAdvance()
+    }
+  })
+  trayManager.start()
+
   await refreshPermissionGateAndMaybeAdvance()
 
   store.onDidChange('shortcuts', (rawValue) => {
@@ -409,7 +422,13 @@ app.whenReady().then(async () => {
   })
 
   app.on('activate', async () => {
-    if (!windowManager.getMain() && !windowManager.getPermissionOnboarding()) {
+    const mainWindow = windowManager.getMain()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show()
+      mainWindow.focus()
+      return
+    }
+    if (!windowManager.getPermissionOnboarding()) {
       await refreshPermissionGateAndMaybeAdvance()
     }
   })
@@ -418,14 +437,13 @@ app.whenReady().then(async () => {
 app.on('will-quit', () => {
   floatingSessionController?.dispose()
   floatingSessionController = null
+  trayManager?.dispose()
+  trayManager = null
   void oauthService.dispose()
   listeningSession.stop()
   shortcutManager.stop()
   windowManager.destroyAll()
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+// Keep the app running in the tray when all windows close — Quit menu item is the only exit.
+app.on('window-all-closed', () => {})

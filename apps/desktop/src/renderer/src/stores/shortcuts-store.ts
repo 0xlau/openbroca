@@ -26,3 +26,5 @@ export const shortcutsStore = createPersistedStore<ShortcutSettings>({
   defaults: defaultShortcutSettings,
   normalize: (raw) => normalizeShortcutSettings(raw, rendererPlatform)
 })
+
+export type { ShortcutSettings } from '../../../shared/shortcuts'

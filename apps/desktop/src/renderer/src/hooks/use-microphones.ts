@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import type { AudioDevice } from '@openbroca/audio-capture'
 import { trpc } from '@renderer/trpc'
+import { audioDevicesSnapshotStore } from '@renderer/stores/audio-devices-snapshot-store'
+import type { AudioDeviceSnapshotEntry } from '../../../shared/audio-devices'
 import { useEffect, useMemo } from 'react'
 
 const EMPTY_BROWSER_DEVICES: MediaDeviceInfo[] = []
@@ -87,6 +89,25 @@ export function useMicrophones() {
   const resolveBrowserDeviceId = (microphone: AudioDevice): string | null => {
     return findMatchingBrowserDevice(microphone, browserDevices)?.deviceId ?? null
   }
+
+  // Persist the merged view so consumers outside the renderer (e.g. the tray
+  // menu in the main process) read clean labels and pre-resolved browser ids
+  // from a single source of truth instead of re-running the match themselves.
+  useEffect(() => {
+    if (query.data == null) return
+
+    const snapshot: AudioDeviceSnapshotEntry[] = query.data.map((microphone) => {
+      const browserDevice = findMatchingBrowserDevice(microphone, browserDevices)
+      return {
+        portAudioId: microphone.id,
+        browserDeviceId: browserDevice?.deviceId ?? null,
+        label: browserDevice?.label || microphone.name,
+        isDefault: microphone.isDefault
+      }
+    })
+
+    void audioDevicesSnapshotStore.getState().replace({ devices: snapshot })
+  }, [browserDevices, query.data])
 
   return {
     microphones,
