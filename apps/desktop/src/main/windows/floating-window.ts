@@ -35,7 +35,8 @@ export function createFloatingWindow(
     alwaysOnTop: true,
     hasShadow: false,
     show: false,
-    // type 'panel' on macOS: doesn't steal focus from other apps
+    focusable: false,
+    roundedCorners: false,
     ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
