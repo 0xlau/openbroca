@@ -31,6 +31,13 @@ export default defineConfig({
         exclude: ['@openbroca/providers', '@openbroca/audio-capture', '@openbroca/app-identity']
       },
       rollupOptions: {
+        // Two entry points: the main process and the provider-host utility
+        // process (spawned via Electron's utilityProcess.fork). Both share
+        // externals so native modules resolve identically in either runtime.
+        input: {
+          index: resolve('src/main/index.ts'),
+          'provider-host': resolve('src/main/provider-host/child/index.ts')
+        },
         // audify is a native addon (.node file) — must stay external even though
         // its parent @openbroca/audio-capture is bundled.
         // get-windows also ships native-install machinery we should leave to
