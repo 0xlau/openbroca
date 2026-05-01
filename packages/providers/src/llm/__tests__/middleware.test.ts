@@ -57,24 +57,6 @@ describe('composeCompleteMiddleware', () => {
     expect(order).toEqual(['before', 'after'])
   })
 
-  it('supports legacy function-style middleware for streaming compatibility', async () => {
-    const middleware: LLMMiddleware = (next) =>
-      async function* (req) {
-        for await (const chunk of next(req)) {
-          yield { ...chunk, delta: `${chunk.delta}!` }
-        }
-      }
-
-    const handler: CompletionStreamFn = () => makeHandler([{ delta: 'hello' }])
-    const composed = composeCompleteMiddleware([middleware], handler)
-    const chunks: CompletionChunk[] = []
-    for await (const chunk of composed(stubRequest)) {
-      chunks.push(chunk)
-    }
-
-    expect(chunks).toEqual([{ delta: 'hello!' }])
-  })
-
   it('wrapComplete middleware composes outermost-first', async () => {
     const order: string[] = []
     const makeMiddleware = (label: string): LLMMiddleware => ({
@@ -156,21 +138,6 @@ describe('composeGenerateMiddleware', () => {
     })
 
     const composed = composeGenerateMiddleware([], handler)
-
-    await expect(composed(stubRequest)).resolves.toEqual({
-      content: 'hello',
-      finishReason: 'stop',
-    })
-  })
-
-  it('ignores legacy function-style middleware on generate path', async () => {
-    const legacyMiddleware: LLMMiddleware = (next) => next
-    const handler: CompletionGenerateFn = async () => ({
-      content: 'hello',
-      finishReason: 'stop',
-    })
-
-    const composed = composeGenerateMiddleware([legacyMiddleware], handler)
 
     await expect(composed(stubRequest)).resolves.toEqual({
       content: 'hello',

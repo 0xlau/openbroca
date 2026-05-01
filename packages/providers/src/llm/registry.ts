@@ -1,4 +1,5 @@
 import { ProviderError } from '../shared/errors.ts'
+import { ProviderRegistry, type RegistryHooks } from '../shared/registry-base.ts'
 import {
   composeCompleteMiddleware,
   composeGenerateMiddleware,
@@ -16,68 +17,13 @@ const DEFAULT_CAPABILITIES: LLMCapabilities = {
   jsonMode: false,
 }
 
-export interface LLMRegistryHooks {
-  onRegistered?: (id: string, descriptor: LLMProviderDescriptor) => void
-  onResolved?: (id: string, provider: LLMProvider) => void
-}
+export type LLMRegistryHooks = RegistryHooks<LLMProviderDescriptor, LLMProvider>
 
-export class LLMProviderRegistry {
-  private readonly descriptors = new Map<string, LLMProviderDescriptor>()
-  private readonly instances = new Map<string, LLMProvider>()
+export class LLMProviderRegistry extends ProviderRegistry<LLMProviderDescriptor, LLMProvider> {
   private readonly middlewares: LLMMiddleware[] = []
-  private readonly hooks: LLMRegistryHooks
-
-  constructor(hooks?: LLMRegistryHooks) {
-    this.hooks = hooks ?? {}
-  }
-
-  register(descriptor: LLMProviderDescriptor): void {
-    if (this.descriptors.has(descriptor.id)) {
-      throw new ProviderError(descriptor.id, `Provider "${descriptor.id}" is already registered`)
-    }
-
-    this.descriptors.set(descriptor.id, descriptor)
-    this.hooks.onRegistered?.(descriptor.id, descriptor)
-  }
 
   use(middleware: LLMMiddleware): void {
     this.middlewares.push(middleware)
-  }
-
-  resolve(id: string, config: unknown): LLMProvider {
-    const existing = this.instances.get(id)
-    if (existing) return existing
-
-    const descriptor = this.descriptors.get(id)
-    if (!descriptor) {
-      throw new ProviderError(id, `Provider "${id}" is not registered`)
-    }
-
-    const validated = descriptor.configSchema.parse(config)
-    const provider = descriptor.create(validated)
-    const final = this.middlewares.length > 0 ? this.wrapWithMiddleware(provider) : provider
-
-    this.instances.set(id, final)
-    this.hooks.onResolved?.(id, final)
-    return final
-  }
-
-  get(id: string): LLMProvider | undefined {
-    return this.instances.get(id)
-  }
-
-  async evict(id: string): Promise<void> {
-    const provider = this.instances.get(id)
-    if (!provider) {
-      return
-    }
-
-    await provider.dispose?.()
-    this.instances.delete(id)
-  }
-
-  listDescriptors(): LLMProviderDescriptor[] {
-    return Array.from(this.descriptors.values())
   }
 
   getCapabilities(id: string): LLMCapabilities {
@@ -89,33 +35,28 @@ export class LLMProviderRegistry {
     return { ...DEFAULT_CAPABILITIES, ...descriptor.capabilities }
   }
 
-  async disposeAll(): Promise<void> {
-    for (const provider of Array.from(this.instances.values())) {
-      await provider.dispose?.()
+  protected override transform(provider: LLMProvider): LLMProvider {
+    if (this.middlewares.length === 0) {
+      return provider
     }
 
-    this.instances.clear()
-  }
+    const wrappedComplete = composeCompleteMiddleware(this.middlewares, (request) =>
+      provider.complete(request)
+    )
+    // generate may internally call `this.complete`; bind it to the proxy so those
+    // self-calls see the wrapped complete chain too.
+    let proxy: LLMProvider
+    const wrappedGenerate = composeGenerateMiddleware(this.middlewares, (request) =>
+      provider.generate.call(proxy, request)
+    )
 
-  private wrapWithMiddleware(provider: LLMProvider): LLMProvider {
-    const middlewares = this.middlewares
-
-    return new Proxy(provider, {
+    proxy = new Proxy(provider, {
       get(target, prop, receiver) {
-        if (prop === 'generate') {
-          return composeGenerateMiddleware(middlewares, (request) =>
-            Reflect.get(target, 'generate', receiver).call(receiver, request)
-          )
-        }
-
-        if (prop === 'complete') {
-          return composeCompleteMiddleware(middlewares, (request) =>
-            Reflect.get(target, 'complete', receiver).call(receiver, request)
-          )
-        }
-
+        if (prop === 'complete') return wrappedComplete
+        if (prop === 'generate') return wrappedGenerate
         return Reflect.get(target, prop, receiver)
       },
     })
+    return proxy
   }
 }

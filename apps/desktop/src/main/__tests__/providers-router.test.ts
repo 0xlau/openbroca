@@ -629,4 +629,278 @@ describe('providersRouter', () => {
       { id: 'openai/gpt-4.1-mini', name: 'openai/gpt-4.1-mini', contextWindow: 128_000 }
     ])
   })
+
+  describe('localModels', () => {
+    function makeLocalAsrRegistryWithFake(opts: {
+      catalogModels?: Array<{ id: string; name: string; sizeBytes: number; downloadUrl: string; sha256: string }>
+      installedModels?: Array<{ id: string; name: string; path: string }>
+      onInstall?: (modelId: string, signal?: AbortSignal) => AsyncIterable<{ phase: 'downloading' | 'extracting' | 'validating' | 'finalizing'; downloadedBytes?: number; totalBytes?: number }>
+      onRemove?: (modelId: string) => Promise<void>
+    }) {
+      const asrRegistry = new ASRProviderRegistry()
+      const fake = {
+        id: 'fake-local',
+        displayName: 'Fake Local',
+        isConfigured: () => true,
+        recognize: async () => ({ text: '', segments: [] }),
+        listCatalogModels: async () => opts.catalogModels ?? [],
+        scanInstalledModels: async () => opts.installedModels ?? [],
+        installModel: opts.onInstall ?? (async function* () {
+          yield { phase: 'downloading', downloadedBytes: 0, totalBytes: 1 } as const
+          yield { phase: 'extracting' } as const
+          yield { phase: 'validating' } as const
+          yield { phase: 'finalizing' } as const
+        }),
+        removeInstalledModel: opts.onRemove ?? (async () => undefined),
+        resolveModelRuntime: async (id: string) => ({ modelId: id, modelPath: `/tmp/${id}` })
+      }
+      asrRegistry.register({
+        id: 'fake-local',
+        displayName: 'Fake Local',
+        description: '',
+        kind: 'local',
+        configSchema: {
+          parse: (data: unknown) => {
+            const d = (data ?? {}) as { modelDir?: string }
+            return { modelDir: d.modelDir ?? '/tmp/fake' }
+          }
+        },
+        create: () => fake
+      })
+      return { asrRegistry, fake }
+    }
+
+    function seedStore(
+      providerId: string,
+      overrides?: { selectedModelId?: string; modelDir?: string; enabled?: boolean }
+    ) {
+      const store = new MemoryStore()
+      store.set('providers', {
+        providers: {
+          [providerId]: {
+            enabled: overrides?.enabled ?? true,
+            connectionType: 'local',
+            config: { modelDir: overrides?.modelDir ?? '/tmp/fake' }
+          }
+        },
+        providerSettings: overrides?.selectedModelId
+          ? { [providerId]: { selectedModelId: overrides.selectedModelId } }
+          : {},
+        activeProviders: {}
+      })
+      return store
+    }
+
+    function makeOauthService() {
+      return new OAuthService({
+        secureStorage: {
+          setSecret: vi.fn(async () => undefined),
+          getSecret: vi.fn(async () => null),
+          deleteSecret: vi.fn(async () => undefined)
+        } satisfies SecureStorage,
+        store: new MemoryStore() as never,
+        providers: {}
+      })
+    }
+
+    test('getState works before any provider record exists (first-time Connect)', async () => {
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({
+        catalogModels: [
+          { id: 'paraformer-zh', name: 'Paraformer Chinese', sizeBytes: 1, downloadUrl: 'https://x', sha256: 'aa' }
+        ],
+        installedModels: []
+      })
+      const store = new MemoryStore()
+      // No `providers` entry written yet — simulates the user clicking
+      // Connect for the very first time.
+      store.set('providers', { providers: {}, providerSettings: {}, activeProviders: {} })
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      const state = await caller.localModels.getState({ providerId: 'fake-local' })
+
+      expect(state).toMatchObject({
+        providerId: 'fake-local',
+        modelDir: '/tmp/fake', // descriptor-default applied by configSchema.parse({})
+        catalogModels: [expect.objectContaining({ id: 'paraformer-zh' })],
+        installedModels: []
+      })
+      expect(state.selectedModelId).toBeUndefined()
+    })
+
+    test('getState returns catalog/installed/selected for a local provider', async () => {
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({
+        catalogModels: [
+          { id: 'paraformer-zh', name: 'Paraformer Chinese', sizeBytes: 1, downloadUrl: 'https://x', sha256: 'aa' }
+        ],
+        installedModels: [
+          { id: 'paraformer-zh', name: 'Paraformer Chinese', path: '/tmp/fake/paraformer-zh' }
+        ]
+      })
+      const store = seedStore('fake-local', { selectedModelId: 'paraformer-zh' })
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      const state = await caller.localModels.getState({ providerId: 'fake-local' })
+
+      expect(state).toMatchObject({
+        providerId: 'fake-local',
+        modelDir: '/tmp/fake',
+        selectedModelId: 'paraformer-zh',
+        catalogModels: [expect.objectContaining({ id: 'paraformer-zh' })],
+        installedModels: [expect.objectContaining({ id: 'paraformer-zh' })]
+      })
+    })
+
+    test('select writes providerSettings.selectedModelId and enables the provider', async () => {
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({
+        installedModels: [{ id: 'paraformer-zh', name: 'Paraformer Chinese', path: '/tmp/fake/paraformer-zh' }]
+      })
+      const store = seedStore('fake-local', { enabled: false })
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      const next = await caller.localModels.select({
+        providerId: 'fake-local',
+        modelId: 'paraformer-zh'
+      })
+
+      expect(next.selectedModelId).toBe('paraformer-zh')
+      expect((store.get<{ providers: Record<string, { enabled: boolean }> }>('providers'))?.providers['fake-local']?.enabled).toBe(true)
+    })
+
+    test('install streams phase events and writes selectedModelId on completion', async () => {
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({})
+      const store = seedStore('fake-local')
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      const phases: string[] = []
+      for await (const event of await caller.localModels.install({
+        providerId: 'fake-local',
+        modelId: 'paraformer-zh'
+      })) {
+        phases.push(event.phase)
+      }
+
+      expect(phases).toEqual(['downloading', 'extracting', 'validating', 'finalizing'])
+      const persisted = store.get<{ providerSettings: Record<string, { selectedModelId?: string }> }>('providers')
+      expect(persisted?.providerSettings['fake-local']?.selectedModelId).toBe('paraformer-zh')
+    })
+
+    test('install rejects a second install for a different modelId while one is running', async () => {
+      let release!: () => void
+      const block = new Promise<void>((resolve) => {
+        release = resolve
+      })
+
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({
+        onInstall: async function* () {
+          yield { phase: 'downloading', downloadedBytes: 0, totalBytes: 1 } as const
+          await block
+        }
+      })
+      const store = seedStore('fake-local')
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      // Start first install but don't drain it; pull only the first event
+      // so the inFlight handle is registered.
+      const iter1 = (await caller.localModels.install({
+        providerId: 'fake-local',
+        modelId: 'paraformer-zh'
+      }))[Symbol.asyncIterator]()
+      await iter1.next()
+
+      try {
+        await expect(
+          (async () => {
+            for await (const _ of await caller.localModels.install({
+              providerId: 'fake-local',
+              modelId: 'zipformer-en-small'
+            })) {
+              // pull events
+            }
+          })()
+        ).rejects.toThrow(/Another install/)
+      } finally {
+        release()
+        // drain the first iterator so cleanup runs and inFlightInstalls clears.
+        for await (const _ of { [Symbol.asyncIterator]: () => iter1 }) {
+          // pump remaining
+        }
+      }
+    })
+
+    test('remove deletes via provider and refuses to remove the active model', async () => {
+      const onRemove = vi.fn(async () => undefined)
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({ onRemove })
+      const store = seedStore('fake-local', { selectedModelId: 'paraformer-zh' })
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      await expect(
+        caller.localModels.remove({ providerId: 'fake-local', modelId: 'paraformer-zh' })
+      ).rejects.toThrow(/active model/i)
+
+      await caller.localModels.remove({ providerId: 'fake-local', modelId: 'zipformer-en-small' })
+      expect(onRemove).toHaveBeenCalledWith('zipformer-en-small')
+    })
+
+    test('changeDirectory writes config.modelDir and clears selectedModelId', async () => {
+      const { asrRegistry } = makeLocalAsrRegistryWithFake({})
+      const store = seedStore('fake-local', { selectedModelId: 'paraformer-zh' })
+
+      const caller = providersRouter.createCaller({
+        store,
+        llmRegistry: new LLMProviderRegistry(),
+        asrRegistry,
+        oauthService: makeOauthService()
+      } as unknown as Context)
+
+      const state = await caller.localModels.changeDirectory({
+        providerId: 'fake-local',
+        modelDir: '/elsewhere'
+      })
+
+      expect(state.modelDir).toBe('/elsewhere')
+      expect(state.selectedModelId).toBeUndefined()
+      const persisted = store.get<{
+        providers: Record<string, { config?: { modelDir?: string } }>
+        providerSettings: Record<string, { selectedModelId?: string } | undefined>
+      }>('providers')
+      expect(persisted?.providers['fake-local']?.config?.modelDir).toBe('/elsewhere')
+      expect(persisted?.providerSettings['fake-local']?.selectedModelId).toBeUndefined()
+    })
+  })
 })

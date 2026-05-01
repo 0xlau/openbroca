@@ -65,6 +65,19 @@ function normalizeModel(value: unknown): string | null {
   return model
 }
 
+/**
+ * Normalize a local ASR provider's `selectedModelId`. Trims whitespace and
+ * returns `null` for empty/whitespace values so they are dropped rather than
+ * persisted as falsy strings.
+ */
+function normalizeSelectedModelId(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const id = value.trim()
+  return id ? id : null
+}
+
 export function clearActiveProviderSelections(
   activeProviders: ActiveProviders,
   providerId: string
@@ -160,6 +173,14 @@ export function normalizeProviderSettings(raw: unknown): ProviderSettings {
         nextSettings.model = model
       } else {
         delete nextSettings.model
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(nextSettings, 'selectedModelId')) {
+      const selectedModelId = normalizeSelectedModelId(nextSettings.selectedModelId)
+      if (selectedModelId) {
+        nextSettings.selectedModelId = selectedModelId
+      } else {
+        delete nextSettings.selectedModelId
       }
     }
 

@@ -172,6 +172,41 @@ describe('LLMProviderRegistry', () => {
       expect(() => registry.resolve('unknown', {})).toThrow(ProviderError)
     })
 
+    it('rebuilds when config changes and disposes the previous instance', () => {
+      const dispose = vi.fn()
+      let createCount = 0
+      const create = vi.fn(() => {
+        createCount += 1
+        return { ...makeFakeProvider(`fake-${createCount}`), dispose }
+      })
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor('fake', { create }))
+
+      const first = registry.resolve('fake', { apiKey: 'one' })
+      const second = registry.resolve('fake', { apiKey: 'two' })
+
+      expect(first).not.toBe(second)
+      expect(create).toHaveBeenCalledTimes(2)
+      expect(dispose).toHaveBeenCalledOnce()
+    })
+
+    it('returns same instance when config keys are reordered', () => {
+      const create = vi.fn(() => makeFakeProvider())
+      const passthroughSchema = {
+        parse: (data: unknown) => {
+          const d = data as Record<string, unknown>
+          return { apiKey: String(d.apiKey ?? '') } satisfies FakeConfig
+        },
+      }
+      const registry = new LLMProviderRegistry()
+      registry.register(makeDescriptor('fake', { create, configSchema: passthroughSchema }))
+
+      registry.resolve('fake', { apiKey: 'k', baseUrl: 'u' })
+      registry.resolve('fake', { baseUrl: 'u', apiKey: 'k' })
+
+      expect(create).toHaveBeenCalledOnce()
+    })
+
     it('calls onResolved hook', () => {
       const onResolved = vi.fn()
       const registry = new LLMProviderRegistry({ onResolved })
@@ -274,27 +309,6 @@ describe('LLMProviderRegistry', () => {
 
       expect(chunks[0]?.delta).toBe('hello!')
       expect(seen).toEqual(['enter', 'exit'])
-    })
-
-    it('legacy middleware still wraps the resolved provider complete()', async () => {
-      const registry = new LLMProviderRegistry()
-      registry.register(makeDescriptor())
-
-      registry.use((next) =>
-        async function* (req) {
-          for await (const chunk of next(req)) {
-            yield { ...chunk, delta: `${chunk.delta}?` }
-          }
-        }
-      )
-
-      const provider = registry.resolve('fake', { apiKey: 'k' })
-      const chunks: CompletionChunk[] = []
-      for await (const chunk of provider.complete({ model: 'm', messages: [] })) {
-        chunks.push(chunk)
-      }
-
-      expect(chunks).toEqual([{ delta: 'hello?' }])
     })
 
     it('middleware wraps the resolved provider generate()', async () => {

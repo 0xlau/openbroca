@@ -1,28 +1,29 @@
 # Local ASR Model Management Design
 
-**Date:** 2026-04-22
+**Date:** 2026-04-22 (revised)
 
 ## Goal
 
 Introduce a shared local-model management flow for all desktop local ASR providers so users can:
 
-- connect a local ASR provider by either downloading a model or pointing at an existing directory
+- connect a local ASR provider by downloading a model from the catalog in one step
 - finish connect only when a usable model is installed and selected
-- switch models later from settings without leaving the providers page
+- switch or download additional models later from settings without leaving the providers page
 - reuse the same lifecycle and UX rules across providers instead of building a sherpa-only flow
 
 The first concrete implementation will be `@k2-fsa/sherpa-onnx`, but the design target is the local ASR platform, not a single provider.
 
 ## Product Decisions
 
-The following decisions were confirmed during brainstorming and are fixed by this design:
+The following decisions are fixed by this design:
 
 - a local ASR provider may have multiple installed models, but runtime uses exactly one `selectedModelId`
-- `Connect` defaults to a `Download model` path, while `Use existing directory` remains available as a secondary path
-- connect can suggest a default model directory, but the user may override it during connect or later in settings
-- switching to an uninstalled model from settings should enter the same install flow and automatically select it after install completes
+- `Connect` is a single flow: pick a catalog model, download it, done — no directory picker on the primary path
+- the model storage directory is app-managed by default (`<userData>/asr-models/<providerId>`); advanced users can override it later from settings
+- the connect dialog highlights a recommended model based on the app's UI language
+- switching to an uninstalled model from settings enters the same install flow and automatically selects it after install completes
 - a local ASR provider can only be activated when it has a valid directory, a selected model, and that selected model is installed and ready
-- the local ASR platform must support both provider-defined model catalogs and importing already-installed models from an existing directory
+- importing an already-installed model directory from a custom path is a future Advanced feature, not part of v1
 
 ## Current State
 
@@ -61,9 +62,7 @@ This is intentionally not a sherpa-specific feature and intentionally not a desk
 
 ### Connection State
 
-Local ASR connection data remains part of the existing provider connection record.
-
-Example:
+Local ASR connection data remains part of the existing provider connection record. `modelDir` lives in `config`, but for the typical user it is set by the app (not entered in the UI):
 
 ```ts
 providers: {
@@ -71,13 +70,13 @@ providers: {
     enabled: true,
     connectionType: 'local',
     config: {
-      modelDir: '/Users/example/Library/Application Support/OpenBroca/models/sherpa-onnx'
+      modelDir: '<userData>/asr-models/sherpa-onnx'
     }
   }
 }
 ```
 
-`modelDir` is the current connected directory for that provider.
+`modelDir` is provided by the descriptor as a default at construction time (see *Descriptor Construction*). The connect dialog does not surface this field. Advanced users can override it later from settings.
 
 ### Provider Settings
 
@@ -115,36 +114,69 @@ This design upgrades local ASR providers to support a full model lifecycle.
 
 ### Required Local ASR Capabilities
 
-Each local ASR provider should expose a shared lifecycle with provider-owned implementations:
+Each local ASR provider exposes a shared lifecycle. The provider holds `modelDir` as construction state — methods do not take it as an argument. Registry-level cache eviction (already in place) recreates the provider when `modelDir` changes, so each instance always sees a single consistent directory.
 
-1. `listCatalogModels()`
-Returns the provider-defined downloadable model catalog.
+```ts
+interface LocalASRProvider extends ASRProvider {
+  listCatalogModels(): Promise<LocalCatalogModel[]>
+  scanInstalledModels(): Promise<InstalledLocalModel[]>
+  installModel(modelId: string, signal?: AbortSignal): AsyncIterable<LocalModelInstallEvent>
+  removeInstalledModel(modelId: string): Promise<void>
+  resolveModelRuntime(selectedModelId: string): Promise<LocalModelRuntime>
+}
+```
 
-2. `scanInstalledModels(modelDir)`
-Scans a target directory and returns the models that are already installed and usable there.
-
-3. `installModel(modelId, modelDir, signal?)`
-Installs a model into a usable state. This must include the complete install process, not just downloading an archive.
-
-4. `removeInstalledModel(modelId, modelDir)`
-Deletes an installed model from the target directory.
-
-5. `resolveModelRuntime(modelDir, selectedModelId)`
-Resolves the exact runtime assets for the selected model.
-
-The platform may choose slightly different final type names, but these responsibilities are mandatory.
+1. `listCatalogModels()` — provider-defined downloadable catalog. Each entry carries enough metadata for the UI (name, size, optional `recommendedFor` language tags) and for safe download (`downloadUrl`, `sha256`).
+2. `scanInstalledModels()` — scans the held `modelDir` and returns models already installed and usable.
+3. `installModel(modelId, signal?)` — full install: download → extract → validate → atomically publish. Yields phase-tagged events (see *Install Event Stream*).
+4. `removeInstalledModel(modelId)` — deletes the model's installed assets from `modelDir`.
+5. `resolveModelRuntime(selectedModelId)` — returns the runtime metadata required to load that model. Throws `ConfigurationError` if not installed.
 
 ### Install Semantics
 
 `installModel()` has a strict meaning:
 
-- download all required assets
-- extract or arrange them into the provider's final directory layout
-- validate required files
-- atomically publish the final installed directory
-- clean up partial state on failure or cancellation
+- download all required assets, **streamed directly to disk** (no full-archive buffering in memory)
+- verify the archive against the catalog's `sha256` before extracting
+- extract or arrange the assets into the provider's final directory layout
+- validate that required files are present
+- atomically publish the final installed directory (write to a `*.staging` path then `rename`)
+- clean up partial state — staging dir, temp archive — on failure or cancellation
 
-A provider must not report install success if only a temporary archive exists.
+A provider must not report install success if only a temporary archive exists, or if the staged directory does not validate.
+
+### Install Event Stream
+
+`installModel()` yields a discriminated union so the UI can render each phase honestly. Only `downloading` carries percentage progress; the remaining phases are short and fire once each.
+
+```ts
+type LocalModelInstallEvent =
+  | { phase: 'downloading'; downloadedBytes: number; totalBytes: number }
+  | { phase: 'extracting' }
+  | { phase: 'validating' }
+  | { phase: 'finalizing' }
+```
+
+UI rendering: `downloading` → progress bar with bytes; the other three → indeterminate spinner with phase label.
+
+### Catalog Entry
+
+Each catalog model exposes the fields the UI and installer both need:
+
+```ts
+interface LocalCatalogModel {
+  id: string
+  name: string
+  description?: string
+  sizeBytes: number
+  downloadUrl: string
+  sha256: string
+  /** ISO language tags this model is intended for; UI uses these to highlight a recommended default. */
+  recommendedFor?: string[]
+}
+```
+
+`sha256` is mandatory in v1 — supply chain integrity is cheap to add now and hard to retrofit later.
 
 ## Setup Status Contract
 
@@ -172,47 +204,37 @@ Activation is allowed only when setup status is `ready`.
 
 For local ASR, connect is only complete when:
 
-- `modelDir` is known
-- `selectedModelId` is known
+- `modelDir` is set (always true after connect — defaulted by the descriptor)
+- `selectedModelId` is set
 - that selected model is installed and ready
 
-Choosing only a directory does not count as a completed connection.
+### Connect Flow (single path)
 
-### Connect Primary Path: Download Model
+`Connect` is a single download flow with no directory picker:
 
-`Connect` defaults to a `Download model` path:
+1. open the connect dialog → render the catalog
+2. highlight the entry whose `recommendedFor` contains `app.getLocale()`; otherwise highlight the first
+3. user picks one and clicks Download
+4. install it into the descriptor-provided default `modelDir`
+5. on completion: write `config.modelDir` (= the default), `settings.selectedModelId`, `enabled: true`
+6. close the dialog — provider is ready
 
-1. show the recommended provider default directory
-2. allow the user to accept it or choose a custom directory
-3. list catalog models
-4. let the user pick one model
-5. install it into the chosen directory
-6. write `config.modelDir`
-7. write `settings.selectedModelId`
-8. mark the provider ready
-
-### Connect Secondary Path: Use Existing Directory
-
-`Use existing directory` remains available in the same connect flow:
-
-1. choose a directory
-2. scan that directory for installed models
-3. if models are found, choose one as `selectedModelId`
-4. if no models are found, keep the chosen directory and route the user into the download flow
-
-Both connect paths converge on the same completion state.
+There is intentionally no "use existing directory" branch on the primary path. Power users who already have local model directories use the *Advanced* settings path described below.
 
 ### Settings Capabilities
 
-Settings becomes the model-management surface for local ASR and must support:
+Settings is the post-connect model-management surface and supports:
 
-- viewing the current directory
-- changing the directory and rescanning it
-- viewing installed models
+- viewing the current directory (read-only by default; editable under Advanced)
+- viewing installed models with size and "active" indicator
 - switching to another installed model
-- viewing catalog models
+- viewing catalog models that are not yet installed
 - installing an uninstalled model and automatically selecting it
-- deleting an installed model
+- deleting an installed non-active model
+
+Under an *Advanced* disclosure:
+
+- changing the model directory and rescanning it (covers the "import existing directory" use case from earlier drafts)
 
 If the current selected model is removed or disappears after a directory change, `selectedModelId` must be cleared and setup status must drop out of `ready`.
 
@@ -222,46 +244,28 @@ The desktop main process owns orchestration. Provider implementations own the un
 
 ### Main Process API
 
-The desktop app should expose a dedicated local-model API layer for local ASR providers. The API surface should support:
+The desktop app exposes a dedicated local-model tRPC layer:
 
-- reading the current local model state for a provider
-- installing a model into a target directory
-- cancelling an in-flight install
-- selecting an installed model
-- changing the connected model directory
-- removing an installed model
+- `providers.localModels.getState(providerId)` — current `modelDir`, `selectedModelId`, catalog list, installed list
+- `providers.localModels.install(providerId, modelId)` — subscription returning `LocalModelInstallEvent`s; on completion the main process writes `selectedModelId` and `enabled: true`
+- `providers.localModels.cancelInstall(providerId)` — abort the in-flight install for that provider
+- `providers.localModels.select(providerId, modelId)` — pick an already-installed model as active
+- `providers.localModels.remove(providerId, modelId)` — delete an installed model
+- `providers.localModels.changeDirectory(providerId, modelDir)` — Advanced; updates `config.modelDir`, evicts cached provider, re-scans
 
-These APIs should be the only way the renderer changes local-model state. They should update persistence on success rather than relying on renderer-side store writes assembled in multiple places.
+These APIs are the only way the renderer changes local-model state. They write persistence on success.
 
-### Task Model
+### In-Flight Install Tracking
 
-Model installation is a task, not a one-shot form submission.
+Install is long-running but does not need a separate task state machine in v1. The main process holds at most one in-flight `AsyncIterator` per `providerId`, plus its `AbortController`. The trpc subscription consumes that iterator directly.
 
-Every install task should report:
+Concurrency rules:
 
-- `taskId`
-- `providerId`
-- `modelId`
-- `modelDir`
-- `status`
-- `progress`
-- `downloadedBytes`
-- `totalBytes`
-- `message`
+- only one install may run per `providerId` at a time
+- a second `install()` for the same `providerId + modelId` while one is running attaches to the existing iterator (via a fan-out adapter or by reading from a snapshot of the latest event) — it does not start a duplicate
+- a second `install()` for a different `modelId` while one is running rejects with a clear "another install is in progress" error rather than queueing
 
-Suggested task states:
-
-- `idle`
-- `running`
-- `succeeded`
-- `failed`
-- `cancelled`
-
-Concurrency rule:
-
-- only one install task may run for the same `providerId + modelDir` at a time
-- re-requesting the same install should reuse the current task state
-- starting a different install while one is running should be blocked until the current task finishes or is cancelled
+A full task model with `idle/succeeded/failed/cancelled` history can be added later if a multi-pane UI requires it; v1 doesn't need it.
 
 ## Runtime Rules
 
@@ -281,49 +285,72 @@ If `modelDir` or `selectedModelId` is missing, or the selected model is not actu
 
 ## Provider Instance Invalidation
 
-The current ASR registry caches provider instances. That is unsafe for local ASR once directory selection and model switching become mutable.
+The ASR registry caches provider instances by `(providerId, configHash)`. When `modelDir` (which lives in `config`) changes, the registry already disposes the old instance and creates a fresh one on the next `resolve()` — this is built into the registry as of the recent refactor and is the reason the provider can hold `modelDir` as construction state.
 
-The desktop runtime layer must evict cached local ASR provider instances when either of these changes:
+`selectedModelId` lives in `providerSettings`, not `config`, so it does **not** trigger registry eviction. The runtime layer reads `selectedModelId` from settings on each resolve and passes it to `resolveModelRuntime(selectedModelId)`. Switching the active model is a settings write — no provider rebuild required.
 
-- the provider connection config changes in a way that affects runtime, such as `modelDir`
-- provider settings change in a way that affects runtime, such as `selectedModelId`
+## Descriptor Construction
 
-After eviction, the next resolve call must create a fresh provider instance using the latest persisted state.
+Local ASR descriptors need access to the platform-managed default directory, which is only known in the main process (`app.getPath('userData')`). The descriptor is therefore exposed as a factory rather than a static export:
+
+```ts
+// packages/providers/src/asr/providers/sherpa-onnx/index.ts
+export function createSherpaOnnxDescriptor(opts: {
+  defaultModelDir: string
+}): ASRProviderDescriptor<SherpaOnnxConfig, SherpaOnnxSettings>
+```
+
+Bootstrap (in desktop main):
+
+```ts
+const descriptor = createSherpaOnnxDescriptor({
+  defaultModelDir: path.join(app.getPath('userData'), 'asr-models', 'sherpa-onnx')
+})
+asrRegistry.register(descriptor)
+```
+
+The descriptor:
+
+- sets `defaultValue` for `modelDir` in the `local` connection option, so when the user activates Connect the dialog already has a valid directory and does not need to render the field
+- applies the default in the Zod schema via `.default(opts.defaultModelDir)` so persisted records that omit `modelDir` resolve correctly
 
 ## Sherpa-ONNX First Implementation
 
-`sherpa-onnx` will be the first provider to implement this platform contract.
+`sherpa-onnx` is the first provider to implement this platform contract.
 
 ### Required Behavioral Changes
 
 The sherpa implementation must:
 
-- expose a provider-defined downloadable catalog
-- scan a chosen directory for installed sherpa models
-- install a chosen model all the way to a usable final directory
-- resolve runtime strictly from `selectedModelId`
+- expose a provider-defined downloadable catalog with `sha256` per entry
+- scan its held `modelDir` for installed sherpa models
+- install a chosen model all the way to a usable final directory:
+  - stream the archive to disk via `https.get(url).pipe(fs.createWriteStream(tmpPath))` — no `Buffer.concat` of the full payload
+  - verify `sha256` before extracting
+  - extract to a `*.staging` directory, validate required files (architecture-specific: encoder/decoder/joiner/tokens for transducer; encoder/decoder/tokens for paraformer), then atomically `rename` to the final path
+  - delete the archive on success; remove staging + archive on failure or cancel
+- emit phase-tagged `LocalModelInstallEvent`s
+- resolve runtime strictly from `selectedModelId`; throw `ConfigurationError` if not installed
 - stop picking the first model found in `modelDir`
 
 ### Default Directory
 
-The sherpa connect flow should suggest a default directory under the desktop app support path, such as:
-
 ```txt
-~/Library/Application Support/OpenBroca/models/sherpa-onnx
+<userData>/asr-models/sherpa-onnx
 ```
 
-The user may override it during connect or later in settings.
+The user does not see this during connect. They can override it under Advanced settings if they want models stored elsewhere.
 
 ### Settings UX
 
-For sherpa specifically, settings should show:
+For sherpa specifically, settings shows:
 
-- current selected model
-- installed model list
-- catalog model list
-- the connected directory
+- current selected model (with size, language hint)
+- installed model list with "use" / "remove" actions
+- catalog model list (filtered to entries not yet installed) with "download and use" action
+- under an *Advanced* disclosure: the current `modelDir` and a "Change directory" action that triggers a rescan after path change
 
-Clicking an uninstalled catalog model in settings should trigger install and automatically switch `selectedModelId` after completion.
+Clicking an uninstalled catalog model triggers install and automatically switches `selectedModelId` after completion.
 
 ## Migration and Compatibility
 
@@ -358,24 +385,26 @@ Verify connect completion rules, settings-based model switching, directory chang
 This design does not include:
 
 - arbitrary manual entry of per-file model asset paths
-- a queue of multiple simultaneous install tasks for one provider and directory
+- a queue of multiple simultaneous install tasks for one provider
 - a provider-agnostic filesystem layout guessed by the platform
 - broad refactoring of cloud ASR providers
+- importing a pre-existing model directory from outside the managed `modelDir` (a future Advanced feature; v1 covers the same need by letting users change `modelDir` to point at their existing folder and rescanning)
+- resumable / partial-content downloads (catalog models are tens to a few hundred MB; restart-on-failure is acceptable for v1)
 
 ## Recommended Implementation Order
 
-1. extend the local ASR platform contract and persistence semantics
-2. make sherpa installation real and runtime resolution strict
-3. add main-process local-model APIs and install task orchestration
-4. wire setup status and activation gating to the new runtime-aware rules
-5. implement the connect `Download model` path
-6. implement the connect `Use existing directory` path
-7. implement settings-based switching, install-and-switch, directory changes, and deletion
-8. finish migration handling and regression coverage
+1. extend the local ASR platform contract (no `modelDir` in method signatures), `LocalCatalogModel` with `sha256`, install event union, persistence semantics for `selectedModelId`
+2. convert the sherpa descriptor to a `createSherpaOnnxDescriptor({ defaultModelDir })` factory; rewrite the sherpa provider to hold `modelDir` and implement the new lifecycle (streamed download, sha256 verify, staging + atomic rename, validate, strict selected-model runtime)
+3. add main-process `providers.localModels.*` tRPC APIs and the in-flight install holder
+4. wire setup status and activation gating to require an installed selected model
+5. implement the single-path connect dialog (catalog + recommended highlight + download progress)
+6. implement settings: switch active model, download additional, remove, plus Advanced directory change
+7. finish migration handling and regression coverage
 
 ## Risks
 
-- ASR provider instance caching can leak stale directory or model selection into runtime if eviction is missed.
-- Install tasks touch both network and filesystem, so partial failure cleanup must be explicit.
-- Different local ASR providers may use different final model layouts, so the platform must not guess provider-specific file conventions.
-- Reusing the old generic `model` field for local ASR would blur LLM and local-model semantics and make future maintenance harder.
+- Streaming download must clean up the on-disk temp file on cancel/error; otherwise repeated failed installs accumulate dead bytes under `userData`.
+- The `recommendedFor` highlight depends on `app.getLocale()` returning a useful tag; fall back to the first catalog entry if the locale doesn't match anything.
+- `tar -xjf` is available on macOS and most Linux distros but not always on Windows; before shipping Windows builds, swap to a node tar/bz2 lib.
+- Different local ASR providers may use different final model layouts, so the platform must not guess provider-specific file conventions — validation lives in the provider.
+- Reusing the old generic `model` field for local ASR would blur LLM and local-model semantics; we keep `selectedModelId` separate.

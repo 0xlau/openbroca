@@ -3,10 +3,11 @@ export {
   type ASRProvider,
   type ASRProviderDescriptor,
   type ASRCapabilities,
-  type CloudASRProvider,
-  type DownloadProgress,
+  type InstalledLocalModel,
   type LocalASRProvider,
-  type LocalModelInfo,
+  type LocalCatalogModel,
+  type LocalModelInstallEvent,
+  type LocalModelRuntime,
   type RecognitionInput,
   type RecognitionOptions,
   type RecognitionResult,
@@ -17,20 +18,3 @@ export {
   recognizeFromTranscribe,
   resolveASRCapabilities
 } from './contracts.ts'
-export {
-  type ProviderConnectionField,
-  type ProviderConnectionFieldInput,
-  type ProviderConnectionOption,
-  type ProviderConnectionType
-} from '../shared/connection.ts'
-export {
-  type ProviderSettingsItem,
-  type ProviderSetupContext,
-  type ProviderSetupStatus,
-  type ProviderSettingsOption,
-  type ProviderTextSettingsItem,
-  type ProviderPasswordSettingsItem,
-  type ProviderToggleSettingsItem,
-  type ProviderSelectSettingsItem,
-  type ProviderModelSelectSettingsItem
-} from '../shared/settings.ts'

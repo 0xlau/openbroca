@@ -330,8 +330,13 @@ export class PostRecordingPipeline {
       typeof asrSettings.language === 'string' && asrSettings.language.trim().length > 0
         ? asrSettings.language
         : 'en'
+    const selectedModelId =
+      typeof asrSettings.selectedModelId === 'string' && asrSettings.selectedModelId.trim().length > 0
+        ? asrSettings.selectedModelId
+        : undefined
     const asrRequest = {
       language: savedLanguage,
+      ...(selectedModelId ? { modelId: selectedModelId } : {}),
       ...(signal ? { signal } : {})
     }
     if (recording.format.sampleRate !== 16000) {

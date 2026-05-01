@@ -1,5 +1,7 @@
 import { createClient } from '@deepgram/sdk'
 import { ConfigurationError, TranscriptionError } from '../../../shared/errors.ts'
+import { AsyncPushQueue } from '../../../shared/async-queue.ts'
+import { assertPCMInput, normalizeAudioChunks, throwIfAborted } from '../../../shared/audio.ts'
 import type {
   RecognitionInput,
   RecognitionOptions,
@@ -8,6 +10,8 @@ import type {
   TranscriptionEvent,
   TranscriptionSegment,
 } from '../../contracts.ts'
+
+const PCM_INPUT_ERROR = 'Recognition metadata is not supported for prerecorded transcription'
 
 export interface DeepgramConfig {
   apiKey: string
@@ -36,7 +40,7 @@ export class DeepgramASRProvider implements StreamingASRProvider {
     }
 
     throwIfAborted(options?.signal)
-    assertPrerecordedInputSupported(this.id, input)
+    assertPCMInput(this.id, input, PCM_INPUT_ERROR)
     const audio = await collectAudioBuffer(input.audio, options?.signal)
     throwIfAborted(options?.signal)
     const client = createClient(this.apiKey)
@@ -104,18 +108,7 @@ export class DeepgramASRProvider implements StreamingASRProvider {
 
     const audio = normalizeAudioChunks(input.audio)
     const client = createClient(this.apiKey)
-    const events: TranscriptionEvent[] = []
-    let done = false
-    let error: Error | null = null
-    let resolve: (() => void) | null = null
-
-    const notify = () => {
-      if (resolve) {
-        const current = resolve
-        resolve = null
-        current()
-      }
-    }
+    const queue = new AsyncPushQueue<TranscriptionEvent>()
 
     const connection = client.listen.live({
       model: 'nova-2',
@@ -125,10 +118,6 @@ export class DeepgramASRProvider implements StreamingASRProvider {
       sample_rate: input.sampleRate ?? 16000,
       channels: input.channels,
       interim_results: true,
-    })
-
-    connection.on('open', () => {
-      // Connection ready, audio will be sent below.
     })
 
     connection.on('Results', (data: {
@@ -151,22 +140,18 @@ export class DeepgramASRProvider implements StreamingASRProvider {
         segment.endTime = data.start + data.duration
       }
 
-      events.push({
+      queue.push({
         type: data.is_final ? 'final' : 'interim',
         segment,
       })
-      notify()
     })
 
     connection.on('error', (err: Error) => {
-      error = new TranscriptionError(this.id, err.message, err)
-      done = true
-      notify()
+      queue.fail(new TranscriptionError(this.id, err.message, err))
     })
 
     connection.on('close', () => {
-      done = true
-      notify()
+      queue.end()
     })
 
     const sendAudio = async () => {
@@ -181,74 +166,7 @@ export class DeepgramASRProvider implements StreamingASRProvider {
     }
     void sendAudio()
 
-    while (!done || events.length > 0) {
-      if (events.length > 0) {
-        yield events.shift()!
-        continue
-      }
-
-      if (error) throw error
-
-      await new Promise<void>((doneWaiting) => {
-        resolve = doneWaiting
-      })
-    }
-
-    if (error) throw error
-  }
-}
-
-function normalizeAudioChunks(audio: RecognitionInput['audio']): AsyncIterable<Uint8Array> {
-  if (isAsyncIterable(audio)) {
-    return audio
-  }
-
-  const chunks = Array.isArray(audio) ? audio : [audio]
-  return {
-    async *[Symbol.asyncIterator]() {
-      for (const chunk of chunks) {
-        yield chunk
-      }
-    },
-  }
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<Uint8Array> {
-  if (!value) return false
-  return typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
-}
-
-function assertPrerecordedInputSupported(providerId: string, input: RecognitionInput): void {
-  if (input.mimeType) {
-    throw new TranscriptionError(
-      providerId,
-      'Recognition metadata is not supported for prerecorded transcription'
-    )
-  }
-
-  const encoding = input.encoding
-  const sampleRate = input.sampleRate
-  const channels = input.channels
-
-  if (encoding && encoding !== 'linear16') {
-    throw new TranscriptionError(
-      providerId,
-      'Recognition metadata is not supported for prerecorded transcription'
-    )
-  }
-
-  if (sampleRate !== undefined && sampleRate !== 16000) {
-    throw new TranscriptionError(
-      providerId,
-      'Recognition metadata is not supported for prerecorded transcription'
-    )
-  }
-
-  if (channels !== undefined && channels !== 1) {
-    throw new TranscriptionError(
-      providerId,
-      'Recognition metadata is not supported for prerecorded transcription'
-    )
+    yield* queue.drain()
   }
 }
 
@@ -264,14 +182,6 @@ async function collectAudioBuffer(
 
   throwIfAborted(signal)
   return Buffer.concat(chunks)
-}
-
-function throwIfAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return
-
-  const error = new Error('Recognition aborted')
-  error.name = 'AbortError'
-  throw error
 }
 
 function buildFallbackSegments(

@@ -35,7 +35,15 @@ export default defineConfig({
         // its parent @openbroca/audio-capture is bundled.
         // get-windows also ships native-install machinery we should leave to
         // Node resolution instead of bundling into the Electron main build.
-        external: ['audify', 'get-windows']
+        // sherpa-onnx-node loads platform-specific native binaries
+        // (sherpa-onnx-darwin-arm64 etc.) via runtime require; Vite must not
+        // try to bundle either the wrapper or its optional platform deps.
+        external: [
+          'audify',
+          'get-windows',
+          'sherpa-onnx-node',
+          /^sherpa-onnx-(darwin|linux|win)-/
+        ]
       }
     },
     plugins: [svgRawPlugin]

@@ -36,12 +36,23 @@ export interface ProviderModelSelectSettingsItem extends ProviderSettingsItemBas
   allowCustomValue?: boolean
 }
 
+/**
+ * UI primitive for local ASR providers. Renders the catalog + installed model
+ * list with download/select/remove actions; the persisted value is the active
+ * `selectedModelId`. Distinct from `model-select` because the data source is
+ * the local-models tRPC endpoints rather than a remote `listModels()` query.
+ */
+export interface ProviderLocalModelSelectSettingsItem extends ProviderSettingsItemBase {
+  type: 'local-model-select'
+}
+
 export type ProviderSettingsItem =
   | ProviderTextSettingsItem
   | ProviderPasswordSettingsItem
   | ProviderToggleSettingsItem
   | ProviderSelectSettingsItem
   | ProviderModelSelectSettingsItem
+  | ProviderLocalModelSelectSettingsItem
 
 export interface ProviderSetupStatus {
   status: 'not-connected' | 'configured' | 'invalid' | 'ready'

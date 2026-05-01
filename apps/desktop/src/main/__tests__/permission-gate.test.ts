@@ -130,6 +130,7 @@ async function setupMainIndexHarness(options: {
       appHandlers.set(event, handler)
     }),
     quit: vi.fn(),
+    getPath: vi.fn(() => '/tmp/test-userdata'),
     getFileIcon: vi.fn(async () => ({
       isEmpty: () => true,
       toDataURL: () => ''
@@ -212,7 +213,8 @@ async function setupMainIndexHarness(options: {
   }))
   vi.doMock('../providers', () => ({
     llmRegistry: {},
-    asrRegistry: {}
+    asrRegistry: {},
+    registerLocalASRProviders: vi.fn()
   }))
   vi.doMock('../window-manager', () => ({
     windowManager

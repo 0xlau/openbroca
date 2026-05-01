@@ -11,7 +11,7 @@ import { appTrpcRouter } from './trpc/router'
 import { createContext } from './trpc/context'
 import { registerTrpcIpcHandler } from './trpc/ipc-handler'
 import { store } from './store'
-import { llmRegistry, asrRegistry } from './providers'
+import { llmRegistry, asrRegistry, registerLocalASRProviders } from './providers'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
 import {
@@ -347,6 +347,10 @@ async function refreshPermissionGateAndMaybeAdvance() {
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
+
+  registerLocalASRProviders({
+    defaultModelDir: join(app.getPath('userData'), 'asr-models', 'sherpa-onnx')
+  })
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

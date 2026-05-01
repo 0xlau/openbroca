@@ -1,5 +1,6 @@
 import React from 'react'
 import type { ProviderConnectionType } from '@openbroca/providers'
+import type { LocalModelInstallEvent } from '@openbroca/providers/asr'
 import {
   Button,
   Dialog,
@@ -14,8 +15,170 @@ import {
   TypographySmall
 } from '@openbroca/ui'
 import type { ProviderConnectionRecord } from '@renderer/stores/provider-store'
+import { trpc } from '@renderer/trpc'
+import { trpcClient } from '@renderer/trpc/client'
 import type { EditableProviderConnectionOption, ProviderViewModel } from './provider-types'
 import { getConnectionOptionByType } from './provider-types'
+
+function isLocalASRProvider(provider: ProviderViewModel): boolean {
+  return 'kind' in provider && provider.kind === 'local'
+}
+
+function pickRecommendedModelId(
+  catalog: ReadonlyArray<{ id: string; recommendedFor?: ReadonlyArray<string> }>,
+  locale: string
+): string | undefined {
+  const lower = locale.toLowerCase()
+  const match = catalog.find((entry) =>
+    entry.recommendedFor?.some((tag) => lower.startsWith(tag.toLowerCase()))
+  )
+  return (match ?? catalog[0])?.id
+}
+
+function humanBytes(bytes: number): string {
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(0)} MB`
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`
+  return `${bytes} B`
+}
+
+function LocalASRConnectPanel({
+  providerId,
+  onComplete
+}: {
+  providerId: string
+  onComplete: () => void
+}) {
+  const stateQuery = trpc.providers.localModels.getState.useQuery({ providerId })
+  const [installing, setInstalling] = React.useState<{
+    modelId: string
+    event?: LocalModelInstallEvent
+    error?: string
+  } | null>(null)
+  const cancelMutation = trpc.providers.localModels.cancelInstall.useMutation()
+
+  const startInstall = React.useCallback(
+    (modelId: string) => {
+      setInstalling({ modelId })
+      const subscription = trpcClient.providers.localModels.install.subscribe(
+        { providerId, modelId },
+        {
+          onData: (event: LocalModelInstallEvent) =>
+            setInstalling((prev) => (prev ? { ...prev, event } : prev)),
+          onComplete: () => {
+            setInstalling(null)
+            void stateQuery.refetch()
+            onComplete()
+          },
+          onError: (err: Error) => {
+            setInstalling((prev) =>
+              prev ? { modelId: prev.modelId, error: err.message } : prev
+            )
+          }
+        }
+      )
+      return subscription
+    },
+    [providerId, stateQuery, onComplete]
+  )
+
+  const handleCancel = () => {
+    cancelMutation.mutate({ providerId })
+    setInstalling(null)
+  }
+
+  const data = stateQuery.data
+  if (stateQuery.isError) {
+    return (
+      <TypographyMuted className="text-sm text-destructive">
+        Failed to load catalog: {stateQuery.error?.message ?? 'unknown error'}
+      </TypographyMuted>
+    )
+  }
+  if (stateQuery.isLoading || !data) {
+    return <TypographyMuted className="text-sm">Loading catalog…</TypographyMuted>
+  }
+
+  const recommendedId = pickRecommendedModelId(data.catalogModels, navigator.language ?? 'en')
+  const installedIds = new Set(data.installedModels.map((m: { id: string }) => m.id))
+  const available = data.catalogModels.filter((m: { id: string }) => !installedIds.has(m.id))
+
+  if (installing) {
+    const event = installing.event
+    const phase = event?.phase ?? 'downloading'
+    const progress =
+      event?.phase === 'downloading' && event.totalBytes > 0
+        ? Math.floor((event.downloadedBytes / event.totalBytes) * 100)
+        : null
+
+    return (
+      <div className="space-y-3 rounded-xl border border-foreground/15 bg-muted/30 p-4">
+        <TypographySmall>Installing {installing.modelId}</TypographySmall>
+        <TypographyMuted className="text-xs capitalize">{phase}</TypographyMuted>
+        {progress != null ? (
+          <div className="h-2 w-full overflow-hidden rounded-full bg-foreground/10">
+            <div
+              className="h-full bg-foreground transition-[width]"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        ) : null}
+        {installing.error ? (
+          <TypographyMuted className="text-xs text-destructive">
+            {installing.error}
+          </TypographyMuted>
+        ) : null}
+        <div>
+          <Button type="button" variant="ghost" onClick={handleCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (available.length === 0 && data.installedModels.length > 0) {
+    return (
+      <div className="rounded-xl border border-foreground/15 bg-muted/30 p-4">
+        <TypographyMuted className="text-sm">
+          All catalog models are installed. Use Settings to switch the active model.
+        </TypographyMuted>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-col gap-3">
+      <TypographySmall>Choose a model to download</TypographySmall>
+      <ul className="-mr-1 max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+        {available.map((model: { id: string; name: string; sizeBytes: number; description?: string }) => (
+          <li
+            key={model.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-foreground/10 px-3 py-2"
+          >
+            <div className="flex min-w-0 flex-col">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium">{model.name}</span>
+                {model.id === recommendedId ? (
+                  <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-xs">
+                    Recommended
+                  </span>
+                ) : null}
+              </div>
+              <TypographyMuted className="truncate text-xs">
+                {humanBytes(model.sizeBytes)}
+                {model.description ? ` · ${model.description}` : ''}
+              </TypographyMuted>
+            </div>
+            <Button type="button" className="shrink-0" onClick={() => startInstall(model.id)}>
+              Download
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 function sanitizeConfig(
   option: EditableProviderConnectionOption,
@@ -267,57 +430,84 @@ export function ProviderConnectDialog({
     )
   }
 
+  const isLocalASR = !!provider && isLocalASRProvider(provider)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="flex max-h-[85vh] max-w-xl flex-col">
         {provider ? (
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <DialogHeader>
-              <DialogTitle>Connect {provider.displayName}</DialogTitle>
-              <DialogDescription>
-                Choose the connection method this provider supports, then save the configuration to
-                enable it in OpenBroca.
-              </DialogDescription>
-            </DialogHeader>
+          isLocalASR ? (
+            <div className="flex min-h-0 flex-col gap-6">
+              <DialogHeader>
+                <DialogTitle>Connect {provider.displayName}</DialogTitle>
+                <DialogDescription>
+                  Pick a model to download. Files are stored under the app data folder by default
+                  and can be relocated under Settings → Advanced.
+                </DialogDescription>
+              </DialogHeader>
 
-            <ConnectionMethodPicker
-              options={provider.connectionOptions}
-              selectedType={selectedType}
-              onSelect={handleSelect}
-            />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <LocalASRConnectPanel
+                  providerId={provider.id}
+                  onComplete={() => onOpenChange(false)}
+                />
+              </div>
 
-            {selectedOption?.type === 'oauth' ? (
-              <OAuthPanel
-                description={selectedOption.description}
-                buttonLabel={selectedOption.buttonLabel}
-                isConnecting={isConnecting}
-                onConnect={handleOAuthConnect}
-              />
-            ) : null}
-            {editableOption ? (
-              <ConnectionFields
-                option={editableOption}
-                values={values}
-                onChange={(fieldKey, value) =>
-                  setValues((current) => ({ ...current, [fieldKey]: value }))
-                }
-              />
-            ) : null}
-
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              {editableOption ? (
-                <Button
-                  type="submit"
-                  disabled={!isOptionComplete(editableOption, values) || isSaving}
-                >
-                  Save Connection
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  Close
                 </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Connect {provider.displayName}</DialogTitle>
+                <DialogDescription>
+                  Choose the connection method this provider supports, then save the configuration
+                  to enable it in OpenBroca.
+                </DialogDescription>
+              </DialogHeader>
+
+              <ConnectionMethodPicker
+                options={provider.connectionOptions}
+                selectedType={selectedType}
+                onSelect={handleSelect}
+              />
+
+              {selectedOption?.type === 'oauth' ? (
+                <OAuthPanel
+                  description={selectedOption.description}
+                  buttonLabel={selectedOption.buttonLabel}
+                  isConnecting={isConnecting}
+                  onConnect={handleOAuthConnect}
+                />
               ) : null}
-            </DialogFooter>
-          </form>
+              {editableOption ? (
+                <ConnectionFields
+                  option={editableOption}
+                  values={values}
+                  onChange={(fieldKey, value) =>
+                    setValues((current) => ({ ...current, [fieldKey]: value }))
+                  }
+                />
+              ) : null}
+
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                {editableOption ? (
+                  <Button
+                    type="submit"
+                    disabled={!isOptionComplete(editableOption, values) || isSaving}
+                  >
+                    Save Connection
+                  </Button>
+                ) : null}
+              </DialogFooter>
+            </form>
+          )
         ) : null}
       </DialogContent>
     </Dialog>

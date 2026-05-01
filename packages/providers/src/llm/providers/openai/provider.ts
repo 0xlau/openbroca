@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { ConfigurationError } from '../../../shared/errors.ts'
+import { ConfigurationError, ProviderError } from '../../../shared/errors.ts'
 import type {
   CompletionChunk,
   CompletionRequest,
@@ -42,16 +42,6 @@ function normalizeFinishReason(reason: string | null | undefined): CompletionChu
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function toSerializable(value: unknown): unknown {
-  try {
-    return JSON.parse(JSON.stringify(value))
-  } catch {
-    return {
-      unstringifiable: String(value)
-    }
-  }
 }
 
 function extractAssistantText(content: unknown): string {
@@ -142,16 +132,6 @@ function mapResponsesFinishReason(response: Record<string, unknown>): Completion
   return Reflect.get(incompleteDetails, 'reason') === 'max_output_tokens' ? 'length' : 'stop'
 }
 
-export class OpenAIResponseShapeError extends Error {
-  constructor(
-    message: string,
-    readonly rawResponse: unknown
-  ) {
-    super(message)
-    this.name = 'OpenAIResponseShapeError'
-  }
-}
-
 export class OpenAILLMProvider implements LLMProvider {
   readonly id = 'openai'
   readonly displayName = 'OpenAI'
@@ -189,9 +169,6 @@ export class OpenAILLMProvider implements LLMProvider {
       stream: false,
     }, { signal: request.signal })
 
-    const rawResponse = toSerializable(response)
-    console.debug('[voice-debug] OpenAI raw response', rawResponse)
-
     if (isRecord(response) && Array.isArray(response.choices)) {
       const choice = response.choices[0]
       return {
@@ -212,12 +189,7 @@ export class OpenAILLMProvider implements LLMProvider {
       }
     }
 
-    console.debug('[voice-debug] OpenAI response parse failed', {
-      message: 'Unsupported OpenAI response shape',
-      rawResponse
-    })
-
-    throw new OpenAIResponseShapeError('Unsupported OpenAI response shape', rawResponse)
+    throw new ProviderError(this.id, 'Unsupported OpenAI response shape', response)
   }
 
   async *complete(request: CompletionRequest): AsyncIterable<CompletionChunk> {

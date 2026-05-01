@@ -9,6 +9,7 @@ import type { SecureStorage } from '../auth/secure-storage'
 import { llmRegistry as desktopLlmRegistry } from '../providers'
 import {
   getActiveASRProviderId,
+  getActiveASRSelectedModelId,
   getActiveLLMSelection,
   getActiveLLMModel,
   getActiveLLMProviderId,
@@ -255,6 +256,131 @@ describe('provider runtime resolution', () => {
     expect(getActiveASRProviderId(store)).toBe('deepgram')
   })
 
+  test('reads the active asr selectedModelId from provider settings', () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'sherpa-onnx': {
+          enabled: true,
+          connectionType: 'local',
+          config: { modelDir: '/tmp/m' }
+        }
+      },
+      providerSettings: {
+        'sherpa-onnx': { selectedModelId: 'paraformer-zh' }
+      },
+      activeProviders: { asr: 'sherpa-onnx' }
+    })
+
+    expect(getActiveASRSelectedModelId(store)).toBe('paraformer-zh')
+  })
+
+  test('returns undefined when the active asr provider has no selectedModelId', () => {
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'sherpa-onnx': {
+          enabled: true,
+          connectionType: 'local',
+          config: { modelDir: '/tmp/m' }
+        }
+      },
+      providerSettings: { 'sherpa-onnx': {} },
+      activeProviders: { asr: 'sherpa-onnx' }
+    })
+
+    expect(getActiveASRSelectedModelId(store)).toBeUndefined()
+  })
+
+  test('resolveActiveASRSelection throws when selectedModelId is missing for a local provider', async () => {
+    const { resolveActiveASRSelection } = await import('../providers/runtime')
+    const { ASRProviderRegistry } = await import('@openbroca/providers/asr')
+
+    const asrRegistry = new ASRProviderRegistry()
+    asrRegistry.register({
+      id: 'fake-local',
+      displayName: 'Fake Local',
+      description: '',
+      kind: 'local',
+      configSchema: { parse: (data: unknown) => (data ?? {}) as { modelDir?: string } },
+      settingsSchema: { parse: (data: unknown) => (data ?? {}) as { selectedModelId?: string } },
+      create: () => ({
+        id: 'fake-local',
+        displayName: 'Fake Local',
+        isConfigured: () => true,
+        recognize: async () => ({ text: '', segments: [] }),
+        listCatalogModels: async () => [],
+        scanInstalledModels: async () => [],
+        installModel: async function* () {},
+        removeInstalledModel: async () => undefined,
+        resolveModelRuntime: async () => ({ modelId: 'x', modelPath: '/x' })
+      })
+    })
+
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'fake-local': {
+          enabled: true,
+          connectionType: 'local',
+          config: { modelDir: '/tmp/fake' }
+        }
+      },
+      providerSettings: { 'fake-local': {} },
+      activeProviders: { asr: 'fake-local' }
+    })
+
+    await expect(
+      resolveActiveASRSelection({ asrRegistry, store } as never)
+    ).rejects.toThrow(/Select a local ASR model/i)
+  })
+
+  test('resolveActiveASRSelection throws when the selected model is not installed', async () => {
+    const { resolveActiveASRSelection } = await import('../providers/runtime')
+    const { ASRProviderRegistry } = await import('@openbroca/providers/asr')
+    const { ConfigurationError } = await import('@openbroca/providers')
+
+    const asrRegistry = new ASRProviderRegistry()
+    asrRegistry.register({
+      id: 'fake-local',
+      displayName: 'Fake Local',
+      description: '',
+      kind: 'local',
+      configSchema: { parse: (data: unknown) => (data ?? {}) as { modelDir?: string } },
+      settingsSchema: { parse: (data: unknown) => (data ?? {}) as { selectedModelId?: string } },
+      create: () => ({
+        id: 'fake-local',
+        displayName: 'Fake Local',
+        isConfigured: () => true,
+        recognize: async () => ({ text: '', segments: [] }),
+        listCatalogModels: async () => [],
+        scanInstalledModels: async () => [],
+        installModel: async function* () {},
+        removeInstalledModel: async () => undefined,
+        resolveModelRuntime: async (id: string) => {
+          throw new ConfigurationError('fake-local', `Selected model "${id}" is not installed`)
+        }
+      })
+    })
+
+    const store = new MemoryStore()
+    store.set('providers', {
+      providers: {
+        'fake-local': {
+          enabled: true,
+          connectionType: 'local',
+          config: { modelDir: '/tmp/fake' }
+        }
+      },
+      providerSettings: { 'fake-local': { selectedModelId: 'paraformer-zh' } },
+      activeProviders: { asr: 'fake-local' }
+    })
+
+    await expect(
+      resolveActiveASRSelection({ asrRegistry, store } as never)
+    ).rejects.toThrow(/not installed/i)
+  })
+
   test('reads the active llm model from structured provider settings', () => {
     const store = new MemoryStore()
     store.set('providers', {
@@ -440,7 +566,8 @@ describe('provider runtime resolution', () => {
     }
     const asrRegistry = {
       resolve: vi.fn().mockReturnValue(asrProvider),
-      listDescriptors: () => [deepgramDescriptor]
+      listDescriptors: () => [deepgramDescriptor],
+      isLocal: () => false
     }
 
     const selection = await resolveActiveASRSelection({

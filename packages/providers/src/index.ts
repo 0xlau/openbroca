@@ -20,5 +20,6 @@ export {
   type ProviderPasswordSettingsItem,
   type ProviderToggleSettingsItem,
   type ProviderSelectSettingsItem,
-  type ProviderModelSelectSettingsItem
+  type ProviderModelSelectSettingsItem,
+  type ProviderLocalModelSelectSettingsItem
 } from './shared/settings.ts'

@@ -29,6 +29,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sherpa:hash": "node scripts/sherpa-hash.mjs",
+    "sherpa:smoke": "node scripts/sherpa-smoke.mjs"
   }
 }

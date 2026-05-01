@@ -45,6 +45,18 @@ export function getActiveASRProviderId(store: StoreLike): string | undefined {
   return getNormalizedProviderSettings(store).activeProviders.asr
 }
 
+export function getActiveASRSelectedModelId(store: StoreLike): string | undefined {
+  const settings = getNormalizedProviderSettings(store)
+  const providerId = settings.activeProviders.asr
+  const providerSettings = providerId ? settings.providerSettings[providerId] : undefined
+  const value = providerSettings?.selectedModelId
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed ? trimmed : undefined
+}
+
 function normalizeModel(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
@@ -96,11 +108,25 @@ export async function resolveActiveASRSelection(deps: ASRProviderRuntimeDeps): P
   }
 
   const settings = resolveValidatedASRProviderSettings(deps, providerId)
+  const provider = deps.asrRegistry.resolve(providerId, providerRecord.config ?? {})
 
-  return {
-    provider: deps.asrRegistry.resolve(providerId, providerRecord.config ?? {}),
-    settings
+  // Local ASR providers must have an installed selected model before activation;
+  // we never silently fall back to "first installed wins".
+  if (deps.asrRegistry.isLocal(provider)) {
+    const selectedModelId =
+      typeof settings.selectedModelId === 'string' ? settings.selectedModelId.trim() : ''
+    if (!selectedModelId) {
+      throw new ConfigurationError(
+        providerId,
+        'Select a local ASR model before activating this provider.'
+      )
+    }
+    // Throws ConfigurationError if the selected model is not installed in the
+    // provider's configured modelDir.
+    await provider.resolveModelRuntime(selectedModelId)
   }
+
+  return { provider, settings }
 }
 
 function resolveValidatedASRProviderSettings(
@@ -160,7 +186,6 @@ export async function resolveLLMProvider(
   deps: LLMProviderRuntimeDeps
 ): Promise<LLMProvider> {
   const config = await getLLMProviderRuntimeConfig(providerId, deps)
-  await deps.llmRegistry.evict(providerId)
   return deps.llmRegistry.resolve(providerId, config)
 }
 
