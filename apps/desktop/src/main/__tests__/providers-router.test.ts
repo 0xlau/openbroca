@@ -36,6 +36,24 @@ vi.mock('@openrouter/sdk', () => {
   }
 })
 
+const providerHostStub = vi.hoisted(() => {
+  const invoke = vi.fn<
+    (instanceId: string, method: string, args: unknown[]) => Promise<unknown>
+  >(async () => undefined)
+  const invokeStream = vi.fn<
+    (instanceId: string, method: string, args: unknown[]) => AsyncIterable<unknown>
+  >(() => (async function* () {})())
+  const createInstance = vi.fn<
+    (kind: string, providerId: string, config: unknown) => Promise<string>
+  >(async (kind, providerId) => `${kind}:${providerId}:stub-instance`)
+  return { invoke, invokeStream, createInstance }
+})
+
+vi.mock('../provider-host/host', () => ({
+  getProviderHost: () => providerHostStub,
+  resetProviderHostSingleton: () => undefined
+}))
+
 class MemoryStore {
   private state: Record<string, unknown> = {
     providers: {}
@@ -179,10 +197,21 @@ describe('providersRouter', () => {
       oauthService
     } as unknown as Context)
 
+    // The router resolves the provider (now a remote proxy) and forwards
+    // listModels to the utility process. We assert the oauth-derived config
+    // reaches the host; the actual model list is owned by the in-child provider
+    // and covered by the openai-codex provider's own tests.
+    providerHostStub.createInstance.mockClear()
+    providerHostStub.invoke.mockResolvedValueOnce([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }])
+
     const models = await caller.listModels({ providerId: 'openai-codex' })
 
-    expect(models[0]).toEqual({ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' })
-    expect(models).toHaveLength(6)
+    expect(providerHostStub.createInstance).toHaveBeenCalledWith(
+      'llm',
+      'openai-codex',
+      expect.objectContaining({ accountId: 'acct_codex' })
+    )
+    expect(models).toEqual([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }])
   })
 
   test('getSetupStatus returns provider-owned readiness for connected providers', async () => {
@@ -624,7 +653,18 @@ describe('providersRouter', () => {
       oauthService
     } as unknown as Context)
 
+    providerHostStub.createInstance.mockClear()
+    providerHostStub.invoke.mockResolvedValueOnce([
+      { id: 'openai/gpt-4.1-mini', name: 'openai/gpt-4.1-mini', contextWindow: 128_000 }
+    ])
+
     const models = await caller.listModels({ providerId: 'openrouter' })
+
+    expect(providerHostStub.createInstance).toHaveBeenCalledWith(
+      'llm',
+      'openrouter',
+      { apiKey: 'or-key' }
+    )
     expect(models).toEqual([
       { id: 'openai/gpt-4.1-mini', name: 'openai/gpt-4.1-mini', contextWindow: 128_000 }
     ])

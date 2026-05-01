@@ -3,6 +3,9 @@ import type { ASRProvider, ASRProviderDescriptor, ASRProviderRegistry } from '@o
 import type { LLMProvider, LLMProviderRegistry } from '@openbroca/providers/llm'
 import type { OAuthService } from '../auth/oauth-service'
 import { normalizeProviderSettings, type ProviderConnectionRecord } from '../../shared/provider-auth'
+import { getProviderHost } from '../provider-host/host'
+import { RemoteASRProvider } from '../provider-host/remote-asr-proxy'
+import { RemoteLLMProvider } from '../provider-host/remote-llm-proxy'
 
 export interface StoreLike {
   get<T>(key: string): T | undefined
@@ -108,22 +111,48 @@ export async function resolveActiveASRSelection(deps: ASRProviderRuntimeDeps): P
   }
 
   const settings = resolveValidatedASRProviderSettings(deps, providerId)
-  const provider = deps.asrRegistry.resolve(providerId, providerRecord.config ?? {})
 
-  // Local ASR providers must have an installed selected model before activation;
-  // we never silently fall back to "first installed wins".
-  if (deps.asrRegistry.isLocal(provider)) {
-    const selectedModelId =
+  // Provider execution lives in the utility process; main only constructs a
+  // remote proxy that satisfies the same interface. We still validate config
+  // up front via the descriptor's schema so misconfigured providers fail fast
+  // here, not after a round-trip.
+  const descriptor = deps.asrRegistry.getDescriptor(providerId)
+  if (!descriptor) {
+    throw new ConfigurationError(providerId, `Provider "${providerId}" is not registered`)
+  }
+
+  // Fail fast on missing local model selection BEFORE spawning the provider
+  // instance in the utility process — both for clearer errors and to avoid
+  // creating an instance we'd immediately throw away.
+  let localSelectedModelId: string | undefined
+  if (descriptor.kind === 'local') {
+    const candidate =
       typeof settings.selectedModelId === 'string' ? settings.selectedModelId.trim() : ''
-    if (!selectedModelId) {
+    if (!candidate) {
       throw new ConfigurationError(
         providerId,
         'Select a local ASR model before activating this provider.'
       )
     }
-    // Throws ConfigurationError if the selected model is not installed in the
-    // provider's configured modelDir.
-    await provider.resolveModelRuntime(selectedModelId)
+    localSelectedModelId = candidate
+  }
+
+  const config = descriptor.configSchema.parse(providerRecord.config ?? {}) as unknown
+  const host = getProviderHost()
+  const instanceId = await host.createInstance('asr', providerId, config)
+  const provider = new RemoteASRProvider({
+    host,
+    instanceId,
+    providerId,
+    displayName: descriptor.displayName,
+    isLocal: descriptor.kind === 'local'
+  }) as unknown as ASRProvider
+
+  // Verify the selected model is installed in the provider's configured
+  // modelDir. The proxy round-trips this to the child, which throws
+  // ConfigurationError if the model is missing.
+  if (localSelectedModelId !== undefined && deps.asrRegistry.isLocal(provider)) {
+    await provider.resolveModelRuntime(localSelectedModelId)
   }
 
   return { provider, settings }
@@ -186,7 +215,18 @@ export async function resolveLLMProvider(
   deps: LLMProviderRuntimeDeps
 ): Promise<LLMProvider> {
   const config = await getLLMProviderRuntimeConfig(providerId, deps)
-  return deps.llmRegistry.resolve(providerId, config)
+  const descriptor = deps.llmRegistry.getDescriptor(providerId)
+  if (!descriptor) {
+    throw new ConfigurationError(providerId, `Provider "${providerId}" is not registered`)
+  }
+  const host = getProviderHost()
+  const instanceId = await host.createInstance('llm', providerId, config)
+  return new RemoteLLMProvider({
+    host,
+    instanceId,
+    providerId,
+    displayName: descriptor.displayName
+  })
 }
 
 export async function resolveActiveLLMProvider(deps: LLMProviderRuntimeDeps): Promise<LLMProvider> {

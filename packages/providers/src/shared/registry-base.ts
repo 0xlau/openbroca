@@ -93,6 +93,10 @@ export abstract class ProviderRegistry<
     return Array.from(this.descriptors.values())
   }
 
+  getDescriptor(id: string): TDescriptor | undefined {
+    return this.descriptors.get(id)
+  }
+
   async disposeAll(): Promise<void> {
     for (const cached of Array.from(this.instances.values())) {
       await cached.provider.dispose?.()

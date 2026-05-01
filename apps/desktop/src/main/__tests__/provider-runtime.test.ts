@@ -3,7 +3,6 @@ import { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
-import type { CompletionChunk } from '@openbroca/providers/llm'
 import { OAuthService } from '../auth/oauth-service'
 import type { SecureStorage } from '../auth/secure-storage'
 import { llmRegistry as desktopLlmRegistry } from '../providers'
@@ -45,6 +44,24 @@ vi.mock('@openrouter/sdk', () => {
   }
 })
 
+const providerHostStub = vi.hoisted(() => {
+  const invoke = vi.fn<
+    (instanceId: string, method: string, args: unknown[]) => Promise<unknown>
+  >(async () => undefined)
+  const invokeStream = vi.fn<
+    (instanceId: string, method: string, args: unknown[]) => AsyncIterable<unknown>
+  >(() => (async function* () {})())
+  const createInstance = vi.fn<
+    (kind: string, providerId: string, config: unknown) => Promise<string>
+  >(async (kind, providerId) => `${kind}:${providerId}:stub-instance`)
+  return { invoke, invokeStream, createInstance }
+})
+
+vi.mock('../provider-host/host', () => ({
+  getProviderHost: () => providerHostStub,
+  resetProviderHostSingleton: () => undefined
+}))
+
 class MemoryStore {
   private state: Record<string, unknown> = {
     providers: {
@@ -77,16 +94,6 @@ function createAccessToken(accountId = 'acct_123'): string {
   ].join('.')
 }
 
-function createEventStreamResponse(events: unknown[]): Response {
-  const payload = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')
-  return new Response(payload, {
-    headers: {
-      'content-type': 'text/event-stream'
-    },
-    status: 200
-  })
-}
-
 describe('provider runtime resolution', () => {
   const fetchFn = vi.fn<typeof fetch>()
 
@@ -106,7 +113,7 @@ describe('provider runtime resolution', () => {
     })
   })
 
-  test('resolves openai-codex from keytar-backed oauth state and can use listModels/generate/complete', async () => {
+  test('resolves openai-codex with config extracted from keytar-backed oauth state and forwards to host', async () => {
     const accessToken = createAccessToken('acct_codex')
     const secureStorage = {
       setSecret: vi.fn(async () => undefined),
@@ -150,37 +157,6 @@ describe('provider runtime resolution', () => {
     const llmRegistry = new LLMProviderRegistry()
     llmRegistry.register(openaiCodexDescriptor)
 
-    fetchFn
-      .mockResolvedValueOnce(
-        createEventStreamResponse([
-          {
-            type: 'response.completed',
-            response: {
-              output: [
-                {
-                  type: 'message',
-                  content: [{ type: 'output_text', text: 'hello from runtime' }]
-                }
-              ]
-            }
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createEventStreamResponse([
-          {
-            type: 'response.output_text.delta',
-            delta: 'hello'
-          },
-          {
-            type: 'response.completed',
-            response: {
-              output: []
-            }
-          }
-        ])
-      )
-
     const config = await getLLMProviderRuntimeConfig('openai-codex', {
       llmRegistry,
       oauthService,
@@ -191,43 +167,25 @@ describe('provider runtime resolution', () => {
       accountId: 'acct_codex'
     })
 
+    // Provider execution lives in the utility process; main-side runtime only
+    // wires the proxy. Assert the host was asked to create the right instance
+    // with the oauth-derived config and that the proxy exposes the contract.
+    providerHostStub.createInstance.mockClear()
     const provider = await resolveLLMProvider('openai-codex', {
       llmRegistry,
       oauthService,
       store
     })
 
-    await expect(provider.listModels()).resolves.toEqual([
-      { id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' },
-      { id: 'gpt-5.2', name: 'gpt-5.2' },
-      { id: 'gpt-5.1-codex', name: 'gpt-5.1-codex' },
-      { id: 'gpt-5.1-codex-mini', name: 'gpt-5.1-codex-mini' },
-      { id: 'gpt-5.1-codex-max', name: 'gpt-5.1-codex-max' },
-      { id: 'gpt-5.1', name: 'gpt-5.1' }
-    ])
-
-    await expect(
-      provider.generate({
-        model: 'gpt-5.2-codex',
-        messages: [{ role: 'user', content: 'Say hello' }]
-      })
-    ).resolves.toMatchObject({
-      content: 'hello from runtime',
-      finishReason: 'stop'
-    })
-
-    const chunks: CompletionChunk[] = []
-    for await (const chunk of provider.complete({
-      model: 'gpt-5.2-codex',
-      messages: [{ role: 'user', content: 'stream' }]
-    })) {
-      chunks.push(chunk)
-    }
-
-    expect(chunks).toEqual([
-      { delta: 'hello', finishReason: null },
-      { delta: '', finishReason: 'stop' }
-    ])
+    expect(providerHostStub.createInstance).toHaveBeenCalledWith(
+      'llm',
+      'openai-codex',
+      { accessToken, accountId: 'acct_codex' }
+    )
+    expect(provider.id).toBe('openai-codex')
+    expect(typeof provider.generate).toBe('function')
+    expect(typeof provider.complete).toBe('function')
+    expect(typeof provider.listModels).toBe('function')
   })
 
   test('reads active llm/asr provider IDs from structured provider settings', () => {
@@ -348,18 +306,13 @@ describe('provider runtime resolution', () => {
       kind: 'local',
       configSchema: { parse: (data: unknown) => (data ?? {}) as { modelDir?: string } },
       settingsSchema: { parse: (data: unknown) => (data ?? {}) as { selectedModelId?: string } },
+      // create() runs in the child process now; the main-side test stubs the
+      // host's invoke() to simulate the child's resolveModelRuntime throwing.
       create: () => ({
         id: 'fake-local',
         displayName: 'Fake Local',
         isConfigured: () => true,
-        recognize: async () => ({ text: '', segments: [] }),
-        listCatalogModels: async () => [],
-        scanInstalledModels: async () => [],
-        installModel: async function* () {},
-        removeInstalledModel: async () => undefined,
-        resolveModelRuntime: async (id: string) => {
-          throw new ConfigurationError('fake-local', `Selected model "${id}" is not installed`)
-        }
+        recognize: async () => ({ text: '', segments: [] })
       })
     })
 
@@ -374,6 +327,16 @@ describe('provider runtime resolution', () => {
       },
       providerSettings: { 'fake-local': { selectedModelId: 'paraformer-zh' } },
       activeProviders: { asr: 'fake-local' }
+    })
+
+    providerHostStub.invoke.mockImplementationOnce(async (_instance, method, args) => {
+      if (method === 'resolveModelRuntime') {
+        throw new ConfigurationError(
+          'fake-local',
+          `Selected model "${(args as string[])[0]}" is not installed`
+        )
+      }
+      return undefined
     })
 
     await expect(
@@ -558,28 +521,26 @@ describe('provider runtime resolution', () => {
       }
     })
 
-    const asrProvider = {
-      id: 'deepgram',
-      displayName: 'Deepgram',
-      isConfigured: () => true,
-      recognize: vi.fn()
-    }
     const asrRegistry = {
-      resolve: vi.fn().mockReturnValue(asrProvider),
+      getDescriptor: vi.fn().mockReturnValue(deepgramDescriptor),
       listDescriptors: () => [deepgramDescriptor],
       isLocal: () => false
     }
 
+    providerHostStub.createInstance.mockClear()
     const selection = await resolveActiveASRSelection({
       asrRegistry,
       store
-    })
+    } as never)
 
-    expect(asrRegistry.resolve).toHaveBeenCalledWith('deepgram', { apiKey: 'dg-key' })
-    expect(selection).toEqual({
-      provider: asrProvider,
-      settings: { language: 'zh' }
-    })
+    // Validated config flows to the host; the proxy stands in for the provider.
+    expect(providerHostStub.createInstance).toHaveBeenCalledWith(
+      'asr',
+      'deepgram',
+      { apiKey: 'dg-key' }
+    )
+    expect(selection.provider.id).toBe('deepgram')
+    expect(selection.settings).toEqual({ language: 'zh' })
   })
 
   test('resolveActiveASRSelection throws configuration error when persisted asr settings are invalid', async () => {

@@ -12,6 +12,7 @@ import { createContext } from './trpc/context'
 import { registerTrpcIpcHandler } from './trpc/ipc-handler'
 import { store } from './store'
 import { llmRegistry, asrRegistry, registerLocalASRProviders } from './providers'
+import { getProviderHost } from './provider-host/host'
 import { windowManager } from './window-manager'
 import { shortcutManager } from './shortcut-manager'
 import { TrayManager } from './tray-manager'
@@ -351,9 +352,14 @@ async function refreshPermissionGateAndMaybeAdvance() {
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
 
-  registerLocalASRProviders({
-    defaultModelDir: join(app.getPath('userData'), 'asr-models', 'sherpa-onnx')
-  })
+  const defaultModelDir = join(app.getPath('userData'), 'asr-models', 'sherpa-onnx')
+  registerLocalASRProviders({ defaultModelDir })
+
+  // Spawn the provider host utility process. All ASR/LLM execution lives in
+  // this child so heavy CPU work (sherpa-onnx native inference) and network
+  // I/O cannot block the main process event loop. We await readiness here so
+  // any subsequent code that resolves a provider sees a live host.
+  await getProviderHost().start({ defaultModelDir })
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -443,6 +449,7 @@ app.on('will-quit', () => {
   listeningSession.stop()
   shortcutManager.stop()
   windowManager.destroyAll()
+  void getProviderHost().dispose()
 })
 
 // Keep the app running in the tray when all windows close — Quit menu item is the only exit.

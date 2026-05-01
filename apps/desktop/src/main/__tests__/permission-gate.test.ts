@@ -216,6 +216,16 @@ async function setupMainIndexHarness(options: {
     asrRegistry: {},
     registerLocalASRProviders: vi.fn()
   }))
+  vi.doMock('../provider-host/host', () => ({
+    getProviderHost: () => ({
+      start: vi.fn(async () => undefined),
+      dispose: vi.fn(async () => undefined),
+      createInstance: vi.fn(async () => 'stub-instance'),
+      invoke: vi.fn(async () => undefined),
+      invokeStream: vi.fn(() => (async function* () {})())
+    }),
+    resetProviderHostSingleton: vi.fn()
+  }))
   vi.doMock('../window-manager', () => ({
     windowManager
   }))
