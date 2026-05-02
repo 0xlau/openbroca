@@ -2,8 +2,8 @@ import { BrowserWindow, screen, type Rectangle } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 
-export const FLOATING_LISTENING_SIZE = { width: 360, height: 38 } as const
-export const FLOATING_PROCESSING_SIZE = { width: 360, height: 38 } as const
+export const FLOATING_LISTENING_SIZE = { width: 360, height: 40 } as const
+export const FLOATING_PROCESSING_SIZE = { width: 360, height: 40 } as const
 const FLOATING_WINDOW_BOTTOM_OFFSET = 50
 
 export function getFloatingWindowPosition(

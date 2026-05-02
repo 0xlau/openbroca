@@ -1,3 +1,7 @@
+html:has(body.float-listening) {
+  overflow: hidden;
+}
+
 body.float-listening {
   background-color: transparent;
   display: flex;
@@ -7,4 +11,5 @@ body.float-listening {
   width: 100vw;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
