@@ -350,7 +350,7 @@ async function refreshPermissionGateAndMaybeAdvance() {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('me.timlau.openbroca')
 
   const defaultModelDir = join(app.getPath('userData'), 'asr-models', 'sherpa-onnx')
   registerLocalASRProviders({ defaultModelDir })
