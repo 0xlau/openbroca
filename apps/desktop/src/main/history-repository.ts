@@ -81,8 +81,8 @@ function normalizeDeliveryDebug(
     value.ownershipMatchedAtDelivery ?? defaults.ownershipMatchedAtDelivery
 
   const normalized: VoiceHistoryDeliveryDebug = {
-    targetAppAtMatch: value.targetAppAtMatch ?? null,
-    targetAppAtDelivery: normalizedTargetAppAtDelivery,
+    targetAppAtMatch: stripAppIcon(value.targetAppAtMatch ?? null),
+    targetAppAtDelivery: stripAppIcon(normalizedTargetAppAtDelivery),
     matchedInstruction: value.matchedInstruction ?? null,
     instructionPromptApplied: normalizedInstructionPromptApplied,
     ownershipMatchedAtDelivery: normalizedOwnershipMatchedAtDelivery,
@@ -114,8 +114,23 @@ function normalizeDeliveryDebug(
   return hasIdenticalShape ? (value as VoiceHistoryDeliveryDebug) : normalized
 }
 
+function stripAppIcon<T extends Record<string, unknown> | null | undefined>(app: T): T {
+  // History records embed app icons (base64 PNG data URLs) that bloat the
+  // electron-store JSON file by 100s of KB per record. The renderer never
+  // reads icons from history records — only live target-app icons in the
+  // floating window — so dropping them here keeps the store small enough
+  // for the synchronous writeFileSync path to stay under any noticeable
+  // main-thread stall.
+  if (!app || typeof app !== 'object' || !('iconDataUrl' in app)) {
+    return app
+  }
+  const rest = { ...app }
+  delete rest.iconDataUrl
+  return rest as T
+}
+
 function normalizeFrontmostAppSnapshot(value: VoiceHistoryDebugData['frontmostAppSnapshot']) {
-  return value ?? null
+  return stripAppIcon(value ?? null)
 }
 
 function normalizeDebugData(debug: VoiceHistoryDebugData): VoiceHistoryDebugData {

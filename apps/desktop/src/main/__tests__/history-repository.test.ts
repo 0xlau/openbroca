@@ -423,4 +423,151 @@ describe('HistoryRepository', () => {
       repository.update('unknown-id', { status: 'failed' })
     ).toThrowError('Unknown voice history record: unknown-id')
   })
+
+  test('update strips iconDataUrl from frontmostAppSnapshot before persisting', () => {
+    const store = createStoreStub({ voiceHistory: { records: [] } })
+    const repository = new HistoryRepository(store)
+
+    const created = repository.create({
+      status: 'processing',
+      audioDurationMs: 1200,
+      asrProviderId: 'deepgram',
+      llmProviderId: 'openai-codex'
+    })
+
+    repository.update(created.id, {
+      debug: {
+        frontmostAppSnapshot: {
+          id: 'com.openai.chat',
+          bundleId: 'com.openai.chat',
+          displayName: 'ChatGPT',
+          iconDataUrl: 'data:image/png;base64,bloated-payload'
+        }
+      }
+    })
+
+    const stored = store.get<{ records: VoiceHistoryRecord[] }>('voiceHistory')
+    const persisted = stored?.records[0]?.debug.frontmostAppSnapshot
+    expect(persisted).toEqual({
+      id: 'com.openai.chat',
+      bundleId: 'com.openai.chat',
+      displayName: 'ChatGPT'
+    })
+    expect(persisted && 'iconDataUrl' in persisted).toBe(false)
+  })
+
+  test('update strips iconDataUrl from delivery target apps before persisting', () => {
+    const store = createStoreStub({ voiceHistory: { records: [] } })
+    const repository = new HistoryRepository(store)
+
+    const created = repository.create({
+      status: 'processing',
+      audioDurationMs: 1200,
+      asrProviderId: 'deepgram',
+      llmProviderId: 'openai-codex'
+    })
+
+    repository.update(created.id, {
+      debug: {
+        delivery: {
+          targetAppAtMatch: {
+            bundleId: 'com.apple.mail',
+            displayName: 'Mail',
+            iconDataUrl: 'data:image/png;base64,bloated-mail'
+          },
+          targetAppAtDelivery: {
+            bundleId: 'com.openai.chat',
+            displayName: 'ChatGPT',
+            iconDataUrl: 'data:image/png;base64,bloated-chat'
+          },
+          method: 'paste',
+          status: 'completed'
+        }
+      }
+    })
+
+    const stored = store.get<{ records: VoiceHistoryRecord[] }>('voiceHistory')
+    const delivery = stored?.records[0]?.debug.delivery
+
+    expect(delivery?.targetAppAtMatch).toEqual({
+      bundleId: 'com.apple.mail',
+      displayName: 'Mail'
+    })
+    expect(delivery?.targetAppAtDelivery).toEqual({
+      bundleId: 'com.openai.chat',
+      displayName: 'ChatGPT'
+    })
+    expect(
+      delivery?.targetAppAtMatch && 'iconDataUrl' in delivery.targetAppAtMatch
+    ).toBe(false)
+    expect(
+      delivery?.targetAppAtDelivery && 'iconDataUrl' in delivery.targetAppAtDelivery
+    ).toBe(false)
+  })
+
+  test('read migrates legacy records by stripping bloated iconDataUrl payloads', () => {
+    const legacyRecord = {
+      id: 'legacy-icon-record',
+      createdAt: '2026-04-18T00:00:00.000Z',
+      updatedAt: '2026-04-18T00:00:00.000Z',
+      status: 'completed',
+      audioDurationMs: 1200,
+      failureStage: null,
+      asrProviderId: 'deepgram',
+      llmProviderId: 'openai-codex',
+      debug: {
+        rawTranscriptionText: 'legacy text',
+        asrSegments: [],
+        asrRequest: {},
+        asrResponseSummary: {},
+        llmRequest: {},
+        llmResponseSummary: {},
+        frontmostAppSnapshot: {
+          bundleId: 'com.apple.mail',
+          displayName: 'Mail',
+          iconDataUrl: 'data:image/png;base64,legacy-bloat'
+        },
+        delivery: {
+          targetAppAtMatch: {
+            bundleId: 'com.openai.chat',
+            displayName: 'ChatGPT',
+            iconDataUrl: 'data:image/png;base64,legacy-chat'
+          },
+          targetAppAtDelivery: {
+            bundleId: 'com.openai.chat',
+            displayName: 'ChatGPT',
+            iconDataUrl: 'data:image/png;base64,legacy-delivery'
+          },
+          matchedInstruction: null,
+          instructionPromptApplied: false,
+          ownershipMatchedAtDelivery: false,
+          method: 'paste',
+          status: 'completed',
+          outcome: 'paste-success',
+          pasteAttempted: true,
+          autoSendTriggered: false
+        },
+        timeline: [],
+        errors: []
+      }
+    }
+    const store = createStoreStub({ voiceHistory: { records: [legacyRecord] } })
+    const repository = new HistoryRepository(store)
+
+    repository.list()
+
+    const persistedRecord = store.get<{ records: VoiceHistoryRecord[] }>('voiceHistory')?.records[0]
+    expect(persistedRecord?.debug.frontmostAppSnapshot).toEqual({
+      bundleId: 'com.apple.mail',
+      displayName: 'Mail'
+    })
+    expect(persistedRecord?.debug.delivery.targetAppAtMatch).toEqual({
+      bundleId: 'com.openai.chat',
+      displayName: 'ChatGPT'
+    })
+    expect(persistedRecord?.debug.delivery.targetAppAtDelivery).toEqual({
+      bundleId: 'com.openai.chat',
+      displayName: 'ChatGPT'
+    })
+  })
 })
