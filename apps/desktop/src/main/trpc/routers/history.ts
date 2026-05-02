@@ -86,7 +86,7 @@ function buildDailyTokenUsage(records: HistoryStatsRecord[]) {
 
   for (const record of records) {
     const totalTokens = record.debug.tokenUsage?.totalTokens
-    if (!Number.isFinite(totalTokens) || totalTokens < 0) {
+    if (typeof totalTokens !== 'number' || !Number.isFinite(totalTokens) || totalTokens < 0) {
       continue
     }
 
