@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
+import type { readFile } from 'node:fs/promises'
 import { describe, expect, test } from 'vitest'
 import {
   createHistoryAudioProtocolHandler,
@@ -19,7 +20,7 @@ describe('historyAudioProtocol', () => {
           id === 'record-1' ? { audioFilePath: '/tmp/one.wav' } : undefined
       },
       {
-        readFile: async () => Buffer.from([82, 73, 70, 70])
+        readFile: (async () => Buffer.from([82, 73, 70, 70])) as unknown as typeof readFile
       }
     )
 

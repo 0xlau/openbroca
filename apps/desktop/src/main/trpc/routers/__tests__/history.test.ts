@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { toHistoryAudioUrl } from '../../../history-audio-protocol'
-import type { VoiceHistoryRecord } from '../../../../shared/voice-history'
+import type {
+  VoiceHistoryDebugData,
+  VoiceHistoryRecord
+} from '../../../../shared/voice-history'
 import { historyRouter } from '../history'
+
+type CreateRecordOverrides = Partial<Omit<VoiceHistoryRecord, 'debug'>> & {
+  debug?: Partial<VoiceHistoryDebugData>
+}
 
 type HistoryCallerContext = Parameters<typeof historyRouter.createCaller>[0]
 
@@ -31,7 +38,7 @@ const defaultDebug = {
   errors: []
 } satisfies VoiceHistoryRecord['debug']
 
-function createRecord(overrides: Partial<VoiceHistoryRecord> = {}): VoiceHistoryRecord {
+function createRecord(overrides: CreateRecordOverrides = {}): VoiceHistoryRecord {
   const { debug, ...restOverrides } = overrides
 
   return {

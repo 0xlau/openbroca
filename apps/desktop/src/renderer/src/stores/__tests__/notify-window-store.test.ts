@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { NotifyWindowBridgeState } from '../../../../../shared/notify-window-state'
+import type { NotifyWindowBridgeState } from '../../../../shared/notify-window-state'
 
 describe('notifyWindowStore', () => {
   const permissionsBridge = {

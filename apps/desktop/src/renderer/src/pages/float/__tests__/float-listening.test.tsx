@@ -50,9 +50,9 @@ vi.mock('@renderer/stores/microphone-store', () => ({
 async function renderForBridgeState(
   bridge: ListeningSessionBridgeState,
   overrides: {
-    cancelCapture?: ReturnType<typeof vi.fn>
-    cancelProcessing?: ReturnType<typeof vi.fn>
-    finishCapture?: ReturnType<typeof vi.fn>
+    cancelCapture?: () => Promise<void>
+    cancelProcessing?: () => Promise<void>
+    finishCapture?: () => Promise<void>
   } = {}
 ) {
   const listeners = new Set<(next: ListeningSessionBridgeState) => void>()
@@ -65,9 +65,9 @@ async function renderForBridgeState(
     },
     listeningSession: {
       getState: vi.fn().mockResolvedValue(bridge),
-      cancelCapture: overrides.cancelCapture ?? vi.fn().mockResolvedValue(undefined),
-      cancelProcessing: overrides.cancelProcessing ?? vi.fn().mockResolvedValue(undefined),
-      finishCapture: overrides.finishCapture ?? vi.fn().mockResolvedValue(undefined),
+      cancelCapture: overrides.cancelCapture ?? vi.fn(async () => {}),
+      cancelProcessing: overrides.cancelProcessing ?? vi.fn(async () => {}),
+      finishCapture: overrides.finishCapture ?? vi.fn(async () => {}),
       onStateChange: vi.fn((callback) => {
         listeners.add(callback)
         return () => listeners.delete(callback)
@@ -252,7 +252,7 @@ describe('FloatListening', () => {
     {
       name: 'quick listening',
       bridge: {
-        state: { status: 'listening' },
+        state: { status: 'listening' as const },
         captureMode: 'quick' as const,
         targetApp: null
       }
@@ -260,7 +260,7 @@ describe('FloatListening', () => {
     {
       name: 'processing',
       bridge: {
-        state: { status: 'processing' },
+        state: { status: 'processing' as const },
         captureMode: 'latched' as const,
         targetApp: null
       }

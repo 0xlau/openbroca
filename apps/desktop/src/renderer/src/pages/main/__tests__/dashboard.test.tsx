@@ -5,7 +5,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createStore } from 'zustand'
 import type { ShortcutSettings } from '../../../../../shared/shortcuts'
-import type { ShortcutSettings } from '../../../../../shared/shortcuts'
 
 const selectedHistoryRecord: {
   id: string
