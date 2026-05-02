@@ -199,7 +199,7 @@ importers:
         specifier: ^5.1.1
         version: 5.2.0(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(lightningcss@1.32.0))
       electron:
-        specifier: ^39.2.6
+        specifier: 39.8.3
         version: 39.8.3
       electron-builder:
         specifier: ^26.0.12
