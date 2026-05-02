@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
   type ChartConfig,
@@ -123,7 +122,7 @@ export const Dashboard: React.FC = () => {
       : historyStatsQuery.isError
         ? 'error'
         : 'ready'
-  const stats = statsState === 'ready' ? (historyStatsQuery.data ?? EMPTY_STATS) : null
+  const stats = historyStatsQuery.data ?? EMPTY_STATS
   const statsData =
     statsState === 'ready'
       ? [
