@@ -16,6 +16,7 @@ mac:
   category: public.app-category.productivity
   icon: build/icon.icon
   entitlementsInherit: build/entitlements.mac.plist
+  identity: 'PEIQIANG LIU (ZK7D6M3F8L)'
   hardenedRuntime: true
   gatekeeperAssess: false
   notarize: true
