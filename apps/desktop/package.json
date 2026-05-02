@@ -1,10 +1,16 @@
 {
-  "name": "desktop",
-  "version": "1.0.0",
-  "description": "Just speak your thoughts",
+  "name": "openbroca-desktop",
+  "version": "0.1.0",
+  "description": "Just speak your thoughts.",
   "main": "./out/main/index.js",
-  "author": "timlau.me",
+  "author": "Timothy Lau <timothy-lau@outlook.com>",
+  "license": "MIT",
   "homepage": "https://openbroca.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xlau/openbroca.git",
+    "directory": "apps/desktop"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
