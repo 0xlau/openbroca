@@ -1,5 +1,12 @@
-import { systemPreferences } from 'electron'
+import { shell, systemPreferences } from 'electron'
 import type { PermissionItem } from './types'
+
+// macOS only shows the in-app TCC prompt the first time we ask. Once the user
+// has denied (or the system has restricted) microphone access, askForMediaAccess
+// resolves false synchronously without any UI. We have to send the user to
+// Privacy & Security → Microphone ourselves in that case.
+const MAC_MICROPHONE_SETTINGS_URL =
+  'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
 
 export function resolveMacMicrophonePermission(): PermissionItem {
   const status = systemPreferences.getMediaAccessStatus('microphone')
@@ -31,7 +38,14 @@ export function resolveMacDesktopControlPermission(): PermissionItem {
 }
 
 export async function requestMacMicrophonePermission(): Promise<PermissionItem> {
-  await systemPreferences.askForMediaAccess('microphone')
+  const status = systemPreferences.getMediaAccessStatus('microphone')
+
+  if (status === 'not-determined') {
+    await systemPreferences.askForMediaAccess('microphone')
+  } else if (status !== 'granted') {
+    await shell.openExternal(MAC_MICROPHONE_SETTINGS_URL)
+  }
+
   return resolveMacMicrophonePermission()
 }
 

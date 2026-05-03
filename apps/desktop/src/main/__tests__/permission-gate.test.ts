@@ -49,12 +49,16 @@ function mockElectronSystemPreferences() {
     askForMediaAccess: vi.fn(),
     isTrustedAccessibilityClient: vi.fn()
   }
+  const shell = {
+    openExternal: vi.fn().mockResolvedValue(undefined)
+  }
 
   vi.doMock('electron', () => ({
+    shell,
     systemPreferences
   }))
 
-  return systemPreferences
+  return { ...systemPreferences, shell }
 }
 
 function createTrackedWindow() {
@@ -418,16 +422,36 @@ describe('permission gate service', () => {
     ])
   })
 
-  test('requests microphone access and re-maps the refreshed state', async () => {
+  test('shows the system prompt when microphone access has never been asked', async () => {
     vi.stubGlobal('process', { ...process, platform: 'darwin' })
     const systemPreferences = mockElectronSystemPreferences()
     systemPreferences.askForMediaAccess.mockResolvedValue(true)
-    systemPreferences.getMediaAccessStatus.mockReturnValue('granted')
+    systemPreferences.getMediaAccessStatus
+      .mockReturnValueOnce('not-determined')
+      .mockReturnValue('granted')
 
     const { requestMicrophonePermission } = await import('../permission-gate/service')
 
     await expect(requestMicrophonePermission()).resolves.toEqual(
       expect.objectContaining({ key: 'microphone', status: 'granted' })
+    )
+    expect(systemPreferences.askForMediaAccess).toHaveBeenCalledWith('microphone')
+    expect(systemPreferences.shell.openExternal).not.toHaveBeenCalled()
+  })
+
+  test('opens System Settings when microphone access has been previously denied', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+    const systemPreferences = mockElectronSystemPreferences()
+    systemPreferences.getMediaAccessStatus.mockReturnValue('denied')
+
+    const { requestMicrophonePermission } = await import('../permission-gate/service')
+
+    await expect(requestMicrophonePermission()).resolves.toEqual(
+      expect.objectContaining({ key: 'microphone', status: 'needs-manual-step' })
+    )
+    expect(systemPreferences.askForMediaAccess).not.toHaveBeenCalled()
+    expect(systemPreferences.shell.openExternal).toHaveBeenCalledWith(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
     )
   })
 
