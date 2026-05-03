@@ -2,8 +2,6 @@ import React from 'react'
 import type { AppIdentity } from '@openbroca/app-identity'
 import {
   Button,
-  Card,
-  CardContent,
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -217,10 +215,13 @@ export const Instructions: React.FC = () => {
       {!isHydrated ? (
         <TypographyMuted>Loading instructions...</TypographyMuted>
       ) : (
-        <section>
-          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="instructions-grid">
-            {data.rules.length > 0 ? (
-              data.rules.map((rule) => (
+        <section className="h-full">
+          {data.rules.length > 0 ? (
+            <div
+              className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
+              data-testid="instructions-grid"
+            >
+              {data.rules.map((rule) => (
                 <InstructionCard
                   key={rule.id}
                   rule={rule}
@@ -232,37 +233,32 @@ export const Instructions: React.FC = () => {
                   }}
                   onDelete={() => handleDelete(rule.id)}
                 />
-              ))
-            ) : (
-              <Card className="md:col-span-2 xl:col-span-3">
-                <CardContent className="flex flex-1">
-                  <Empty className="min-h-90 flex-1 border border-dashed border-border/70 p-10">
-                    <EmptyHeader>
-                      <EmptyTitle>No instructions yet</EmptyTitle>
-                      <EmptyDescription>
-                        Add your first rule to bind custom instructions to one or more activation
-                        apps.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                    <EmptyContent>
-                      <Button
-                        type="button"
-                        disabled={isPersisting}
-                        onClick={() => {
-                          setEditorErrorMessage(null)
-                          setPageErrorMessage(null)
-                          setDraftRules(cloneRulesSnapshot(data.rules))
-                          setEditorState({ open: true, rule: null })
-                        }}
-                      >
-                        Create instruction
-                      </Button>
-                    </EmptyContent>
-                  </Empty>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <Empty className="min-h-full flex-1 rounded-xl border border-dashed border-foreground/15 bg-muted/20">
+              <EmptyHeader>
+                <EmptyTitle>No instructions yet</EmptyTitle>
+                <EmptyDescription>
+                  Add your first rule to bind custom instructions to one or more activation apps.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button
+                  type="button"
+                  disabled={isPersisting}
+                  onClick={() => {
+                    setEditorErrorMessage(null)
+                    setPageErrorMessage(null)
+                    setDraftRules(cloneRulesSnapshot(data.rules))
+                    setEditorState({ open: true, rule: null })
+                  }}
+                >
+                  Create instruction
+                </Button>
+              </EmptyContent>
+            </Empty>
+          )}
         </section>
       )}
 

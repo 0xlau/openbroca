@@ -275,7 +275,7 @@ function DictionaryRow({
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <Empty className="min-h-90 flex-1 rounded-xl border border-dashed border-foreground/15 bg-muted/20">
+    <Empty className="min-h-full flex-1 rounded-xl border border-dashed border-foreground/15 bg-muted/20">
       <EmptyHeader>
         <EmptyTitle>Your dictionary is empty</EmptyTitle>
         <EmptyDescription>Add hotwords or replacements.</EmptyDescription>
