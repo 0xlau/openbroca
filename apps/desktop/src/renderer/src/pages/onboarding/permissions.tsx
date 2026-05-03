@@ -227,13 +227,13 @@ export const PermissionOnboarding: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid w-full gap-4 md:grid-cols-2">
+        <div className="flex w-full flex-col gap-4">
           {errorMessage ? (
-            <p className="md:col-span-2 text-sm text-destructive">{errorMessage}</p>
+            <p className="text-sm text-destructive">{errorMessage}</p>
           ) : null}
 
           {isLoading ? (
-            <p className="md:col-span-2 text-sm text-muted-foreground">Loading permissions...</p>
+            <p className="text-sm text-muted-foreground">Loading permissions...</p>
           ) : shouldShowCards ? (
             <>
               <PermissionCard
