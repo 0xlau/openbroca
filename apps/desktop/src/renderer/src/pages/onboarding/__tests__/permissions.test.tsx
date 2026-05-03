@@ -72,6 +72,28 @@ function createSnapshot(overrides: Partial<PermissionGateSnapshot> = {}): Permis
   }
 }
 
+function installMediaDevicesMock(behavior: 'success' | 'denied' | 'unavailable' = 'success') {
+  if (behavior === 'unavailable') {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: undefined
+    })
+    return { getUserMedia: vi.fn(), stop: vi.fn() }
+  }
+
+  const stop = vi.fn()
+  const getUserMedia =
+    behavior === 'success'
+      ? vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] })
+      : vi.fn().mockRejectedValue(new Error('NotAllowedError'))
+
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia }
+  })
+  return { getUserMedia, stop }
+}
+
 async function renderPage(
   options: {
     snapshot?: PermissionGateSnapshot
@@ -144,6 +166,10 @@ describe('PermissionOnboarding', () => {
   beforeEach(() => {
     vi.resetModules()
     cleanup()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: undefined
+    })
   })
 
   test('renders the permission cards with layout copy and a continue action', async () => {
@@ -171,8 +197,9 @@ describe('PermissionOnboarding', () => {
     expect(screen.queryByRole('button', { name: 'Quit for now' })).toBeNull()
   })
 
-  test('requests microphone access from the microphone card', async () => {
-    const { requestMicrophone } = await renderPage()
+  test('probes the microphone via getUserMedia and refreshes when status was missing', async () => {
+    const media = installMediaDevicesMock('success')
+    const { requestMicrophone, refresh } = await renderPage()
 
     const microphoneCard = (await screen.findAllByTestId('permission-card')).find((card) =>
       within(card).queryByText('Microphone Access')
@@ -184,8 +211,91 @@ describe('PermissionOnboarding', () => {
     )
 
     await waitFor(() => {
+      expect(media.getUserMedia).toHaveBeenCalledWith({ audio: true })
+    })
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+    expect(media.stop).toHaveBeenCalledTimes(1)
+    expect(requestMicrophone).not.toHaveBeenCalled()
+  })
+
+  test('refreshes (no settings fallback) when status was missing and the probe is denied', async () => {
+    const media = installMediaDevicesMock('denied')
+    const { requestMicrophone, refresh } = await renderPage()
+
+    const microphoneCard = (await screen.findAllByTestId('permission-card')).find((card) =>
+      within(card).queryByText('Microphone Access')
+    )
+
+    fireEvent.click(
+      within(microphoneCard as HTMLElement).getByRole('button', { name: 'Grant Access' })
+    )
+
+    await waitFor(() => {
+      expect(media.getUserMedia).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+    expect(requestMicrophone).not.toHaveBeenCalled()
+  })
+
+  test('falls back to opening System Settings when status is needs-manual-step and the probe fails', async () => {
+    const media = installMediaDevicesMock('denied')
+    const { requestMicrophone, refresh } = await renderPage({
+      snapshot: createSnapshot({
+        permissions: [
+          createPermission({ key: 'microphone', status: 'needs-manual-step' }),
+          createPermission({ key: 'desktopControl', status: 'needs-manual-step' })
+        ]
+      })
+    })
+
+    const microphoneCard = (await screen.findAllByTestId('permission-card')).find((card) =>
+      within(card).queryByText('Microphone Access')
+    )
+
+    fireEvent.click(
+      within(microphoneCard as HTMLElement).getByRole('button', { name: 'Grant Access' })
+    )
+
+    await waitFor(() => {
+      expect(media.getUserMedia).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
       expect(requestMicrophone).toHaveBeenCalledTimes(1)
     })
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  test('refreshes when status is needs-manual-step but the probe unexpectedly succeeds', async () => {
+    const media = installMediaDevicesMock('success')
+    const { requestMicrophone, refresh } = await renderPage({
+      snapshot: createSnapshot({
+        permissions: [
+          createPermission({ key: 'microphone', status: 'needs-manual-step' }),
+          createPermission({ key: 'desktopControl', status: 'needs-manual-step' })
+        ]
+      })
+    })
+
+    const microphoneCard = (await screen.findAllByTestId('permission-card')).find((card) =>
+      within(card).queryByText('Microphone Access')
+    )
+
+    fireEvent.click(
+      within(microphoneCard as HTMLElement).getByRole('button', { name: 'Grant Access' })
+    )
+
+    await waitFor(() => {
+      expect(media.getUserMedia).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+    expect(media.stop).toHaveBeenCalledTimes(1)
+    expect(requestMicrophone).not.toHaveBeenCalled()
   })
 
   test('opens system settings from the accessibility card', async () => {

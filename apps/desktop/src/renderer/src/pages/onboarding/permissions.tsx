@@ -70,6 +70,26 @@ function getPermission(
   )
 }
 
+// Touch the actual audio device so macOS registers Openbroca in the TCC
+// database. systemPreferences.askForMediaAccess only does this on the very
+// first call (status === 'not-determined'); once denied — or when the binary
+// changed (dev → prod) — the app can be missing from System Settings entirely,
+// leaving the user with no toggle to flip. getUserMedia goes through
+// Chromium's media stack and re-registers reliably.
+async function probeMicrophoneAccess(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return false
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    stream.getTracks().forEach((track) => track.stop())
+    return true
+  } catch {
+    return false
+  }
+}
+
 function PermissionCard({
   permission,
   isPending,
@@ -178,10 +198,22 @@ export const PermissionOnboarding: React.FC = () => {
     setErrorMessage(null)
 
     try {
-      const nextSnapshot =
-        permission.key === 'microphone'
-          ? await window.api.permissions.requestMicrophone()
-          : await window.api.permissions.openDesktopControlSettings()
+      let nextSnapshot: PermissionGateSnapshot
+      if (permission.key === 'microphone') {
+        const wasNotDetermined = permission.status === 'missing'
+        const probed = await probeMicrophoneAccess()
+
+        // After probing: if the OS just showed its prompt (was not-determined) or
+        // the probe succeeded, refresh and let the user see the result. Only fall
+        // through to opening System Settings when the user already denied earlier
+        // and the probe couldn't recover.
+        nextSnapshot =
+          probed || wasNotDetermined
+            ? await window.api.permissions.refresh()
+            : await window.api.permissions.requestMicrophone()
+      } else {
+        nextSnapshot = await window.api.permissions.openDesktopControlSettings()
+      }
 
       setSnapshot(nextSnapshot)
     } catch (error) {
