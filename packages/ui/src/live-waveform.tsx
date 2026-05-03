@@ -119,14 +119,22 @@ export const LiveWaveform = ({
     const container = containerRef.current
     if (!canvas || !container) return
 
-    const resizeObserver = new ResizeObserver(() => {
-      const rect = container.getBoundingClientRect()
+    // Use entry.contentRect (transform-independent) instead of
+    // getBoundingClientRect (which inflates under ancestor CSS transforms,
+    // e.g. framer-motion's FLIP layout animations).
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+
+      const { width, height } = entry.contentRect
+      if (width <= 0 || height <= 0) return
+
       const dpr = window.devicePixelRatio || 1
 
-      canvas.width = rect.width * dpr
-      canvas.height = rect.height * dpr
-      canvas.style.width = `${rect.width}px`
-      canvas.style.height = `${rect.height}px`
+      canvas.width = width * dpr
+      canvas.height = height * dpr
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
 
       const ctx = canvas.getContext('2d')
       if (ctx) {
@@ -134,7 +142,7 @@ export const LiveWaveform = ({
       }
 
       gradientCacheRef.current = null
-      lastWidthRef.current = rect.width
+      lastWidthRef.current = width
       needsRedrawRef.current = true
     })
 
@@ -153,7 +161,7 @@ export const LiveWaveform = ({
 
         const processingData = []
         const barCount = getFittingBarCount(
-          containerRef.current?.getBoundingClientRect().width || 200,
+          containerRef.current?.clientWidth || 200,
           barWidth,
           barGap
         )
@@ -347,8 +355,10 @@ export const LiveWaveform = ({
     let rafId: number
 
     const animate = (currentTime: number) => {
-      // Render waveform
-      const rect = canvas.getBoundingClientRect()
+      // Use clientWidth/clientHeight so drawing dimensions match the canvas
+      // layout box, ignoring any ancestor CSS transforms (e.g. framer-motion
+      // layout animations) that getBoundingClientRect would include.
+      const rect = { width: canvas.clientWidth, height: canvas.clientHeight }
 
       // Update audio data if active
       if (active && currentTime - lastUpdateRef.current > updateRate) {
