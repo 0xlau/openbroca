@@ -4,6 +4,10 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "bundle:mac": "turbo run bundle:mac",
+    "bundle:win": "turbo run bundle:win",
+    "bundle:linux": "turbo run bundle:linux",
+    "bundle:unpack": "turbo run bundle:unpack",
     "lint": "turbo run lint",
     "format": "turbo run format",
     "typecheck": "turbo run typecheck",

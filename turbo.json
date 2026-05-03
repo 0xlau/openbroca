@@ -8,6 +8,18 @@
     "build": {
       "outputs": ["out/**", "dist/**"]
     },
+    "bundle:mac": {
+      "outputs": ["out/**", "dist/**"]
+    },
+    "bundle:win": {
+      "outputs": ["out/**", "dist/**"]
+    },
+    "bundle:linux": {
+      "outputs": ["out/**", "dist/**"]
+    },
+    "bundle:unpack": {
+      "outputs": ["out/**", "dist/**"]
+    },
     "typecheck": {},
     "test": {},
     "lint": {},
