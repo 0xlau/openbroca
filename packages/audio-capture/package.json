@@ -6,11 +6,12 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
+  "peerDependencies": {
     "audify": "^1.10.1"
   },
   "devDependencies": {
     "@openbroca/typescript-config": "workspace:*",
+    "audify": "^1.10.1",
     "typescript": "^5.9.3"
   },
   "scripts": {
