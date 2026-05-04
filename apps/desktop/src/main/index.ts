@@ -19,8 +19,11 @@ import { TrayManager } from './tray-manager'
 import {
   requestDesktopControlPermission,
   requestMicrophonePermission,
-  resolvePermissionGateSnapshot
-} from './permission-gate/service'
+  resolveOnboardingGateSnapshot
+} from './onboarding-gate/service'
+import { OnboardingWatcher } from './onboarding-gate/watcher'
+import type { OnboardingGateSnapshot } from './onboarding-gate/types'
+import { normalizeOnboardingState } from '../shared/onboarding'
 import {
   bindFloatingSessionController,
   type FloatingSessionController
@@ -34,14 +37,8 @@ import {
   createNormalizedCleanupPromptContextGetters,
   PostRecordingPipeline
 } from './post-recording-pipeline'
-import {
-  createHistoryAudioProtocolHandler,
-  HISTORY_AUDIO_PROTOCOL
-} from './history-audio-protocol'
-import {
-  resolveActiveASRSelection,
-  resolveActiveLLMSelection
-} from './providers/runtime'
+import { createHistoryAudioProtocolHandler, HISTORY_AUDIO_PROTOCOL } from './history-audio-protocol'
+import { resolveActiveASRSelection, resolveActiveLLMSelection } from './providers/runtime'
 import { createFinalTextDeliveryService } from './final-text-delivery/service'
 import { createMacPasteText } from './final-text-delivery/platform/macos'
 import { createWindowsPasteText } from './final-text-delivery/platform/windows'
@@ -50,7 +47,6 @@ import { AppIdentityService } from './app-identity/service'
 import { FocusedInputAppService } from './focused-input/service'
 import { resolveWindowsFocusedInputApp } from './focused-input/platform/windows'
 import { OAuthService } from './auth/oauth-service'
-import { openaiCodexOAuth } from './auth/openai-codex-oauth'
 import { secureStorage } from './auth/secure-storage'
 import { normalizeInstructionsSettings } from '../shared/instructions'
 import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
@@ -149,13 +145,17 @@ async function resolveMacBundleIconDataUrl(filePath?: string): Promise<string | 
 
     try {
       await new Promise<void>((resolve, reject) => {
-        nodeExecFile('/usr/bin/sips', ['-s', 'format', 'png', iconPath, '--out', outputPath], (error) => {
-          if (error) {
-            reject(error)
-            return
+        nodeExecFile(
+          '/usr/bin/sips',
+          ['-s', 'format', 'png', iconPath, '--out', outputPath],
+          (error) => {
+            if (error) {
+              reject(error)
+              return
+            }
+            resolve()
           }
-          resolve()
-        })
+        )
       })
 
       const png = await readFile(outputPath)
@@ -175,9 +175,7 @@ const captureSource = new RtAudioCaptureSource()
 const oauthService = new OAuthService({
   store,
   secureStorage,
-  providers: {
-    'openai-codex': openaiCodexOAuth
-  }
+  providers: {}
 })
 const historyRepository = new HistoryRepository(store)
 const recordingStorage = new RecordingStorage()
@@ -190,10 +188,10 @@ const discoveryClient =
       })
     : process.platform === 'win32'
       ? createDiscoveryClient({
-        platform: 'windows',
-        listDetectedApps: listWindowsApps,
-        getDetectedFrontmostApp: getWindowsFrontmostApp
-      })
+          platform: 'windows',
+          listDetectedApps: listWindowsApps,
+          getDetectedFrontmostApp: getWindowsFrontmostApp
+        })
       : {
           listApps: async () => [],
           getFrontmostApp: async () => null
@@ -221,7 +219,8 @@ const cleanupPromptContextGetters = createNormalizedCleanupPromptContextGetters(
 const focusedInputAppService = new FocusedInputAppService({
   resolveFocusedInputApp:
     process.platform === 'win32' ? () => resolveWindowsFocusedInputApp() : undefined,
-  hydrateApp: process.platform === 'win32' ? (app) => appIdentityService.hydrateApp(app) : undefined,
+  hydrateApp:
+    process.platform === 'win32' ? (app) => appIdentityService.hydrateApp(app) : undefined,
   getFrontmostApp: () => appIdentityService.getFrontmostApp()
 })
 const autoEnterService = createAutoEnterService()
@@ -231,10 +230,10 @@ const pasteText =
     ? createMacPasteText()
     : process.platform === 'win32'
       ? createWindowsPasteText()
-    : async () => ({
-        ok: false as const,
-        reason: 'not-available' as const
-      })
+      : async () => ({
+          ok: false as const,
+          reason: 'not-available' as const
+        })
 const finalTextDeliveryService = createFinalTextDeliveryService({
   clipboard: {
     readText: () => clipboard.readText(),
@@ -299,14 +298,30 @@ function broadcastListeningSessionState(): void {
   }
 }
 
-function ensurePermissionOnboardingWindow(): void {
-  const existingWindow = windowManager.getPermissionOnboarding()
-  if (existingWindow && !existingWindow.isDestroyed()) {
+function ensureOnboardingWindow(snapshot: OnboardingGateSnapshot): void {
+  if (snapshot.mode === 'none') return
+
+  const existing = windowManager.getOnboarding()
+  if (existing && !existing.isDestroyed()) {
     return
   }
 
-  const onboardingWindow = windowManager.createPermissionOnboarding()
+  const onboardingWindow = windowManager.createOnboarding(snapshot.mode)
+
+  const watcher = new OnboardingWatcher({
+    resolve: () =>
+      resolveOnboardingGateSnapshot(() => normalizeOnboardingState(store.get('onboarding'))),
+    pushSnapshot: (next) => {
+      if (!onboardingWindow.isDestroyed()) {
+        onboardingWindow.webContents.send('onboarding:state-changed', next)
+      }
+    },
+    onMaybeAdvance: refreshOnboardingGateAndMaybeAdvance
+  })
+  watcher.start(onboardingWindow)
+
   onboardingWindow.on('closed', () => {
+    watcher.stop()
     if (!windowManager.getMain()) {
       app.quit()
     }
@@ -333,19 +348,21 @@ function ensureCaptureEntryPointsReady(): void {
   })
 }
 
-async function refreshPermissionGateAndMaybeAdvance() {
-  const snapshot = await resolvePermissionGateSnapshot()
+async function refreshOnboardingGateAndMaybeAdvance(): Promise<OnboardingGateSnapshot> {
+  const snapshot = await resolveOnboardingGateSnapshot(() =>
+    normalizeOnboardingState(store.get('onboarding'))
+  )
   if (snapshot.canEnterMainWindow) {
     ensureCaptureEntryPointsReady()
     if (!windowManager.getMain()) {
       windowManager.createMain()
       trayManager?.notifyMainWindowChanged()
     }
-    windowManager.closePermissionOnboarding()
+    windowManager.closeOnboarding()
     return snapshot
   }
 
-  ensurePermissionOnboardingWindow()
+  ensureOnboardingWindow(snapshot)
   return snapshot
 }
 
@@ -385,23 +402,29 @@ app.whenReady().then(async () => {
     win?.isMaximized() ? win.unmaximize() : win?.maximize()
   })
   ipcMain.handle('window:close', () => windowManager.getMain()?.close())
-  ipcMain.handle('permissions:get-snapshot', () => resolvePermissionGateSnapshot())
+  ipcMain.handle('permissions:get-snapshot', () =>
+    resolveOnboardingGateSnapshot(() => normalizeOnboardingState(store.get('onboarding')))
+  )
   ipcMain.handle('permissions:request-microphone', async () => {
     await requestMicrophonePermission()
-    return refreshPermissionGateAndMaybeAdvance()
+    return refreshOnboardingGateAndMaybeAdvance()
   })
   ipcMain.handle('permissions:open-desktop-control-settings', async () => {
     requestDesktopControlPermission()
-    return refreshPermissionGateAndMaybeAdvance()
+    return refreshOnboardingGateAndMaybeAdvance()
   })
-  ipcMain.handle('permissions:refresh', () => refreshPermissionGateAndMaybeAdvance())
+  ipcMain.handle('permissions:refresh', () => refreshOnboardingGateAndMaybeAdvance())
   ipcMain.handle('permissions:quit-app', () => app.quit())
   ipcMain.handle('listening-session:get-state', () => getListeningSessionBridgeState())
   ipcMain.handle('listening-session:cancel-capture', () => listeningSession.cancelCapture())
   ipcMain.handle('listening-session:cancel-processing', () => listeningSession.cancelProcessing())
-  ipcMain.handle('listening-session:finish-capture', () => floatingSessionController?.finishCapture())
+  ipcMain.handle('listening-session:finish-capture', () =>
+    floatingSessionController?.finishCapture()
+  )
   ipcMain.handle('notify-window:get-state', () => notifyWindows.getState())
-  ipcMain.handle('provider-auth:connect', (_event, providerId: string) => oauthService.start(providerId))
+  ipcMain.handle('provider-auth:connect', (_event, providerId: string) =>
+    oauthService.start(providerId)
+  )
   ipcMain.handle('provider-auth:disconnect', (_event, providerId: string) =>
     oauthService.disconnect(providerId)
   )
@@ -415,16 +438,20 @@ app.whenReady().then(async () => {
     captureSource,
     store,
     onShowMainRequested: async () => {
-      await refreshPermissionGateAndMaybeAdvance()
+      await refreshOnboardingGateAndMaybeAdvance()
     }
   })
   trayManager.start()
 
-  await refreshPermissionGateAndMaybeAdvance()
+  await refreshOnboardingGateAndMaybeAdvance()
 
   store.onDidChange('shortcuts', (rawValue) => {
     const nextSettings = normalizeShortcutSettings(rawValue, process.platform)
     floatingSessionController?.updateShortcuts(nextSettings)
+  })
+
+  store.onDidChange('onboarding', () => {
+    void refreshOnboardingGateAndMaybeAdvance()
   })
 
   app.on('activate', async () => {
@@ -434,8 +461,8 @@ app.whenReady().then(async () => {
       mainWindow.focus()
       return
     }
-    if (!windowManager.getPermissionOnboarding()) {
-      await refreshPermissionGateAndMaybeAdvance()
+    if (!windowManager.getOnboarding()) {
+      await refreshOnboardingGateAndMaybeAdvance()
     }
   })
 })

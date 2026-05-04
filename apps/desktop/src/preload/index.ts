@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { PermissionGateSnapshot } from '../main/permission-gate/types'
+import type { OnboardingGateSnapshot } from '../main/onboarding-gate/types'
 import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
 import type { NotifyWindowBridgeState } from '../shared/notify-window-state'
 import type { ProviderAuthState } from '../shared/provider-auth'
@@ -20,21 +20,31 @@ const api = {
   },
   permissions: {
     getSnapshot: () =>
-      ipcRenderer.invoke('permissions:get-snapshot') as Promise<PermissionGateSnapshot>,
+      ipcRenderer.invoke('permissions:get-snapshot') as Promise<OnboardingGateSnapshot>,
     requestMicrophone: () =>
-      ipcRenderer.invoke('permissions:request-microphone') as Promise<PermissionGateSnapshot>,
+      ipcRenderer.invoke('permissions:request-microphone') as Promise<OnboardingGateSnapshot>,
     openDesktopControlSettings: () =>
-      ipcRenderer.invoke('permissions:open-desktop-control-settings') as Promise<PermissionGateSnapshot>,
-    refresh: () => ipcRenderer.invoke('permissions:refresh') as Promise<PermissionGateSnapshot>,
-    quitApp: () => ipcRenderer.invoke('permissions:quit-app') as Promise<void>
+      ipcRenderer.invoke(
+        'permissions:open-desktop-control-settings'
+      ) as Promise<OnboardingGateSnapshot>,
+    refresh: () => ipcRenderer.invoke('permissions:refresh') as Promise<OnboardingGateSnapshot>,
+    quitApp: () => ipcRenderer.invoke('permissions:quit-app') as Promise<void>,
+    onStateChange: (callback: (snapshot: OnboardingGateSnapshot) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, snapshot: OnboardingGateSnapshot) =>
+        callback(snapshot)
+
+      ipcRenderer.on('onboarding:state-changed', handler)
+
+      return () => {
+        ipcRenderer.removeListener('onboarding:state-changed', handler)
+      }
+    }
   },
   listeningSession: {
-    cancelCapture: () =>
-      ipcRenderer.invoke('listening-session:cancel-capture') as Promise<void>,
+    cancelCapture: () => ipcRenderer.invoke('listening-session:cancel-capture') as Promise<void>,
     cancelProcessing: () =>
       ipcRenderer.invoke('listening-session:cancel-processing') as Promise<void>,
-    finishCapture: () =>
-      ipcRenderer.invoke('listening-session:finish-capture') as Promise<void>,
+    finishCapture: () => ipcRenderer.invoke('listening-session:finish-capture') as Promise<void>,
     getState: () =>
       ipcRenderer.invoke('listening-session:get-state') as Promise<ListeningSessionBridgeState>,
     onStateChange: (callback: (state: ListeningSessionBridgeState) => void) => {

@@ -14,7 +14,8 @@ const allowedStoreKeys = [
   'providers',
   'settings',
   'microphone',
-  'shortcuts'
+  'shortcuts',
+  'onboarding'
 ] as const
 
 type AllowedStoreKey = (typeof allowedStoreKeys)[number]

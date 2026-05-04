@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { z } from 'zod'
 import type { ProviderSetupStatus } from '@openbroca/providers'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
-import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import { ASRProviderRegistry } from '@openbroca/providers/asr'
 import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
@@ -66,20 +65,6 @@ class MemoryStore {
   set(key: string, value: unknown): void {
     this.state[key] = value
   }
-}
-
-function createAccessToken(accountId = 'acct_123'): string {
-  return [
-    'header',
-    Buffer.from(
-      JSON.stringify({
-        'https://api.openai.com/auth': {
-          chatgpt_account_id: accountId
-        }
-      })
-    ).toString('base64url'),
-    'signature'
-  ].join('.')
 }
 
 describe('providersRouter', () => {
@@ -155,63 +140,6 @@ describe('providersRouter', () => {
         })
       ]
     })
-  })
-
-  test('listModels resolves openai-codex from oauth state in main', async () => {
-    const secureStorage = {
-      setSecret: vi.fn(async () => undefined),
-      getSecret: vi.fn(async () => JSON.stringify({ accessToken: createAccessToken('acct_codex') })),
-      deleteSecret: vi.fn(async () => undefined)
-    } satisfies SecureStorage
-    const store = new MemoryStore()
-    store.set('providers', {
-      'openai-codex': {
-        enabled: true,
-        connectionType: 'oauth',
-        account: {
-          accountId: 'acct_codex'
-        },
-        auth: {
-          status: 'connected',
-          lastConnectedAt: '2026-03-30T00:00:00.000Z'
-        }
-      }
-    })
-
-    const oauthService = new OAuthService({
-      secureStorage,
-      store,
-      providers: {
-        'openai-codex': {
-          authorize: vi.fn(),
-          dispose: vi.fn()
-        }
-      }
-    })
-    const llmRegistry = new LLMProviderRegistry()
-    llmRegistry.register(openaiCodexDescriptor)
-
-    const caller = providersRouter.createCaller({
-      store,
-      llmRegistry,
-      oauthService
-    } as unknown as Context)
-
-    // The router resolves the provider (now a remote proxy) and forwards
-    // listModels to the utility process. We assert the oauth-derived config
-    // reaches the host; the actual model list is owned by the in-child provider
-    // and covered by the openai-codex provider's own tests.
-    providerHostStub.createInstance.mockClear()
-    providerHostStub.invoke.mockResolvedValueOnce([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }])
-
-    const models = await caller.listModels({ providerId: 'openai-codex' })
-
-    expect(providerHostStub.createInstance).toHaveBeenCalledWith(
-      'llm',
-      'openai-codex',
-      expect.objectContaining({ accountId: 'acct_codex' })
-    )
-    expect(models).toEqual([{ id: 'gpt-5.2-codex', name: 'gpt-5.2-codex' }])
   })
 
   test('getSetupStatus returns provider-owned readiness for connected providers', async () => {

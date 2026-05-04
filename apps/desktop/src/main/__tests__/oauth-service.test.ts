@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { OAuthService } from '../auth/oauth-service'
-import type { OAuthSession } from '../auth/openai-codex-oauth'
+import type { OAuthSession } from '../auth/oauth-types'
 import type { SecureStorage } from '../auth/secure-storage'
 
 class MemoryStore {

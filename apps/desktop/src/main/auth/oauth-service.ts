@@ -1,5 +1,5 @@
 import { ConfigurationError } from '@openbroca/providers'
-import type { OAuthAuthorizer, OAuthTokens } from './openai-codex-oauth'
+import type { OAuthAuthorizer, OAuthTokens } from './oauth-types'
 import type { SecureStorage } from './secure-storage'
 import {
   createConnectedProviderMetadata,

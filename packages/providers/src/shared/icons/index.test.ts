@@ -6,9 +6,6 @@ describe('providerIcons', () => {
     expect(providerIcons.openai).toBe(
       'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/openai.svg'
     )
-    expect(providerIcons['openai-codex']).toBe(
-      'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/codex.svg'
-    )
     expect(providerIcons.openrouter).toBe(
       'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/openrouter.svg'
     )

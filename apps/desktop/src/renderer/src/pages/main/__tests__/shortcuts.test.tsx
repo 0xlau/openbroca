@@ -26,7 +26,8 @@ function getTestRendererPlatform(): string | undefined {
   return globalThis.process?.platform
 }
 
-const EFFECTIVE_DEFAULT_SHORTCUT_SETTINGS = resolveDefaultShortcutSettings(getTestRendererPlatform())
+const EFFECTIVE_DEFAULT_SHORTCUT_SETTINGS =
+  resolveDefaultShortcutSettings(getTestRendererPlatform())
 
 let shortcutsStoreMock: ReturnType<typeof createShortcutsStore>
 
@@ -140,7 +141,9 @@ describe('Shortcuts', () => {
     })
 
     expect(screen.getByText('Hold cannot use the same shortcut as Quick.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Save changes' }).getAttribute('disabled')).not.toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Save changes' }).getAttribute('disabled')
+    ).not.toBeNull()
   })
 
   test('resets editor values back to defaults without persisting immediately', async () => {
@@ -432,6 +435,19 @@ describe('Shortcuts', () => {
     vi.doMock('@renderer/pages/main/main-root', () => ({ MainRoot: () => null }))
     vi.doMock('@renderer/pages/float/float-listening', () => ({ FloatListening: () => null }))
     vi.doMock('@renderer/pages/notify/notify-window', () => ({ NotifyWindow: () => null }))
+    vi.doMock('@renderer/pages/onboarding/shell', () => ({ OnboardingShell: () => null }))
+    vi.doMock('@renderer/pages/onboarding/steps/permissions-step', () => ({
+      PermissionsStep: () => null,
+      usePermissionsStepReady: () => false
+    }))
+    vi.doMock('@renderer/pages/onboarding/steps/providers-step', () => ({
+      ProvidersStep: () => null,
+      useProvidersStepReady: () => false
+    }))
+    vi.doMock('@renderer/pages/onboarding/steps/shortcuts-step', () => ({
+      ShortcutsStep: () => null,
+      useShortcutsStepReady: () => false
+    }))
 
     await import('@renderer/router/index')
 

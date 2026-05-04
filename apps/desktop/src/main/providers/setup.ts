@@ -1,7 +1,6 @@
 import type { ASRProviderRegistry } from '@openbroca/providers/asr'
 import type { LLMProviderRegistry } from '@openbroca/providers/llm'
 import { openaiDescriptor } from '@openbroca/providers/llm/openai'
-import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
 import { createSherpaOnnxDescriptor } from '@openbroca/providers/asr/sherpa-onnx'
@@ -18,7 +17,6 @@ export interface ProviderSetupOptions {
 
 export function registerAllLLM(registry: LLMProviderRegistry): void {
   registry.register(openaiDescriptor)
-  registry.register(openaiCodexDescriptor)
   registry.register(openrouterDescriptor)
 }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ListeningSessionBridgeState } from '../../shared/listening-session-state'
-import type { PermissionGateSnapshot } from '../../main/permission-gate/types'
+import type { OnboardingGateSnapshot } from '../../main/onboarding-gate/types'
 
 const invoke = vi.fn()
 const on = vi.fn()
@@ -30,11 +30,12 @@ function getExposedApi() {
       disconnect: (providerId: string) => Promise<void>
     }
     permissions: {
-      getSnapshot: () => Promise<PermissionGateSnapshot>
-      requestMicrophone: () => Promise<PermissionGateSnapshot>
-      openDesktopControlSettings: () => Promise<PermissionGateSnapshot>
-      refresh: () => Promise<PermissionGateSnapshot>
+      getSnapshot: () => Promise<OnboardingGateSnapshot>
+      requestMicrophone: () => Promise<OnboardingGateSnapshot>
+      openDesktopControlSettings: () => Promise<OnboardingGateSnapshot>
+      refresh: () => Promise<OnboardingGateSnapshot>
       quitApp: () => Promise<void>
+      onStateChange: (callback: (snapshot: OnboardingGateSnapshot) => void) => () => void
     }
     listeningSession: {
       cancelCapture: () => Promise<void>
@@ -113,10 +114,12 @@ describe('preload listeningSession bridge', () => {
   })
 
   test('fetches the permission onboarding snapshot', async () => {
-    const snapshot: PermissionGateSnapshot = {
+    const snapshot: OnboardingGateSnapshot = {
       platform: 'darwin',
-      shouldGate: true,
+      mode: 'first-run',
       canEnterMainWindow: false,
+      permissionsOk: false,
+      hasCompletedOnboarding: false,
       permissions: [
         {
           key: 'microphone',
@@ -145,10 +148,12 @@ describe('preload listeningSession bridge', () => {
   })
 
   test('requests microphone access through the permissions bridge', async () => {
-    const snapshot: PermissionGateSnapshot = {
+    const snapshot: OnboardingGateSnapshot = {
       platform: 'darwin',
-      shouldGate: true,
+      mode: 'first-run',
       canEnterMainWindow: false,
+      permissionsOk: false,
+      hasCompletedOnboarding: false,
       permissions: [
         {
           key: 'microphone',
@@ -177,10 +182,12 @@ describe('preload listeningSession bridge', () => {
   })
 
   test('opens desktop control settings through the permissions bridge', async () => {
-    const snapshot: PermissionGateSnapshot = {
+    const snapshot: OnboardingGateSnapshot = {
       platform: 'darwin',
-      shouldGate: false,
+      mode: 'none',
       canEnterMainWindow: true,
+      permissionsOk: true,
+      hasCompletedOnboarding: true,
       permissions: [
         {
           key: 'microphone',
@@ -209,10 +216,12 @@ describe('preload listeningSession bridge', () => {
   })
 
   test('refreshes the permission gate through the permissions bridge', async () => {
-    const snapshot: PermissionGateSnapshot = {
+    const snapshot: OnboardingGateSnapshot = {
       platform: 'darwin',
-      shouldGate: false,
+      mode: 'none',
       canEnterMainWindow: true,
+      permissionsOk: true,
+      hasCompletedOnboarding: true,
       permissions: [
         {
           key: 'microphone',
@@ -318,14 +327,51 @@ describe('preload listeningSession bridge', () => {
     )?.[1]
 
     unsubscribe()
-    handler?.(
-      {},
-      {
-        state: { status: 'idle' },
-        targetApp: null
-      } satisfies ListeningSessionBridgeState
-    )
+    handler?.({}, {
+      state: { status: 'idle' },
+      targetApp: null
+    } satisfies ListeningSessionBridgeState)
 
     expect(removeListener).toHaveBeenCalledWith('listening-session:state-changed', handler)
+  })
+})
+
+describe('preload permissions bridge', () => {
+  afterEach(() => {
+    vi.resetModules()
+    invoke.mockReset()
+    on.mockReset()
+    removeListener.mockReset()
+    exposeInMainWorld.mockReset()
+  })
+
+  test('onStateChange registers ipcRenderer listener and returns unsubscribe', async () => {
+    enableContextIsolation()
+    await import('../index')
+    const api = getExposedApi()
+
+    const callback = vi.fn()
+    const unsubscribe = api.permissions.onStateChange(callback)
+
+    expect(on).toHaveBeenCalledTimes(1)
+    expect(on.mock.calls[0]?.[0]).toBe('onboarding:state-changed')
+
+    const handler = on.mock.calls[0]?.[1] as (
+      event: unknown,
+      snapshot: OnboardingGateSnapshot
+    ) => void
+    const fakeSnapshot: OnboardingGateSnapshot = {
+      platform: 'darwin',
+      mode: 'first-run',
+      canEnterMainWindow: false,
+      permissionsOk: false,
+      hasCompletedOnboarding: false,
+      permissions: []
+    }
+    handler({}, fakeSnapshot)
+    expect(callback).toHaveBeenCalledWith(fakeSnapshot)
+
+    unsubscribe()
+    expect(removeListener).toHaveBeenCalledWith('onboarding:state-changed', handler)
   })
 })

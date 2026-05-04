@@ -8,7 +8,6 @@
     "./llm": "./src/llm/index.ts",
     "./asr": "./src/asr/index.ts",
     "./llm/openai": "./src/llm/providers/openai/index.ts",
-    "./llm/openai-codex": "./src/llm/providers/openai-codex/index.ts",
     "./llm/openrouter": "./src/llm/providers/openrouter/index.ts",
     "./asr/deepgram": "./src/asr/providers/deepgram/index.ts",
     "./asr/sherpa-onnx": "./src/asr/providers/sherpa-onnx/index.ts",

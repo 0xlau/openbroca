@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { PermissionGateSnapshot } from '../main/permission-gate/types'
+import type { OnboardingGateSnapshot } from '../main/onboarding-gate/types'
 import type { ProviderAuthState } from '../shared/provider-auth'
 import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
 import type { NotifyWindowBridgeState } from '../shared/notify-window-state'
@@ -18,11 +18,12 @@ declare global {
         disconnect: (providerId: string) => Promise<ProviderAuthState>
       }
       permissions: {
-        getSnapshot: () => Promise<PermissionGateSnapshot>
-        requestMicrophone: () => Promise<PermissionGateSnapshot>
-        openDesktopControlSettings: () => Promise<PermissionGateSnapshot>
-        refresh: () => Promise<PermissionGateSnapshot>
+        getSnapshot: () => Promise<OnboardingGateSnapshot>
+        requestMicrophone: () => Promise<OnboardingGateSnapshot>
+        openDesktopControlSettings: () => Promise<OnboardingGateSnapshot>
+        refresh: () => Promise<OnboardingGateSnapshot>
         quitApp: () => Promise<void>
+        onStateChange: (callback: (snapshot: OnboardingGateSnapshot) => void) => () => void
       }
       listeningSession: {
         cancelCapture: () => Promise<void>

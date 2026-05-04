@@ -2,11 +2,11 @@
 
 import React from 'react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type {
-  PermissionGateSnapshot,
+  OnboardingGateSnapshot,
   PermissionItem
-} from '../../../../../main/permission-gate/types'
+} from '../../../../../../main/onboarding-gate/types'
 
 vi.mock('@openbroca/ui', () => ({
   Button: ({ children, onClick, ...props }: React.ComponentProps<'button'>) => (
@@ -59,11 +59,13 @@ function createPermission(
   }
 }
 
-function createSnapshot(overrides: Partial<PermissionGateSnapshot> = {}): PermissionGateSnapshot {
+function createSnapshot(overrides: Partial<OnboardingGateSnapshot> = {}): OnboardingGateSnapshot {
   return {
     platform: 'darwin',
-    shouldGate: true,
+    mode: 'first-run',
     canEnterMainWindow: false,
+    permissionsOk: false,
+    hasCompletedOnboarding: false,
     permissions: [
       createPermission({ key: 'microphone', status: 'missing' }),
       createPermission({ key: 'desktopControl', status: 'needs-manual-step' })
@@ -96,10 +98,10 @@ function installMediaDevicesMock(behavior: 'success' | 'denied' | 'unavailable' 
 
 async function renderPage(
   options: {
-    snapshot?: PermissionGateSnapshot
-    microphoneSnapshot?: PermissionGateSnapshot
-    accessibilitySnapshot?: PermissionGateSnapshot
-    refreshSnapshot?: PermissionGateSnapshot
+    snapshot?: OnboardingGateSnapshot
+    microphoneSnapshot?: OnboardingGateSnapshot
+    accessibilitySnapshot?: OnboardingGateSnapshot
+    refreshSnapshot?: OnboardingGateSnapshot
     snapshotError?: Error
     microphoneError?: Error
     accessibilityError?: Error
@@ -136,6 +138,14 @@ async function renderPage(
     : vi.fn().mockResolvedValue(options.refreshSnapshot ?? options.snapshot ?? createSnapshot())
   const quitApp = vi.fn().mockResolvedValue(undefined)
 
+  let onStateChangeCallback: ((snapshot: OnboardingGateSnapshot) => void) | null = null
+  const onStateChange = vi.fn((callback: (snapshot: OnboardingGateSnapshot) => void) => {
+    onStateChangeCallback = callback
+    return () => {
+      onStateChangeCallback = null
+    }
+  })
+
   window.api = {
     ...window.api,
     permissions: {
@@ -143,12 +153,13 @@ async function renderPage(
       requestMicrophone,
       openDesktopControlSettings,
       refresh,
-      quitApp
+      quitApp,
+      onStateChange
     }
   }
 
-  const { PermissionOnboarding } = await import('../permissions')
-  render(<PermissionOnboarding />)
+  const { PermissionsStep } = await import('../permissions-step')
+  render(<PermissionsStep variant="recovery" />)
 
   await waitFor(() => {
     expect(getSnapshot).toHaveBeenCalledTimes(1)
@@ -158,11 +169,14 @@ async function renderPage(
     getSnapshot,
     requestMicrophone,
     openDesktopControlSettings,
-    refresh
+    refresh,
+    triggerStateChange: (snapshot: OnboardingGateSnapshot) => {
+      onStateChangeCallback?.(snapshot)
+    }
   }
 }
 
-describe('PermissionOnboarding', () => {
+describe('PermissionsStep', () => {
   beforeEach(() => {
     vi.resetModules()
     cleanup()
@@ -352,7 +366,9 @@ describe('PermissionOnboarding', () => {
     const { refresh } = await renderPage({
       snapshot: createSnapshot({
         canEnterMainWindow: true,
-        shouldGate: false,
+        permissionsOk: true,
+        hasCompletedOnboarding: true,
+        mode: 'none',
         permissions: [
           createPermission({ key: 'microphone', status: 'granted' }),
           createPermission({ key: 'desktopControl', status: 'granted' })
@@ -360,7 +376,9 @@ describe('PermissionOnboarding', () => {
       }),
       refreshSnapshot: createSnapshot({
         canEnterMainWindow: true,
-        shouldGate: false,
+        permissionsOk: true,
+        hasCompletedOnboarding: true,
+        mode: 'none',
         permissions: [
           createPermission({ key: 'microphone', status: 'granted' }),
           createPermission({ key: 'desktopControl', status: 'granted' })
@@ -388,31 +406,55 @@ describe('PermissionOnboarding', () => {
     expect(screen.queryByTestId('permission-card')).toBeNull()
   })
 
-  test('includes /onboarding/permissions in router configuration', async () => {
-    const createHashRouter = vi.fn((routes) => ({ routes }))
+  test('updates the UI when the main process pushes a permission state change', async () => {
+    const { triggerStateChange } = await renderPage()
 
-    vi.doMock('react-router', () => ({
-      createHashRouter
-    }))
-    vi.doMock('@renderer/pages/main/about-me', () => ({ AboutMe: () => null }))
-    vi.doMock('@renderer/pages/main/dashboard', () => ({ Dashboard: () => null }))
-    vi.doMock('@renderer/pages/main/dictionary', () => ({ Dictionary: () => null }))
-    vi.doMock('@renderer/pages/main/brocas', () => ({ Brocas: () => null }))
-    vi.doMock('@renderer/pages/main/instructions', () => ({ Instructions: () => null }))
-    vi.doMock('@renderer/pages/main/providers', () => ({ Providers: () => null }))
-    vi.doMock('@renderer/pages/main/prompts', () => ({ Prompts: () => null }))
-    vi.doMock('@renderer/pages/main/shortcuts', () => ({ Shortcuts: () => null }))
-    vi.doMock('@renderer/pages/main/main-root', () => ({ MainRoot: () => null }))
-    vi.doMock('@renderer/pages/float/float-listening', () => ({ FloatListening: () => null }))
-    vi.doMock('@renderer/pages/notify/notify-window', () => ({ NotifyWindow: () => null }))
-    vi.doMock('@renderer/pages/onboarding/permissions', () => ({
-      PermissionOnboarding: () => null
-    }))
+    expect(
+      (screen.getByRole('button', { name: 'Continue to OpenBroca' }) as HTMLButtonElement).disabled
+    ).toBe(true)
 
-    await import('@renderer/router/index')
+    const granted = createSnapshot({
+      canEnterMainWindow: false,
+      permissions: [
+        createPermission({ key: 'microphone', status: 'granted' }),
+        createPermission({ key: 'desktopControl', status: 'needs-manual-step' })
+      ]
+    })
 
-    const routes = createHashRouter.mock.calls[0]?.[0] as Array<{ path?: string }>
+    await act(async () => {
+      triggerStateChange(granted)
+    })
 
-    expect(routes.some((route) => route.path === '/onboarding/permissions')).toBe(true)
+    const microphoneCard = (await screen.findAllByTestId('permission-card')).find((card) =>
+      within(card).queryByText('Microphone Access')
+    )
+    expect(microphoneCard).toBeTruthy()
+    const grantButton = within(microphoneCard as HTMLElement).getByRole(
+      'button'
+    ) as HTMLButtonElement
+    expect(grantButton.textContent).toContain('Granted')
+    expect(grantButton.disabled).toBe(true)
+  })
+
+  test('wizard variant does not render the standalone Continue button', async () => {
+    const getSnapshot = vi.fn().mockResolvedValue(createSnapshot())
+    const onStateChange = vi.fn(() => () => {})
+
+    window.api = {
+      ...window.api,
+      permissions: {
+        getSnapshot,
+        requestMicrophone: vi.fn(),
+        openDesktopControlSettings: vi.fn(),
+        refresh: vi.fn(),
+        quitApp: vi.fn(),
+        onStateChange
+      }
+    }
+
+    const { PermissionsStep } = await import('../permissions-step')
+    render(<PermissionsStep variant="wizard" />)
+    await waitFor(() => expect(getSnapshot).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: 'Continue to OpenBroca' })).toBeNull()
   })
 })

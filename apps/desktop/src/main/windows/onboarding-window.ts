@@ -1,8 +1,14 @@
 import { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
+import type { OnboardingMode } from '../onboarding-gate/types'
 
-export function createPermissionOnboardingWindow(): BrowserWindow {
+function hashFor(mode: OnboardingMode): string {
+  if (mode === 'permission-recovery') return '/onboarding/permissions?variant=recovery'
+  return '/onboarding/permissions'
+}
+
+export function createOnboardingWindow(mode: OnboardingMode): BrowserWindow {
   const window = new BrowserWindow({
     width: 800,
     height: 800,
@@ -26,12 +32,11 @@ export function createPermissionOnboardingWindow(): BrowserWindow {
     window.show()
   })
 
+  const hash = hashFor(mode)
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    window.loadURL(process.env['ELECTRON_RENDERER_URL'] + '#/onboarding/permissions')
+    window.loadURL(process.env['ELECTRON_RENDERER_URL'] + '#' + hash)
   } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'), {
-      hash: '/onboarding/permissions'
-    })
+    window.loadFile(join(__dirname, '../renderer/index.html'), { hash })
   }
 
   return window

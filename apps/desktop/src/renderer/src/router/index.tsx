@@ -9,7 +9,10 @@ import { Shortcuts } from '@renderer/pages/main/shortcuts'
 import { MainRoot } from '@renderer/pages/main/main-root'
 import { FloatListening } from '@renderer/pages/float/float-listening'
 import { NotifyWindow } from '@renderer/pages/notify/notify-window'
-import { PermissionOnboarding } from '@renderer/pages/onboarding/permissions'
+import { OnboardingShell } from '@renderer/pages/onboarding/shell'
+import { PermissionsStep } from '@renderer/pages/onboarding/steps/permissions-step'
+import { ProvidersStep } from '@renderer/pages/onboarding/steps/providers-step'
+import { ShortcutsStep } from '@renderer/pages/onboarding/steps/shortcuts-step'
 import { createHashRouter } from 'react-router'
 
 export const router = createHashRouter([
@@ -36,7 +39,12 @@ export const router = createHashRouter([
     element: <NotifyWindow />
   },
   {
-    path: '/onboarding/permissions',
-    element: <PermissionOnboarding />
+    path: '/onboarding',
+    element: <OnboardingShell />,
+    children: [
+      { path: 'permissions', element: <PermissionsStep /> },
+      { path: 'providers', element: <ProvidersStep /> },
+      { path: 'shortcuts', element: <ShortcutsStep /> }
+    ]
   }
 ])

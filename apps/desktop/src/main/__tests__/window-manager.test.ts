@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
 vi.mock('../windows', () => ({
   createMainWindow: vi.fn(),
   createFloatingWindow: vi.fn(),
-  createPermissionOnboardingWindow: vi.fn(),
+  createOnboardingWindow: vi.fn(),
   getFloatingWindowPosition: vi.fn()
 }))
 
@@ -68,16 +68,17 @@ describe('WindowManager', () => {
     } as never)
     vi.mocked(windows.getFloatingWindowPosition).mockReturnValue({ x: 44, y: 55 })
 
-    const createFloatingWindow = vi.fn(() =>
-      ({
-        isDestroyed: () => false,
-        isVisible: () => false,
-        getBounds: () => ({ x: 0, y: 0, width: 180, height: 38 }),
-        setBounds,
-        setPosition,
-        showInactive,
-        hide
-      }) as never
+    const createFloatingWindow = vi.fn(
+      () =>
+        ({
+          isDestroyed: () => false,
+          isVisible: () => false,
+          getBounds: () => ({ x: 0, y: 0, width: 180, height: 38 }),
+          setBounds,
+          setPosition,
+          showInactive,
+          hide
+        }) as never
     )
     const manager = new WindowManager({ createFloatingWindow })
 
@@ -103,16 +104,17 @@ describe('WindowManager', () => {
     } as never)
     vi.mocked(windows.getFloatingWindowPosition).mockReturnValue({ x: 700, y: 710 })
 
-    const createFloatingWindow = vi.fn(() =>
-      ({
-        isDestroyed: () => false,
-        isVisible: () => true,
-        getBounds: () => ({ x: 500, y: 600, width: 180, height: 60 }),
-        setBounds,
-        setPosition,
-        showInactive,
-        hide
-      }) as never
+    const createFloatingWindow = vi.fn(
+      () =>
+        ({
+          isDestroyed: () => false,
+          isVisible: () => true,
+          getBounds: () => ({ x: 500, y: 600, width: 180, height: 60 }),
+          setBounds,
+          setPosition,
+          showInactive,
+          hide
+        }) as never
     )
     const manager = new WindowManager({ createFloatingWindow })
 
@@ -136,16 +138,16 @@ describe('WindowManager', () => {
       close: vi.fn()
     }
 
-    vi.mocked(windows.createPermissionOnboardingWindow).mockReturnValue(onboardingWindow as never)
+    vi.mocked(windows.createOnboardingWindow).mockReturnValue(onboardingWindow as never)
 
     const manager = new WindowManager()
 
-    expect(manager.createPermissionOnboarding()).toBe(onboardingWindow)
-    expect(manager.getPermissionOnboarding()).toBe(onboardingWindow)
+    expect(manager.createOnboarding('first-run')).toBe(onboardingWindow)
+    expect(manager.getOnboarding()).toBe(onboardingWindow)
 
     closedHandler?.()
 
-    expect(manager.getPermissionOnboarding()).toBeNull()
+    expect(manager.getOnboarding()).toBeNull()
   })
 
   test('keeps tracking the onboarding window until the closed lifecycle completes', async () => {
@@ -162,17 +164,17 @@ describe('WindowManager', () => {
       close: vi.fn()
     }
 
-    vi.mocked(windows.createPermissionOnboardingWindow).mockReturnValue(onboardingWindow as never)
+    vi.mocked(windows.createOnboardingWindow).mockReturnValue(onboardingWindow as never)
 
     const manager = new WindowManager()
-    manager.createPermissionOnboarding()
-    manager.closePermissionOnboarding()
+    manager.createOnboarding('first-run')
+    manager.closeOnboarding()
 
     expect(onboardingWindow.close).toHaveBeenCalledTimes(1)
-    expect(manager.getPermissionOnboarding()).toBe(onboardingWindow)
+    expect(manager.getOnboarding()).toBe(onboardingWindow)
 
     closedHandler?.()
 
-    expect(manager.getPermissionOnboarding()).toBeNull()
+    expect(manager.getOnboarding()).toBeNull()
   })
 })

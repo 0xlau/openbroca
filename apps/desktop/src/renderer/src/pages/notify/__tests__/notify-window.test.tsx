@@ -16,7 +16,8 @@ describe('NotifyWindow', () => {
     requestMicrophone: vi.fn(),
     openDesktopControlSettings: vi.fn(),
     refresh: vi.fn(),
-    quitApp: vi.fn()
+    quitApp: vi.fn(),
+    onStateChange: vi.fn(() => vi.fn())
   }
 
   beforeEach(() => {

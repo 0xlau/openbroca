@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import type { PermissionGateSnapshot, PermissionItem } from '../permission-gate/types'
+import type { OnboardingGateSnapshot, PermissionItem } from '../onboarding-gate/types'
 
-function createSnapshot(
-  overrides: Partial<PermissionGateSnapshot> = {}
-): PermissionGateSnapshot {
+function createSnapshot(overrides: Partial<OnboardingGateSnapshot> = {}): OnboardingGateSnapshot {
   return {
     platform: 'darwin',
-    shouldGate: true,
+    mode: 'first-run',
     canEnterMainWindow: false,
+    permissionsOk: false,
+    hasCompletedOnboarding: false,
     permissions: [
       {
         key: 'microphone',
@@ -68,14 +68,19 @@ function createTrackedWindow() {
     on: vi.fn((event: string, handler: () => void) => {
       listeners.set(event, handler)
     }),
+    removeListener: vi.fn(),
     close: vi.fn(() => {
       listeners.get('closed')?.()
     }),
     isDestroyed: () => false,
+    isFocused: () => false,
     minimize: vi.fn(),
     maximize: vi.fn(),
     unmaximize: vi.fn(),
-    isMaximized: () => false
+    isMaximized: () => false,
+    webContents: {
+      send: vi.fn()
+    }
   }
 }
 
@@ -85,23 +90,29 @@ async function flushMainReadyWork(): Promise<void> {
 }
 
 async function setupMainIndexHarness(options: {
-  snapshots: PermissionGateSnapshot[]
+  snapshots: OnboardingGateSnapshot[]
   microphonePermission?: PermissionItem
   desktopControlPermission?: PermissionItem
 }) {
   const snapshotQueue = [...options.snapshots]
   const registeredHandlers = new Map<string, (...args: unknown[]) => unknown>()
   const appHandlers = new Map<string, (...args: unknown[]) => unknown>()
+  const onDidChangeHandlers = new Map<string, (rawValue: unknown) => void>()
   const mainWindow = createTrackedWindow()
   let onboardingWindow: ReturnType<typeof createTrackedWindow> | null = null
 
-  const resolvePermissionGateSnapshot = vi.fn(
+  const resolveOnboardingGateSnapshot = vi.fn(
     async () => snapshotQueue.shift() ?? options.snapshots.at(-1) ?? createSnapshot()
   )
-  const requestMicrophonePermission = vi
-    .fn(async () => options.microphonePermission ?? createPermission({ key: 'microphone', status: 'granted' }))
-  const requestDesktopControlPermission = vi
-    .fn(() => options.desktopControlPermission ?? createPermission({ key: 'desktopControl', status: 'needs-manual-step' }))
+  const requestMicrophonePermission = vi.fn(
+    async () =>
+      options.microphonePermission ?? createPermission({ key: 'microphone', status: 'granted' })
+  )
+  const requestDesktopControlPermission = vi.fn(
+    () =>
+      options.desktopControlPermission ??
+      createPermission({ key: 'desktopControl', status: 'needs-manual-step' })
+  )
   const setAppUserModelId = vi.fn()
   const watchWindowShortcuts = vi.fn()
   const registerTrpcIpcHandler = vi.fn()
@@ -113,19 +124,19 @@ async function setupMainIndexHarness(options: {
     dispose: vi.fn()
   }))
   const createMain = vi.fn(() => mainWindow)
-  const createPermissionOnboarding = vi.fn(() => {
+  const createOnboarding = vi.fn(() => {
     onboardingWindow = createTrackedWindow()
     return onboardingWindow
   })
-  const closePermissionOnboarding = vi.fn(() => {
+  const closeOnboarding = vi.fn(() => {
     onboardingWindow?.close()
   })
   const windowManager = {
     createMain,
     getMain: vi.fn(() => (createMain.mock.calls.length > 0 ? mainWindow : null)),
-    createPermissionOnboarding,
-    getPermissionOnboarding: vi.fn(() => onboardingWindow),
-    closePermissionOnboarding,
+    createOnboarding,
+    getOnboarding: vi.fn(() => onboardingWindow),
+    closeOnboarding,
     destroyAll: vi.fn()
   }
   const app = {
@@ -212,7 +223,12 @@ async function setupMainIndexHarness(options: {
   vi.doMock('../store', () => ({
     store: {
       get: vi.fn(() => ({})),
-      onDidChange: vi.fn()
+      onDidChange: vi.fn((key: string, handler: (rawValue: unknown) => void) => {
+        onDidChangeHandlers.set(key, handler)
+        return () => {
+          onDidChangeHandlers.delete(key)
+        }
+      })
     }
   }))
   vi.doMock('../providers', () => ({
@@ -356,10 +372,12 @@ async function setupMainIndexHarness(options: {
       getState: vi.fn(() => ({ visible: false }))
     }))
   }))
-  vi.doMock('../permission-gate/service', () => ({
-    resolvePermissionGateSnapshot,
+  vi.doMock('../onboarding-gate/service', () => ({
     requestMicrophonePermission,
     requestDesktopControlPermission
+  }))
+  vi.doMock('../onboarding-gate/service', () => ({
+    resolveOnboardingGateSnapshot
   }))
 
   await import('../index')
@@ -369,57 +387,25 @@ async function setupMainIndexHarness(options: {
     app,
     appHandlers,
     registeredHandlers,
+    onDidChangeHandlers,
     bindFloatingSessionController,
     createMain,
-    createPermissionOnboarding,
-    closePermissionOnboarding,
+    createOnboarding,
+    closeOnboarding,
     onboardingWindow: () => onboardingWindow,
     setOnboardingMissing() {
       onboardingWindow = null
     },
-    resolvePermissionGateSnapshot,
+    resolveOnboardingGateSnapshot,
     requestMicrophonePermission,
     requestDesktopControlPermission
   }
 }
 
-describe('permission gate service', () => {
+describe('onboarding-gate request helpers', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
-  })
-
-  test('returns startup-ready on Windows without macOS permission checks', async () => {
-    vi.stubGlobal('process', { ...process, platform: 'win32' })
-    const systemPreferences = mockElectronSystemPreferences()
-    const { resolvePermissionGateSnapshot } = await import('../permission-gate/service')
-
-    await expect(resolvePermissionGateSnapshot()).resolves.toEqual({
-      platform: 'win32',
-      shouldGate: false,
-      canEnterMainWindow: true,
-      permissions: []
-    })
-    expect(systemPreferences.getMediaAccessStatus).not.toHaveBeenCalled()
-    expect(systemPreferences.askForMediaAccess).not.toHaveBeenCalled()
-    expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled()
-  })
-
-  test('maps missing microphone and desktop control on macOS into a blocked snapshot', async () => {
-    vi.stubGlobal('process', { ...process, platform: 'darwin' })
-    const systemPreferences = mockElectronSystemPreferences()
-    systemPreferences.getMediaAccessStatus.mockReturnValue('not-determined')
-    systemPreferences.isTrustedAccessibilityClient.mockReturnValue(false)
-
-    const { resolvePermissionGateSnapshot } = await import('../permission-gate/service')
-    const snapshot = await resolvePermissionGateSnapshot()
-
-    expect(snapshot.shouldGate).toBe(true)
-    expect(snapshot.canEnterMainWindow).toBe(false)
-    expect(snapshot.permissions).toEqual([
-      expect.objectContaining({ key: 'microphone', status: 'missing' }),
-      expect.objectContaining({ key: 'desktopControl', status: 'needs-manual-step' })
-    ])
   })
 
   test('shows the system prompt when microphone access has never been asked', async () => {
@@ -430,7 +416,7 @@ describe('permission gate service', () => {
       .mockReturnValueOnce('not-determined')
       .mockReturnValue('granted')
 
-    const { requestMicrophonePermission } = await import('../permission-gate/service')
+    const { requestMicrophonePermission } = await import('../onboarding-gate/service')
 
     await expect(requestMicrophonePermission()).resolves.toEqual(
       expect.objectContaining({ key: 'microphone', status: 'granted' })
@@ -444,7 +430,7 @@ describe('permission gate service', () => {
     const systemPreferences = mockElectronSystemPreferences()
     systemPreferences.getMediaAccessStatus.mockReturnValue('denied')
 
-    const { requestMicrophonePermission } = await import('../permission-gate/service')
+    const { requestMicrophonePermission } = await import('../onboarding-gate/service')
 
     await expect(requestMicrophonePermission()).resolves.toEqual(
       expect.objectContaining({ key: 'microphone', status: 'needs-manual-step' })
@@ -458,9 +444,11 @@ describe('permission gate service', () => {
   test('requests desktop control access and re-maps the refreshed state', async () => {
     vi.stubGlobal('process', { ...process, platform: 'darwin' })
     const systemPreferences = mockElectronSystemPreferences()
-    systemPreferences.isTrustedAccessibilityClient.mockReturnValueOnce(false).mockReturnValueOnce(true)
+    systemPreferences.isTrustedAccessibilityClient
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
 
-    const { requestDesktopControlPermission } = await import('../permission-gate/service')
+    const { requestDesktopControlPermission } = await import('../onboarding-gate/service')
 
     expect(requestDesktopControlPermission()).toEqual(
       expect.objectContaining({ key: 'desktopControl', status: 'granted' })
@@ -472,9 +460,8 @@ describe('permission gate service', () => {
   test('request helpers stay startup-ready on Windows without macOS permission checks', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
     const systemPreferences = mockElectronSystemPreferences()
-    const { requestDesktopControlPermission, requestMicrophonePermission } = await import(
-      '../permission-gate/service'
-    )
+    const { requestDesktopControlPermission, requestMicrophonePermission } =
+      await import('../onboarding-gate/service')
 
     await expect(requestMicrophonePermission()).resolves.toEqual(
       expect.objectContaining({ key: 'microphone', status: 'granted' })
@@ -488,7 +475,7 @@ describe('permission gate service', () => {
   })
 })
 
-describe('permission onboarding main-process flow', () => {
+describe('onboarding gate main-process flow', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -512,7 +499,7 @@ describe('permission onboarding main-process flow', () => {
     })
 
     expect(harness.bindFloatingSessionController).not.toHaveBeenCalled()
-    expect(harness.createPermissionOnboarding).toHaveBeenCalledTimes(1)
+    expect(harness.createOnboarding).toHaveBeenCalledTimes(1)
     expect(harness.createMain).not.toHaveBeenCalled()
     expect(harness.onboardingWindow()?.on).toHaveBeenCalledWith('closed', expect.any(Function))
   })
@@ -521,8 +508,10 @@ describe('permission onboarding main-process flow', () => {
     const harness = await setupMainIndexHarness({
       snapshots: [
         createSnapshot({
-          shouldGate: false,
+          mode: 'none',
           canEnterMainWindow: true,
+          permissionsOk: true,
+          hasCompletedOnboarding: true,
           permissions: [
             createPermission({ key: 'microphone', status: 'granted' }),
             createPermission({ key: 'desktopControl', status: 'granted' })
@@ -533,13 +522,15 @@ describe('permission onboarding main-process flow', () => {
 
     expect(harness.bindFloatingSessionController).toHaveBeenCalledTimes(1)
     expect(harness.createMain).toHaveBeenCalledTimes(1)
-    expect(harness.createPermissionOnboarding).not.toHaveBeenCalled()
+    expect(harness.createOnboarding).not.toHaveBeenCalled()
   })
 
   test('refresh advances into the main window before closing onboarding when everything is granted', async () => {
     const grantedSnapshot = createSnapshot({
-      shouldGate: false,
+      mode: 'none',
       canEnterMainWindow: true,
+      permissionsOk: true,
+      hasCompletedOnboarding: true,
       permissions: [
         createPermission({ key: 'microphone', status: 'granted' }),
         createPermission({ key: 'desktopControl', status: 'granted' })
@@ -554,7 +545,7 @@ describe('permission onboarding main-process flow', () => {
 
     expect(harness.bindFloatingSessionController).toHaveBeenCalledTimes(1)
     expect(harness.createMain).toHaveBeenCalledTimes(1)
-    expect(harness.closePermissionOnboarding).toHaveBeenCalledTimes(1)
+    expect(harness.closeOnboarding).toHaveBeenCalledTimes(1)
     expect(harness.app.quit).not.toHaveBeenCalled()
     expect(result).toEqual(grantedSnapshot)
   })
@@ -571,7 +562,7 @@ describe('permission onboarding main-process flow', () => {
     const result = await refreshHandler?.({})
 
     expect(harness.bindFloatingSessionController).not.toHaveBeenCalled()
-    expect(harness.createPermissionOnboarding).toHaveBeenCalledTimes(2)
+    expect(harness.createOnboarding).toHaveBeenCalledTimes(2)
     expect(harness.createMain).not.toHaveBeenCalled()
     expect(result).toEqual(blockedSnapshot)
   })
@@ -584,8 +575,10 @@ describe('permission onboarding main-process flow', () => {
       ]
     })
     const refreshedDesktopSnapshot = createSnapshot({
-      shouldGate: false,
+      mode: 'none',
       canEnterMainWindow: true,
+      permissionsOk: true,
+      hasCompletedOnboarding: true,
       permissions: [
         createPermission({ key: 'microphone', status: 'granted' }),
         createPermission({ key: 'desktopControl', status: 'granted' })
@@ -613,5 +606,31 @@ describe('permission onboarding main-process flow', () => {
     expect(harness.requestMicrophonePermission).toHaveBeenCalledTimes(1)
     expect(harness.requestDesktopControlPermission).toHaveBeenCalledTimes(1)
     expect(harness.app.quit).toHaveBeenCalledTimes(1)
+  })
+
+  test('store onDidChange("onboarding") triggers refresh and advances when ready', async () => {
+    const grantedSnapshot = createSnapshot({
+      mode: 'none',
+      canEnterMainWindow: true,
+      permissionsOk: true,
+      hasCompletedOnboarding: true,
+      permissions: [
+        createPermission({ key: 'microphone', status: 'granted' }),
+        createPermission({ key: 'desktopControl', status: 'granted' })
+      ]
+    })
+    const harness = await setupMainIndexHarness({
+      snapshots: [createSnapshot(), grantedSnapshot]
+    })
+
+    const handler = harness.onDidChangeHandlers.get('onboarding')
+    expect(handler).toBeDefined()
+
+    handler?.({ completedAt: 1700000000000 })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.createMain).toHaveBeenCalledTimes(1)
+    expect(harness.closeOnboarding).toHaveBeenCalledTimes(1)
   })
 })

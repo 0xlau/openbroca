@@ -20,11 +20,6 @@ const lobeSvgIcon = (id: string) => {
 
 export const providerIcons: Record<string, string> = {
   openai: lobeSvgIcon('OpenAI'),
-  'openai-codex': getLobeIconCDN('Codex', {
-    cdn: 'unpkg',
-    format: 'svg',
-    type: 'mono'
-  }),
   openrouter: lobeSvgIcon('OpenRouter'),
   deepgram,
   'sherpa-onnx': sherpaOnnx,

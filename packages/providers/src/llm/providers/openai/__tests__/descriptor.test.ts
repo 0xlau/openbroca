@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { openaiDescriptor } from '../index.ts'
-import { openaiCodexDescriptor } from '../../openai-codex/index.ts'
 
 describe('openaiDescriptor', () => {
   it('has correct metadata', () => {
@@ -113,13 +112,3 @@ describe('openaiDescriptor', () => {
   })
 })
 
-describe('openaiCodexDescriptor', () => {
-  it('declares a browser OAuth connection option for the Codex provider', () => {
-    expect(openaiCodexDescriptor.connectionOptions).toEqual([
-      expect.objectContaining({
-        type: 'oauth',
-        flow: 'systemBrowser'
-      })
-    ])
-  })
-})

@@ -2,9 +2,10 @@ import { BrowserWindow, screen, type Rectangle } from 'electron'
 import {
   createMainWindow,
   createFloatingWindow,
-  createPermissionOnboardingWindow,
+  createOnboardingWindow,
   getFloatingWindowPosition
 } from './windows'
+import type { OnboardingMode } from './onboarding-gate/types'
 
 type FloatingWindowSize = Pick<Rectangle, 'width' | 'height'>
 
@@ -37,19 +38,19 @@ class WindowManager {
     return this.mainWindow
   }
 
-  createPermissionOnboarding(): BrowserWindow {
-    this.onboardingWindow = createPermissionOnboardingWindow()
+  createOnboarding(mode: OnboardingMode): BrowserWindow {
+    this.onboardingWindow = createOnboardingWindow(mode)
     this.onboardingWindow.on('closed', () => {
       this.onboardingWindow = null
     })
     return this.onboardingWindow
   }
 
-  getPermissionOnboarding(): BrowserWindow | null {
+  getOnboarding(): BrowserWindow | null {
     return this.onboardingWindow
   }
 
-  closePermissionOnboarding(): void {
+  closeOnboarding(): void {
     if (this.onboardingWindow && !this.onboardingWindow.isDestroyed()) {
       this.onboardingWindow.close()
     }

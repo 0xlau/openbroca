@@ -10,9 +10,13 @@ export type PermissionItem = {
   errorMessage?: string
 }
 
-export type PermissionGateSnapshot = {
-  platform: NodeJS.Platform
-  shouldGate: boolean
+export type OnboardingMode = 'first-run' | 'permission-recovery' | 'none'
+
+export interface OnboardingGateSnapshot {
+  mode: OnboardingMode
   canEnterMainWindow: boolean
+  permissionsOk: boolean
+  hasCompletedOnboarding: boolean
   permissions: PermissionItem[]
+  platform: NodeJS.Platform
 }

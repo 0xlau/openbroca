@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { LLMProviderRegistry } from '@openbroca/providers/llm'
-import { openaiCodexDescriptor } from '@openbroca/providers/llm/openai-codex'
 import { openrouterDescriptor } from '@openbroca/providers/llm/openrouter'
 import { deepgramDescriptor } from '@openbroca/providers/asr/deepgram'
 import { OAuthService } from '../auth/oauth-service'
@@ -12,12 +11,10 @@ import {
   getActiveLLMSelection,
   getActiveLLMModel,
   getActiveLLMProviderId,
-  getLLMProviderRuntimeConfig,
   resolveActiveLLMModel,
   resolveActiveLLMProvider,
   resolveActiveASRSelection,
-  resolveActiveLLMSelection,
-  resolveLLMProvider
+  resolveActiveLLMSelection
 } from '../providers/runtime'
 
 const openrouterSdk = vi.hoisted(() => {
@@ -79,21 +76,6 @@ class MemoryStore {
   }
 }
 
-function createAccessToken(accountId = 'acct_123'): string {
-  return [
-    'header',
-    Buffer.from(
-      JSON.stringify({
-        sub: 'user_123',
-        'https://api.openai.com/auth': {
-          chatgpt_account_id: accountId
-        }
-      })
-    ).toString('base64url'),
-    'signature'
-  ].join('.')
-}
-
 describe('provider runtime resolution', () => {
   const fetchFn = vi.fn<typeof fetch>()
 
@@ -111,81 +93,6 @@ describe('provider runtime resolution', () => {
         }
       ]
     })
-  })
-
-  test('resolves openai-codex with config extracted from keytar-backed oauth state and forwards to host', async () => {
-    const accessToken = createAccessToken('acct_codex')
-    const secureStorage = {
-      setSecret: vi.fn(async () => undefined),
-      getSecret: vi.fn(async () =>
-        JSON.stringify({
-          accessToken
-        })
-      ),
-      deleteSecret: vi.fn(async () => undefined)
-    } satisfies SecureStorage
-    const store = new MemoryStore()
-    store.set('providers', {
-      providers: {
-        'openai-codex': {
-          enabled: true,
-          connectionType: 'oauth',
-          account: {
-            accountId: 'acct_codex'
-          },
-          auth: {
-            status: 'connected',
-            lastConnectedAt: '2026-03-30T00:00:00.000Z'
-          }
-        }
-      },
-      activeProviders: {
-        llm: 'openai-codex'
-      }
-    })
-
-    const oauthService = new OAuthService({
-      secureStorage,
-      store,
-      providers: {
-        'openai-codex': {
-          authorize: vi.fn(),
-          dispose: vi.fn()
-        },
-      }
-    })
-    const llmRegistry = new LLMProviderRegistry()
-    llmRegistry.register(openaiCodexDescriptor)
-
-    const config = await getLLMProviderRuntimeConfig('openai-codex', {
-      llmRegistry,
-      oauthService,
-      store
-    })
-    expect(config).toEqual({
-      accessToken,
-      accountId: 'acct_codex'
-    })
-
-    // Provider execution lives in the utility process; main-side runtime only
-    // wires the proxy. Assert the host was asked to create the right instance
-    // with the oauth-derived config and that the proxy exposes the contract.
-    providerHostStub.createInstance.mockClear()
-    const provider = await resolveLLMProvider('openai-codex', {
-      llmRegistry,
-      oauthService,
-      store
-    })
-
-    expect(providerHostStub.createInstance).toHaveBeenCalledWith(
-      'llm',
-      'openai-codex',
-      { accessToken, accountId: 'acct_codex' }
-    )
-    expect(provider.id).toBe('openai-codex')
-    expect(typeof provider.generate).toBe('function')
-    expect(typeof provider.complete).toBe('function')
-    expect(typeof provider.listModels).toBe('function')
   })
 
   test('reads active llm/asr provider IDs from structured provider settings', () => {
@@ -444,7 +351,7 @@ describe('provider runtime resolution', () => {
       }
     })
     const llmRegistry = new LLMProviderRegistry()
-    llmRegistry.register(openaiCodexDescriptor)
+    llmRegistry.register(openrouterDescriptor)
 
     await expect(
       resolveActiveLLMProvider({
