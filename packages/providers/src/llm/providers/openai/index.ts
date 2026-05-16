@@ -78,7 +78,8 @@ export const openaiDescriptor: LLMProviderDescriptor<OpenAIConfig, OpenAISetting
           label: 'Base URL',
           input: 'url',
           placeholder: 'https://api.openai.com/v1',
-          description: 'Optional. Override the API base URL for compatible endpoints.'
+          description: 'Optional. Override the API base URL for compatible endpoints.',
+          advanced: true
         },
         {
           key: 'organization',

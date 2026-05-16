@@ -54,6 +54,7 @@ type ProviderFixture = {
       label: string
       input: 'password' | 'url' | 'text'
       required?: boolean
+      advanced?: boolean
     }>
   }>
 }
@@ -598,6 +599,46 @@ describe('Providers page', () => {
     })
   })
 
+  test('hides advanced connection fields until requested', async () => {
+    llmProviders = [
+      {
+        id: 'openai-compatible',
+        displayName: 'Custom Endpoint',
+        description: 'OpenAI-compatible endpoint',
+        icon: null,
+        connectionOptions: [
+          {
+            type: 'apiKey',
+            label: 'API Key',
+            fields: [
+              { key: 'apiKey', label: 'API Key', input: 'password' },
+              { key: 'baseUrl', label: 'Base URL', input: 'url', advanced: true },
+              {
+                key: 'modelListStrategy',
+                label: 'Model List Strategy',
+                input: 'text',
+                advanced: true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+
+    await renderProviders()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+    expect(screen.getByLabelText('API Key')).toBeTruthy()
+    expect(screen.queryByLabelText('Base URL')).toBeNull()
+    expect(screen.queryByLabelText('Model List Strategy')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show advanced settings' }))
+
+    expect(screen.getByLabelText('Base URL')).toBeTruthy()
+    expect(screen.getByLabelText('Model List Strategy')).toBeTruthy()
+  })
+
   test('keeps API key providers connected when a provider also supports OAuth', async () => {
     llmProviders = [
       {
@@ -966,6 +1007,56 @@ describe('Providers page', () => {
       expect(updateSettings).toHaveBeenCalledWith({
         providerSettings: {
           openai: { model: 'gpt-4.1-nano-custom' }
+        }
+      })
+    })
+  })
+
+  test('saves a model id when the combobox input contains a model display name', async () => {
+    llmProviders = [openAIProviderFixture]
+    providerSetupStatusQueries['llm:openai'] = {
+      data: {
+        status: 'configured',
+        canActivate: false,
+        summary: 'Select a model to finish setup.',
+        blockingReasons: ['Choose a model'],
+        fieldErrors: { model: 'Choose a model' }
+      }
+    }
+    llmModelsByProvider.openai = [
+      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
+      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }
+    ]
+
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    providerStore.setState({
+      ...providerStore.getState(),
+      data: {
+        providers: {
+          openai: {
+            enabled: true,
+            connectionType: 'apiKey',
+            config: { apiKey: 'sk-openai' }
+          }
+        },
+        providerSettings: {},
+        activeProviders: {}
+      },
+      update: updateSettings
+    })
+
+    await renderProviders()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings for OpenAI' }))
+    fireEvent.change(screen.getByLabelText('Model'), {
+      target: { value: 'DeepSeek V4 Pro' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }))
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        providerSettings: {
+          openai: { model: 'deepseek-v4-pro' }
         }
       })
     })

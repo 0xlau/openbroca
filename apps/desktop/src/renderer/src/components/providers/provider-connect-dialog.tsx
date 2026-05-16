@@ -305,32 +305,58 @@ function ConnectionFields({
   values: Record<string, string>
   onChange: (fieldKey: string, value: string) => void
 }) {
+  const [showAdvanced, setShowAdvanced] = React.useState(false)
+  const primaryFields = option.fields.filter((field) => !field.advanced)
+  const advancedFields = option.fields.filter((field) => field.advanced)
+
+  React.useEffect(() => {
+    setShowAdvanced(false)
+  }, [option])
+
+  const renderField = (field: EditableProviderConnectionOption['fields'][number]) => {
+    const inputId = `provider-field-${field.key}`
+    const inputType =
+      field.input === 'password' ? 'password' : field.input === 'url' ? 'url' : 'text'
+
+    return (
+      <div key={field.key} className="space-y-2">
+        <Label htmlFor={inputId}>{field.label}</Label>
+        <Input
+          id={inputId}
+          type={inputType}
+          value={values[field.key] ?? ''}
+          placeholder={field.placeholder}
+          onChange={(event) => onChange(field.key, event.target.value)}
+        />
+        {field.description ? (
+          <TypographyMuted className="text-xs">{field.description}</TypographyMuted>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {option.description ? (
         <TypographyMuted className="text-sm">{option.description}</TypographyMuted>
       ) : null}
-      {option.fields.map((field) => {
-        const inputId = `provider-field-${field.key}`
-        const inputType =
-          field.input === 'password' ? 'password' : field.input === 'url' ? 'url' : 'text'
-
-        return (
-          <div key={field.key} className="space-y-2">
-            <Label htmlFor={inputId}>{field.label}</Label>
-            <Input
-              id={inputId}
-              type={inputType}
-              value={values[field.key] ?? ''}
-              placeholder={field.placeholder}
-              onChange={(event) => onChange(field.key, event.target.value)}
-            />
-            {field.description ? (
-              <TypographyMuted className="text-xs">{field.description}</TypographyMuted>
-            ) : null}
-          </div>
-        )
-      })}
+      {primaryFields.map(renderField)}
+      {advancedFields.length > 0 ? (
+        <section className="space-y-3">
+          <button
+            type="button"
+            className="text-xs underline"
+            onClick={() => setShowAdvanced((current) => !current)}
+          >
+            {showAdvanced ? 'Hide advanced settings' : 'Show advanced settings'}
+          </button>
+          {showAdvanced ? (
+            <div className="space-y-4 rounded-lg border border-dashed border-foreground/15 p-3">
+              {advancedFields.map(renderField)}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   )
 }

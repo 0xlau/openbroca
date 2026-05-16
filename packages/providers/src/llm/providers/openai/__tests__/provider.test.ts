@@ -135,7 +135,10 @@ describe('OpenAILLMProvider', () => {
 
     expect(openAIConstructorMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseURL: 'https://sub2api.example.com/v1'
+        baseURL: 'https://sub2api.example.com/v1',
+        defaultHeaders: {
+          'User-Agent': 'node'
+        }
       })
     )
   })

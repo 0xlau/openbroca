@@ -11,6 +11,7 @@ export interface ProviderConnectionField {
   placeholder?: string
   description?: string
   required?: boolean
+  advanced?: boolean
 }
 
 export interface ProviderApiKeyConnectionOption {

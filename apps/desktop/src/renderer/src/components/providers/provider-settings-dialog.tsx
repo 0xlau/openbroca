@@ -316,7 +316,11 @@ function isModelSelectItem(
   return item.type === 'model-select'
 }
 
-function normalizeSettingsValue(item: ProviderSettingsItemViewModel, value: SettingsValue) {
+function normalizeSettingsValue(
+  item: ProviderSettingsItemViewModel,
+  value: SettingsValue,
+  models?: Array<{ id: string; name: string }>
+) {
   if (item.type === 'toggle') {
     return typeof value === 'boolean' ? value : undefined
   }
@@ -326,6 +330,13 @@ function normalizeSettingsValue(item: ProviderSettingsItemViewModel, value: Sett
   }
 
   const trimmed = value.trim()
+  if (isModelSelectItem(item)) {
+    const matchedModel = models?.find((model) => model.id === trimmed || model.name === trimmed)
+    if (matchedModel) {
+      return matchedModel.id
+    }
+  }
+
   return trimmed ? trimmed : undefined
 }
 
@@ -341,7 +352,7 @@ function canSaveSettings(
   }
 
   return provider.settingsItems.every((item) => {
-    const value = normalizeSettingsValue(item, values[item.key] ?? '')
+    const value = normalizeSettingsValue(item, values[item.key] ?? '', models)
 
     if (isModelSelectItem(item)) {
       if (item.allowCustomValue) {
@@ -579,7 +590,7 @@ export function ProviderSettingsDialog({
 
     const nextSettings = Object.fromEntries(
       provider.settingsItems
-        .map((item) => [item.key, normalizeSettingsValue(item, values[item.key] ?? '')] as const)
+        .map((item) => [item.key, normalizeSettingsValue(item, values[item.key] ?? '', models)] as const)
         .filter((entry): entry is [string, string | boolean] => entry[1] !== undefined)
     )
 

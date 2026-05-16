@@ -9,6 +9,15 @@ describe('providerIcons', () => {
     expect(providerIcons.openrouter).toBe(
       'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/openrouter.svg'
     )
+    expect(providerIcons['openai-compatible']).toBe(
+      'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/llmapi-color.svg'
+    )
+    expect(providerIcons.deepseek).toBe(
+      'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/deepseek-color.svg'
+    )
+    expect(providerIcons.groq).toBe(
+      'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/groq.svg'
+    )
     expect(providerIcons.anthropic).toBe(
       'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/anthropic.svg'
     )
@@ -26,6 +35,9 @@ describe('providerIcons', () => {
     )
     expect(providerIcons.ollama).toBe(
       'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/ollama.svg'
+    )
+    expect(providerIcons['lm-studio']).toBe(
+      'https://unpkg.com/@lobehub/icons-static-svg@latest/icons/lmstudio.svg'
     )
   })
 
