@@ -6,6 +6,7 @@ import { audioRouter } from './routers/audio'
 import { providerAuthRouter } from './routers/provider-auth'
 import { historyRouter } from './routers/history'
 import { appIdentityRouter } from './routers/app-identity'
+import { updatesRouter } from './routers/updates'
 
 export const appTrpcRouter = router({
   app: appRouter,
@@ -14,7 +15,8 @@ export const appTrpcRouter = router({
   audio: audioRouter,
   providerAuth: providerAuthRouter,
   history: historyRouter,
-  appIdentity: appIdentityRouter
+  appIdentity: appIdentityRouter,
+  updates: updatesRouter
 })
 
 export type AppRouter = typeof appTrpcRouter

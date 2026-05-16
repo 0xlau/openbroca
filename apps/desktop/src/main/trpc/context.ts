@@ -6,6 +6,7 @@ import type { LLMProviderRegistry } from '@openbroca/providers/llm'
 import type { OAuthService } from '../auth/oauth-service'
 import type { HistoryRepository } from '../history-repository'
 import type { AppIdentityService } from '../app-identity/service'
+import type { AppUpdateService } from '../app-update-service'
 import type { StoreSchema } from '../store'
 
 export interface Context {
@@ -17,6 +18,7 @@ export interface Context {
   oauthService: OAuthService
   historyRepository: HistoryRepository
   appIdentityService: AppIdentityService
+  updateService: AppUpdateService
 }
 
 export function createContext(
@@ -27,7 +29,8 @@ export function createContext(
   captureSource: AudioCaptureSource,
   oauthService: OAuthService,
   historyRepository: HistoryRepository,
-  appIdentityService: AppIdentityService
+  appIdentityService: AppIdentityService,
+  updateService: AppUpdateService
 ): Context {
   return {
     window,
@@ -37,6 +40,7 @@ export function createContext(
     captureSource,
     oauthService,
     historyRepository,
-    appIdentityService
+    appIdentityService,
+    updateService
   }
 }

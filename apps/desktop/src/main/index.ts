@@ -52,6 +52,7 @@ import { normalizeInstructionsSettings } from '../shared/instructions'
 import type { ListeningSessionBridgeState } from '../shared/listening-session-state'
 import { normalizeShortcutSettings } from '../shared/shortcuts'
 import { createNotifyWindows } from './notify-windows'
+import { AppUpdateService } from './app-update-service'
 
 const macBundleIconCache = new Map<string, Promise<string | undefined>>()
 let floatingSessionController: FloatingSessionController | null = null
@@ -177,6 +178,7 @@ const oauthService = new OAuthService({
   secureStorage,
   providers: {}
 })
+const updateService = new AppUpdateService()
 const historyRepository = new HistoryRepository(store)
 const recordingStorage = new RecordingStorage()
 const discoveryClient =
@@ -391,7 +393,8 @@ app.whenReady().then(async () => {
       captureSource,
       oauthService,
       historyRepository,
-      appIdentityService
+      appIdentityService,
+      updateService
     )
   )
   protocol.handle(HISTORY_AUDIO_PROTOCOL, createHistoryAudioProtocolHandler(historyRepository))
@@ -437,13 +440,16 @@ app.whenReady().then(async () => {
     windowManager,
     captureSource,
     store,
+    updateService,
     onShowMainRequested: async () => {
       await refreshOnboardingGateAndMaybeAdvance()
     }
   })
   trayManager.start()
+  updateService.start()
 
   await refreshOnboardingGateAndMaybeAdvance()
+  void updateService.checkForUpdates()
 
   store.onDidChange('shortcuts', (rawValue) => {
     const nextSettings = normalizeShortcutSettings(rawValue, process.platform)

@@ -4,6 +4,7 @@ import type ElectronStore from 'electron-store'
 import type { AudioCaptureSource } from '@openbroca/audio-capture'
 import type { StoreSchema } from './store/schema'
 import type { WindowManager } from './window-manager'
+import type { AppUpdateService } from './app-update-service'
 import {
   AUDIO_DEVICES_SNAPSHOT_KEY,
   type AudioDeviceSnapshotEntry,
@@ -21,6 +22,7 @@ interface TrayManagerOptions {
   windowManager: WindowManager
   captureSource: AudioCaptureSource
   store: ElectronStore<StoreSchema>
+  updateService: AppUpdateService
   /** Called when the user picks Show but the main window isn't created yet. */
   onShowMainRequested: () => void | Promise<void>
 }
@@ -32,6 +34,7 @@ class TrayManager {
   private tray: Tray | null = null
   private unsubscribeMicChange: (() => void) | null = null
   private unsubscribeSnapshotChange: (() => void) | null = null
+  private unsubscribeUpdateChange: (() => void) | null = null
   private currentMainWindow: ReturnType<WindowManager['getMain']> = null
 
   constructor(private readonly options: TrayManagerOptions) {}
@@ -52,6 +55,10 @@ class TrayManager {
       this.rebuildMenu()
     }) as unknown as () => void
 
+    this.unsubscribeUpdateChange = this.options.updateService.subscribe(() => {
+      this.rebuildMenu()
+    })
+
     this.attachMainWindowListeners()
     this.rebuildMenu()
   }
@@ -67,6 +74,8 @@ class TrayManager {
     this.unsubscribeMicChange = null
     this.unsubscribeSnapshotChange?.()
     this.unsubscribeSnapshotChange = null
+    this.unsubscribeUpdateChange?.()
+    this.unsubscribeUpdateChange = null
     this.detachMainWindowListeners()
     if (this.tray && !this.tray.isDestroyed()) {
       this.tray.destroy()
@@ -120,17 +129,59 @@ class TrayManager {
       { label: 'Select microphone', submenu: microphoneSubmenu },
       { type: 'separator' },
       { label: `Version ${app.getVersion()}`, enabled: false },
-      {
-        label: 'Check for updates',
-        click: () => {
-          // Click handler intentionally left unwired — auto-updater not yet configured.
-        }
-      },
+      this.getUpdateMenuItem(),
       { type: 'separator' },
       { label: 'Quit OpenBroca', click: () => app.quit() }
     ]
 
     this.tray.setContextMenu(Menu.buildFromTemplate(template))
+  }
+
+  private getUpdateMenuItem(): MenuItemConstructorOptions {
+    const state = this.options.updateService.getState()
+    const version = state.latestVersion ? ` ${state.latestVersion}` : ''
+
+    if (state.status === 'checking') {
+      return { label: 'Checking for updates...', enabled: false }
+    }
+
+    if (state.status === 'available') {
+      return {
+        label: `Update to${version || ' latest version'}`,
+        click: () => {
+          void this.options.updateService.installUpdate()
+        }
+      }
+    }
+
+    if (state.status === 'downloading') {
+      const progress = state.downloadProgress != null ? ` ${state.downloadProgress}%` : ''
+      return { label: `Downloading update${progress}...`, enabled: false }
+    }
+
+    if (state.status === 'downloaded') {
+      return {
+        label: `Restart to install${version}`,
+        click: () => {
+          void this.options.updateService.installUpdate()
+        }
+      }
+    }
+
+    if (state.status === 'installing') {
+      return { label: 'Installing update...', enabled: false }
+    }
+
+    if (state.status === 'unsupported') {
+      return { label: 'Updates unavailable', enabled: false }
+    }
+
+    return {
+      label: 'Check for updates',
+      click: () => {
+        void this.options.updateService.checkForUpdates()
+      }
+    }
   }
 
   private getDeviceList(): AudioDeviceSnapshotEntry[] {
