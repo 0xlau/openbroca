@@ -1,4 +1,4 @@
-import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, nativeImage, shell, Tray, type MenuItemConstructorOptions } from 'electron'
 import { readFileSync } from 'node:fs'
 import type ElectronStore from 'electron-store'
 import type { AudioCaptureSource } from '@openbroca/audio-capture'
@@ -10,6 +10,7 @@ import {
   type AudioDeviceSnapshotEntry,
   type AudioDevicesSnapshot
 } from '../shared/audio-devices'
+import { OPENBROCA_FEEDBACK_URL } from '../shared/support-links'
 import trayIcon1xPath from '../../resources/tray-Template.png?asset'
 import trayIcon2xPath from '../../resources/tray-Template@2x.png?asset'
 
@@ -118,7 +119,9 @@ class TrayManager {
       {
         label: 'Give feedback',
         click: () => {
-          // Click handler intentionally left unwired — feedback channel TBD.
+          void shell.openExternal(OPENBROCA_FEEDBACK_URL).catch((error) => {
+            console.warn('Failed to open feedback link:', error)
+          })
         }
       },
       {

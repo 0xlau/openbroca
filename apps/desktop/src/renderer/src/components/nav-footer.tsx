@@ -15,6 +15,7 @@ import { HelpCircleIcon, Refresh01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { isVisibleUpdateState } from '../../../shared/app-update'
 import { useAppUpdate } from '@renderer/hooks/use-app-update'
+import { trpcClient } from '@renderer/trpc/client'
 
 const navItems: NavItem[] = [
   {
@@ -29,6 +30,9 @@ export function NavFooter({ ...props }: {} & React.ComponentPropsWithoutRef<type
   const showUpdate = isVisibleUpdateState(updateState)
   const updateLabel = getUpdateLabel(updateState)
   const isUpdateBusy = updateState?.status === 'downloading' || updateState?.status === 'installing'
+  const openHelp = React.useCallback(() => {
+    void trpcClient.app.openSupportLink.mutate({ target: 'help' }).catch(() => undefined)
+  }, [])
 
   return (
     <SidebarGroup {...props}>
@@ -36,7 +40,7 @@ export function NavFooter({ ...props }: {} & React.ComponentPropsWithoutRef<type
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.name}>
-              <SidebarMenuButton>
+              <SidebarMenuButton tooltip={item.name} onClick={openHelp}>
                 {item.icon}
                 <span>{item.name}</span>
               </SidebarMenuButton>
