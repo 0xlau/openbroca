@@ -242,7 +242,11 @@ async function setupMainIndexHarness(options: {
       dispose: vi.fn(async () => undefined),
       createInstance: vi.fn(async () => 'stub-instance'),
       invoke: vi.fn(async () => undefined),
-      invokeStream: vi.fn(() => (async function* () {})())
+      invokeStream: vi.fn(() =>
+        (async function* () {
+          yield* []
+        })()
+      )
     }),
     resetProviderHostSingleton: vi.fn()
   }))
@@ -266,13 +270,21 @@ async function setupMainIndexHarness(options: {
         return { status: 'idle' }
       }
 
-      subscribe() {}
+      subscribe() {
+        return
+      }
 
-      stop() {}
+      stop() {
+        return
+      }
 
-      cancelCapture() {}
+      cancelCapture() {
+        return
+      }
 
-      cancelProcessing() {}
+      cancelProcessing() {
+        return
+      }
     }
   }))
   vi.doMock('../history-repository', () => ({
@@ -291,7 +303,9 @@ async function setupMainIndexHarness(options: {
       getPromptTemplateSettings: vi.fn(() => undefined)
     })),
     PostRecordingPipeline: class {
-      process() {}
+      process() {
+        return
+      }
     }
   }))
   vi.doMock('../history-audio-protocol', () => ({
@@ -351,7 +365,9 @@ async function setupMainIndexHarness(options: {
         return { providerId: 'openai-codex', status: 'not-connected' }
       }
 
-      dispose() {}
+      dispose() {
+        return
+      }
     }
   }))
   vi.doMock('../auth/openai-codex-oauth', () => ({

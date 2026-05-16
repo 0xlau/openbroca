@@ -3,9 +3,9 @@ version = 1
 name = "openbroca"
 
 [setup]
-script = "pnpm i"
+script = "pnpm install --frozen-lockfile"
 
 [[actions]]
 name = "Run"
 icon = "tool"
-command = "pnpm run dev"
+command = "pnpm dev"

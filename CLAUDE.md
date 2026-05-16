@@ -1,173 +1,128 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code and agentic coding tools working in this repository.
 
-## Structure
+## Project Shape
 
-This is a **Turborepo monorepo** managed with pnpm workspaces.
+OpenBroca is a pnpm/Turborepo monorepo.
 
-```
+```text
 apps/
-  desktop/          ← Electron + React + TypeScript app
+  desktop/              Electron + React + TypeScript desktop app
 packages/
-  providers/        ← Provider platform: shared contracts, registries, and implementations (@openbroca/providers)
-  typescript-config ← Shared TypeScript configs (@openbroca/typescript-config)
-  eslint-config     ← Shared ESLint config (@openbroca/eslint-config)
-  tailwind-config   ← Shared Tailwind base CSS (@openbroca/tailwind-config)
-  ui/               ← Shared React component library (@openbroca/ui)
+  app-identity/         Active app/window identity helpers
+  audio-capture/        Audio capture primitives
+  providers/            ASR/LLM contracts, registries, and implementations
+  ui/                   Shared React component library
+  eslint-config/        Shared ESLint config
+  tailwind-config/      Shared Tailwind CSS base
+  typescript-config/    Shared TypeScript configs
 ```
 
 ## Commands
 
-### From repo root (via Turborepo)
+Run commands from the repository root unless a task specifically needs an app/package directory.
 
 ```bash
-pnpm dev              # Start all dev servers
-pnpm build            # Build all apps
-pnpm lint             # Lint all apps
-pnpm format           # Format all apps
-pnpm typecheck        # Typecheck all apps
+pnpm dev
+pnpm build
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm format
+pnpm check
 ```
 
-### Targeting the desktop app specifically
+Package-scoped examples:
 
 ```bash
-pnpm --filter desktop dev              # Start dev server (Electron + Vite HMR)
-pnpm --filter desktop build            # Typecheck + build all processes
-pnpm --filter desktop build:mac        # Build macOS distributable
-pnpm --filter desktop lint             # ESLint
-pnpm --filter desktop format           # Prettier
-pnpm --filter desktop typecheck        # Check both node and web TypeScript configs
-pnpm --filter desktop typecheck:node   # Main/preload process types only
-pnpm --filter desktop typecheck:web    # Renderer process types only
+pnpm --filter openbroca-desktop dev
+pnpm --filter openbroca-desktop build
+pnpm --filter openbroca-desktop typecheck
+pnpm --filter @openbroca/providers test
+pnpm --filter @openbroca/ui typecheck
 ```
 
-### From inside `apps/desktop/`
-
-All the same scripts work directly with `pnpm dev`, `pnpm build`, etc.
-
-**Adding shadcn components**: run `pnpm dlx shadcn add <component>` from inside `apps/desktop/` — the `components.json` aliases will place them correctly under `@renderer/components/ui/`.
+Add shadcn components from `apps/desktop/`:
 
 ```bash
-pnpm --filter @openbroca/ui typecheck        # Typecheck the shared UI package
-pnpm --filter @openbroca/providers typecheck # Typecheck the provider platform package
+pnpm dlx shadcn add <component>
 ```
-
-```bash
-pnpm test                                    # Run all tests (via Turborepo)
-pnpm --filter @openbroca/providers test      # Provider tests only
-```
-
-Vitest workspace config is at `vitest.workspace.ts` (root). Each testable package has its own `vitest.config.ts`. Test files live alongside source in `src/**/__tests__/*.test.ts`.
 
 ## Architecture
 
-The desktop app is an **Electron + React + TypeScript** app built with [electron-vite](https://electron-vite.org/). The three Electron processes map directly to `apps/desktop/src/` subdirectories:
+The desktop app uses Electron with three process areas:
 
-| Directory | Process | Role |
-|---|---|---|
-| `apps/desktop/src/main/` | Main | Electron entry, window creation, IPC handlers |
-| `apps/desktop/src/preload/` | Preload | Exposes `window.electron` and `window.api` to renderer via `contextBridge` |
-| `apps/desktop/src/renderer/` | Renderer | React SPA |
+| Directory                    | Process  | Role                                                                  |
+| ---------------------------- | -------- | --------------------------------------------------------------------- |
+| `apps/desktop/src/main/`     | Main     | Windows, tray, shortcuts, provider runtime, persistence, IPC handlers |
+| `apps/desktop/src/preload/`  | Preload  | Typed `contextBridge` APIs for the renderer                           |
+| `apps/desktop/src/renderer/` | Renderer | React SPA, routes, stores, UI                                         |
 
-### Renderer (`apps/desktop/src/renderer/src/`)
+Renderer-to-main communication should normally use tRPC over the custom Electron IPC link:
 
-Path alias `@renderer` resolves to `apps/desktop/src/renderer/src/`.
-
-**Routing** — `react-router` v7 with `createHashRouter` (hash router required for Electron file protocol). Routes are defined in `router/index.tsx`. The root layout (`pages/root.tsx`) wraps all pages in a `SidebarProvider` + `AppSidebar` shell.
-
-**Current pages**: Dashboard (index), Providers, Brocas, Dictionary, AboutMe.
-
-**UI layer** — shadcn/ui components (style: `radix-maia`, base color: `mauve`) live in `components/ui/`. Icons use `@hugeicons/react`. Tailwind CSS v4 is configured entirely via `src/renderer/src/styles/globals.css` — there is no `tailwind.config.js`. CSS variables drive theming (light/dark via `.dark` class, managed by `ThemeProvider`).
-
-### TypeScript config layering
-
-Shared TS configs live in `packages/typescript-config` (`@openbroca/typescript-config`):
-
-| Export | Purpose | Consumers |
-|---|---|---|
-| `base.json` | Strict baseline (no runtime assumptions) | extended by react/node configs |
-| `react.json` | `base` + DOM libs + `react-jsx` | `packages/ui`, `apps/desktop` renderer |
-| `node.json` | `base` + node types | future Node-only packages |
-
-`apps/desktop/tsconfig.web.json` extends `@openbroca/typescript-config/react`. `tsconfig.node.json` keeps `@electron-toolkit/tsconfig` (Electron-specific).
-
-### tRPC over IPC
-
-All renderer↔main communication uses **tRPC over a custom Electron IPC transport** (not HTTP). The data flow is:
-
-```
-Renderer (trpc hooks / trpcClient)
-  → ipcLink (src/renderer/src/trpc/client.ts)
-    → window.trpc (preload contextBridge)
-      → ipcMain.handle (src/main/trpc/ipc-handler.ts)
-        → tRPC router (src/main/trpc/router.ts)
+```text
+Renderer trpc hook/client
+  -> ipcLink
+  -> window.trpc from preload
+  -> ipcMain.handle
+  -> main tRPC router
 ```
 
-**Adding a new procedure:**
-1. Create a router in `src/main/trpc/routers/<name>.ts` using `publicProcedure` from `../trpc`
-2. Register it in `src/main/trpc/router.ts`
-3. The renderer gets full type inference automatically via `AppRouter`
+Add new tRPC procedures by creating a router under `apps/desktop/src/main/trpc/routers/`, registering it in `apps/desktop/src/main/trpc/router.ts`, and consuming it through renderer `trpc` hooks or `trpcClient`.
 
-**In-renderer usage:**
-- React components: `trpc.<router>.<procedure>.useQuery/useMutation()` (via `@trpc/react-query`)
-- Outside React (e.g. zustand stores): `trpcClient.<router>.<procedure>.query/mutate/subscribe()` from `src/renderer/src/trpc/client.ts`
+Use `.mutation()` for write operations. Subscriptions should use async generators on the server side.
 
-**Subscriptions** use async generators on the server side (`async function*`). The IPC handler converts them to streamed `ipcRenderer.on` messages.
+## State And Secrets
 
-**Mutation support:** The `trpc:request` IPC channel now forwards `type` (`'query'` | `'mutation'`) from the renderer. Always define write operations as `.mutation()`, not `.query()`.
+`electron-store` runs in the main process and is the source of truth for persisted app state. Renderer Zustand stores should use `createPersistedStore`.
 
-### Persistent state (electron-store + zustand)
+Provider secrets and OAuth credentials should use secure OS-backed storage. Never commit real credentials, `.env` files, certificates, local model artifacts, or generated bundles.
 
-**electron-store** (`src/main/store/`) runs in the main process and is the source of truth for persisted data. It's injected into the tRPC context and exposed via the generic `store` tRPC router (`get`, `set`, `delete`, `watch`).
+## Provider Platform
 
-**zustand** stores (`src/renderer/src/stores/`) live in the renderer. Use `createPersistedStore<T>({ key, defaults })` to create a store that auto-hydrates from electron-store on init and stays in sync via a `store.watch` subscription.
+Provider code lives in `packages/providers` and is consumed directly as TypeScript source.
 
-```ts
-// Define a domain store
-export const myStore = createPersistedStore<{ value: string }>({
-  key: 'my-domain',
-  defaults: { value: '' }
-})
+- LLM exports live under `@openbroca/providers/llm`.
+- ASR exports live under `@openbroca/providers/asr`.
+- Provider descriptors include a config schema and factory.
+- LLM middleware wraps `complete()` through `(next: CompletionFn) => CompletionFn`.
+- Local ASR providers expose model management APIs in addition to recognition.
 
-// Use in a component
-const { data, isHydrated, update } = useStore(myStore)
-await update({ value: 'new' })  // writes through to electron-store
+When adding a provider, implement the relevant contract, export a descriptor, add a package export, and register the descriptor during app bootstrap.
+
+## Frontend Notes
+
+The renderer uses React Router, Tailwind CSS v4, shared UI components, shadcn-style components, and Hugeicons/Lucide icons. Tailwind theme variables live in `apps/desktop/src/renderer/src/styles/globals.css`; there is no `tailwind.config.js`.
+
+Keep desktop app screens functional and dense enough for repeated use. Avoid landing-page-style UI inside the app.
+
+## Repository Hygiene
+
+Do not add generated output or personal tooling state:
+
+- `node_modules/`
+- `out/`
+- `dist/`
+- `.turbo/`
+- `.claude/`
+- `.agents/`
+- `.superpowers/`
+- `.worktrees/`
+- `.DS_Store`
+- `.env*`
+
+Before a public PR, run:
+
+```bash
+pnpm check
+trufflehog git file://$(pwd) --no-update
 ```
 
-The `store.watch` subscription is async-generator based and powered by `electron-store`'s `onDidChange`. It fires on any external write to the same key (other windows, main-process code).
+## Editing Expectations
 
-### IPC pattern (low-level)
-
-For cases that don't fit tRPC, raw IPC can be added to the `api` object in `apps/desktop/src/preload/index.ts` (exposed via `contextBridge`) and typed in `apps/desktop/src/preload/index.d.ts`. Main-side handlers go in `apps/desktop/src/main/index.ts` using `ipcMain`. Prefer tRPC for new APIs.
-
-### Provider architecture (`packages/providers`)
-
-All packages export **raw TypeScript source** — no build step, consumed directly by Vite.
-
-**`@openbroca/providers`** now contains the full provider platform:
-- `@openbroca/providers` — `ProviderError`, `ConfigurationError`, `TranscriptionError`, `ConfigSchema<T>`, `Disposable`, `HealthCheckable`
-- `@openbroca/providers/llm` — `LLMProvider`, `LLMProviderDescriptor<TConfig>`, `LLMProviderRegistry`, `LLMMiddleware`, `CompletionFn`, `composeMiddleware`
-- `@openbroca/providers/asr` — `ASRProvider`, `CloudASRProvider`, `StreamingASRProvider`, `LocalASRProvider`, `ASRProviderDescriptor`, `ASRProviderRegistry`
-- `@openbroca/providers/llm/openai` — OpenAI LLM descriptor and implementation
-- `@openbroca/providers/asr/deepgram` — Deepgram ASR descriptor and implementation
-- `@openbroca/providers/asr/sherpa-onnx` — Sherpa-ONNX ASR descriptor and implementation
-
-Package layout inside `packages/providers/src/` is domain-based:
-- `shared/` — shared errors, minimal schema/types, icon aggregation
-- `llm/` — LLM contracts, middleware, registry, and LLM providers
-- `asr/` — ASR contracts, registry, and ASR providers
-
-**Adding a new provider** — implement the relevant interface from `@openbroca/providers/{llm,asr}`, export a descriptor with a Zod (or any `.parse()`-compatible) config schema and a factory, add the subpath to `packages/providers/package.json` exports, and call `registry.register(descriptor)` at app bootstrap.
-
-**Middleware** (LLM only) — `registry.use(middleware)` adds a global interceptor wrapping every provider's `complete()`. Middleware signature: `(next: CompletionFn) => CompletionFn`. Use `async function*` to yield chunks and wrap with try/finally for cleanup.
-
-**`ConfigSchema<T>`** is our own minimal interface (`{ parse(data: unknown): T }`) — not coupled to Zod. Any validation library satisfies it.
-
-**`ASRProvider`** is the base contract and uses `recognize(input, options?)` returning a `RecognitionResult`. `RecognitionInput` accepts general audio payloads (`Uint8Array`, arrays, or async iterables) plus optional `mimeType`, `encoding`, `sampleRate`, and `channels`.
-
-**`StreamingASRProvider`** adds `transcribe()` for realtime output via `AsyncIterable<TranscriptionEvent>`.
-
-**`LocalASRProvider`** (sherpa-onnx) adds model management on top of `recognize()`: `listModels()`, `downloadModel(id, signal?)` returning `AsyncIterable<DownloadProgress>`, and `deleteModel(id)`.
-
-Provider instances run in the **Electron main process** (Node.js). Streaming results must cross the IPC boundary to reach the renderer — this wiring is not yet implemented.
+- Prefer existing patterns and local helper APIs.
+- Keep changes scoped to the request.
+- Add or update tests when behavior changes.
+- Do not revert unrelated user changes in the working tree.
+- Use `rg` for searching and keep generated/churn-only changes out of commits.

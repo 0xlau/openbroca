@@ -749,9 +749,9 @@ describe('ListeningSessionManager', () => {
       source: 'detected'
     }
     const getTargetApp = vi.fn().mockImplementation(async () => ({ ...currentTargetApp }))
-    let manager!: ListeningSessionManager
+    const managerRef: { current?: ListeningSessionManager } = {}
     const onRecordingComplete = vi.fn().mockImplementation(async (recording) => {
-      expect(manager.getState().targetApp).toEqual(
+      expect(managerRef.current?.getState().targetApp).toEqual(
         expect.objectContaining({
           id: 'com.cursor.app',
           bundleId: 'com.cursor.app'
@@ -764,12 +764,13 @@ describe('ListeningSessionManager', () => {
         })
       )
     })
-    manager = new ListeningSessionManager(captureSource, {
+    const manager = new ListeningSessionManager(captureSource, {
       onRecordingComplete,
       getFrontmostAppSnapshot: () => frontmostSnapshot.promise,
       getTargetApp,
       targetAppPollIntervalMs: 5
     })
+    managerRef.current = manager
 
     captureSource.pushChunk(new Uint8Array([1, 2, 3, 4]))
 

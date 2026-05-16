@@ -16,10 +16,10 @@ mac:
   category: public.app-category.productivity
   icon: build/icon.icon
   entitlementsInherit: build/entitlements.mac.plist
-  identity: 'PEIQIANG LIU (ZK7D6M3F8L)'
-  hardenedRuntime: true
+  identity: null
+  hardenedRuntime: false
   gatekeeperAssess: false
-  notarize: true
+  notarize: false
   extendInfo:
     NSMicrophoneUsageDescription: Openbroca uses your microphone to transcribe what you say.
     NSCameraUsageDescription: Openbroca uses the camera only when you opt in to a feature that requires it.

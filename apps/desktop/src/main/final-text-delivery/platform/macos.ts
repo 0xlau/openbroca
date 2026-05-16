@@ -18,7 +18,9 @@ function sendGenericPaste(execFile: ExecFile): Promise<void> {
 }
 
 export function createMacPasteText(execFile: ExecFile = nodeExecFile as ExecFile) {
-  return async (_text: string): Promise<ClipboardPasteAttemptResult> => {
+  return async (text: string): Promise<ClipboardPasteAttemptResult> => {
+    void text
+
     try {
       await sendGenericPaste(execFile)
 

@@ -1,11 +1,34 @@
-node_modules
-dist
-out
-.DS_Store
+node_modules/
+
+# Build and cache output
+dist/
+out/
+build/
+.turbo/
 .eslintcache
+*.tsbuildinfo
 *.log*
-.claude
-.agents
+
+# Local OS/editor state
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+
+# Local agent/tooling state
+.claude/
+.agents/
+.superpowers/
 skills-lock.json
-.turbo
-.worktrees
+.worktrees/

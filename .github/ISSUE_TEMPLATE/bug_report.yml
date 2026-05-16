@@ -1,0 +1,38 @@
+name: Bug report
+description: Report something that is broken or surprising.
+title: 'bug: '
+labels: ['bug']
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the issue and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: macOS 15.5, Windows 11, Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OpenBroca version or commit
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell

@@ -8,7 +8,9 @@ type ExecFile = (
 ) => void
 
 export function createWindowsPasteText(execFile: ExecFile = nodeExecFile as ExecFile) {
-  return async (_text: string): Promise<ClipboardPasteAttemptResult> => {
+  return async (text: string): Promise<ClipboardPasteAttemptResult> => {
+    void text
+
     try {
       await new Promise<void>((resolve, reject) => {
         execFile(

@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64
+            runner: macos-26
+            builder_target: --mac --arm64
+            artifact_name: openbroca-macos-arm64
+          - name: macOS x64
+            runner: macos-26-intel
+            builder_target: --mac --x64
+            artifact_name: openbroca-macos-x64
+          - name: Windows x64
+            runner: windows-latest
+            builder_target: --win --x64
+            artifact_name: openbroca-windows-x64
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop app
+        run: pnpm --filter openbroca-desktop build
+
+      - name: Package installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: pnpm --filter openbroca-desktop exec electron-builder ${{ matrix.builder_target }} --publish never
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+
+          find apps/desktop/dist -maxdepth 1 -type f \
+            \( -name '*.dmg' -o -name '*.exe' -o -name '*.blockmap' -o -name '*.yml' -o -name '*.yaml' \) \
+            -print -exec cp {} release-assets/ \;
+
+          if [[ -z "$(find release-assets -type f -print -quit)" ]]; then
+            echo "No release assets were produced."
+            find apps/desktop/dist -maxdepth 2 -print
+            exit 1
+          fi
+
+          find release-assets -maxdepth 1 -type f -print | sort
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  upload-assets:
+    name: Upload installers to GitHub Release
+    needs:
+      - release-please
+      - build
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Upload release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          find release-assets -maxdepth 1 -type f -print | sort
+          gh release upload "${RELEASE_TAG}" release-assets/* --clobber

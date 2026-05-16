@@ -163,7 +163,10 @@ export class ProviderHost {
     }
     void sendStart()
 
-    const self = this
+    const streams = this.streams
+    const cancelRequest = (): void => {
+      this.postRequest({ kind: 'cancel', reqId })
+    }
 
     return {
       [Symbol.asyncIterator]() {
@@ -175,12 +178,12 @@ export class ProviderHost {
                 return { value, done: false }
               }
               if (errorObj) {
-                self.streams.delete(reqId)
+                streams.delete(reqId)
                 opts.signal?.removeEventListener('abort', abortHandler)
                 throw errorObj
               }
               if (finished) {
-                self.streams.delete(reqId)
+                streams.delete(reqId)
                 opts.signal?.removeEventListener('abort', abortHandler)
                 return { value: undefined, done: true }
               }
@@ -193,8 +196,8 @@ export class ProviderHost {
             }
           },
           async return(): Promise<IteratorResult<unknown>> {
-            self.postRequest({ kind: 'cancel', reqId })
-            self.streams.delete(reqId)
+            cancelRequest()
+            streams.delete(reqId)
             opts.signal?.removeEventListener('abort', abortHandler)
             return { value: undefined, done: true }
           }

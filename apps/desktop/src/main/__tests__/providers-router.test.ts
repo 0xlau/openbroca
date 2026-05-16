@@ -19,7 +19,9 @@ const openrouterSdk = vi.hoisted(() => {
     models = { listForUser: modelsListForUser }
     chat = { send: chatSend }
 
-    constructor(_opts: unknown) {}
+    constructor(opts: unknown) {
+      void opts
+    }
   }
 
   return {
@@ -41,7 +43,11 @@ const providerHostStub = vi.hoisted(() => {
   >(async () => undefined)
   const invokeStream = vi.fn<
     (instanceId: string, method: string, args: unknown[]) => AsyncIterable<unknown>
-  >(() => (async function* () {})())
+  >(() =>
+    (async function* () {
+      yield* []
+    })()
+  )
   const createInstance = vi.fn<
     (kind: string, providerId: string, config: unknown) => Promise<string>
   >(async (kind, providerId) => `${kind}:${providerId}:stub-instance`)
@@ -107,7 +113,9 @@ describe('providersRouter', () => {
         isConfigured: () => true,
         listModels: async () => [],
         generate: async () => ({ content: '', finishReason: 'stop' }),
-        complete: async function* () {}
+        complete: async function* () {
+          yield* []
+        }
       })
     })
 
@@ -168,7 +176,9 @@ describe('providersRouter', () => {
         isConfigured: () => true,
         listModels: async () => [],
         generate: async () => ({ content: '', finishReason: 'stop' }),
-        complete: async function* () {}
+        complete: async function* () {
+          yield* []
+        }
       })
     })
 
@@ -382,7 +392,9 @@ describe('providersRouter', () => {
         isConfigured: () => true,
         listModels: async () => [],
         generate: async () => ({ content: '', finishReason: 'stop' }),
-        complete: async function* () {}
+        complete: async function* () {
+          yield* []
+        }
       })
     })
 
@@ -439,7 +451,9 @@ describe('providersRouter', () => {
         isConfigured: () => true,
         listModels: async () => [],
         generate: async () => ({ content: '', finishReason: 'stop' }),
-        complete: async function* () {}
+        complete: async function* () {
+          yield* []
+        }
       })
     })
 
@@ -496,7 +510,9 @@ describe('providersRouter', () => {
         isConfigured: () => true,
         listModels: async () => [],
         generate: async () => ({ content: '', finishReason: 'stop' }),
-        complete: async function* () {}
+        complete: async function* () {
+          yield* []
+        }
       })
     })
 
@@ -808,10 +824,11 @@ describe('providersRouter', () => {
       try {
         await expect(
           (async () => {
-            for await (const _ of await caller.localModels.install({
+            for await (const event of await caller.localModels.install({
               providerId: 'fake-local',
               modelId: 'zipformer-en-small'
             })) {
+              void event
               // pull events
             }
           })()
@@ -819,7 +836,8 @@ describe('providersRouter', () => {
       } finally {
         release()
         // drain the first iterator so cleanup runs and inFlightInstalls clears.
-        for await (const _ of { [Symbol.asyncIterator]: () => iter1 }) {
+        for await (const event of { [Symbol.asyncIterator]: () => iter1 }) {
+          void event
           // pump remaining
         }
       }

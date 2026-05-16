@@ -25,7 +25,9 @@ const openrouterSdk = vi.hoisted(() => {
     models = { listForUser: modelsListForUser }
     chat = { send: chatSend }
 
-    constructor(_opts: unknown) {}
+    constructor(opts: unknown) {
+      void opts
+    }
   }
 
   return {
@@ -47,7 +49,11 @@ const providerHostStub = vi.hoisted(() => {
   >(async () => undefined)
   const invokeStream = vi.fn<
     (instanceId: string, method: string, args: unknown[]) => AsyncIterable<unknown>
-  >(() => (async function* () {})())
+  >(() =>
+    (async function* () {
+      yield* []
+    })()
+  )
   const createInstance = vi.fn<
     (kind: string, providerId: string, config: unknown) => Promise<string>
   >(async (kind, providerId) => `${kind}:${providerId}:stub-instance`)
@@ -176,7 +182,9 @@ describe('provider runtime resolution', () => {
         recognize: async () => ({ text: '', segments: [] }),
         listCatalogModels: async () => [],
         scanInstalledModels: async () => [],
-        installModel: async function* () {},
+        installModel: async function* () {
+          yield* []
+        },
         removeInstalledModel: async () => undefined,
         resolveModelRuntime: async () => ({ modelId: 'x', modelPath: '/x' })
       })
