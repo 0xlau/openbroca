@@ -5,7 +5,9 @@
   <img src="docs/assets/logo.svg" alt="OpenBroca logo" width="260" />
 
   <p align="center">
-    An open-source desktop voice assistant for turning speech into useful text, actions, and workflows across your computer.
+    An open-source voice interface for the AI era.
+    <br />
+    It turns speech into text, intent into action, and your voice into a system-wide input layer.
     <br />
     <a href="docs/ARCHITECTURE.md"><strong>Explore the docs »</strong></a>
     <br />
@@ -33,6 +35,9 @@
 ## Table Of Contents
 
 1. [About The Project](#about-the-project)
+   - [Why OpenBroca](#why-openbroca)
+   - [What OpenBroca Does](#what-openbroca-does)
+   - [The Idea](#the-idea)
    - [Built With](#built-with)
    - [Status](#status)
 2. [Getting Started](#getting-started)
@@ -51,13 +56,29 @@
 
 ## About The Project
 
-OpenBroca is a desktop-first voice assistant built for people who want spoken thoughts to become clean, useful output without being locked into one speech or language model provider.
+OpenBroca is an open-source voice interface for the AI era.
 
-It started from a personal itch: tools like Typeless show how delightful desktop dictation can be, but I kept running into places where the behavior I wanted was not customizable. OpenBroca is my attempt to solve that problem for myself first, in the open, with the hope that the same flexibility can help other people shape voice input around their own workflows too.
+Computers should hear you before they read your mind. OpenBroca is built around that simple belief: voice should be a first-class input layer for computers, not a narrow dictation box locked to one vendor, one model, or one workflow.
 
-It captures audio locally, routes transcription and LLM work through provider registries, and delivers the final text back into the desktop context where you were working. The app is built with Electron, React, TypeScript, tRPC over IPC, and a provider-first monorepo architecture.
+It started from a personal itch. Tools like Typeless show how delightful desktop dictation can be, but I kept running into places where the behavior I wanted was not customizable. OpenBroca is my attempt to solve that problem for myself first, in the open, with the hope that the same flexibility can help other people shape voice input around their own workflows too.
 
-Why this project exists:
+OpenBroca captures audio locally, routes transcription and LLM work through provider registries, and delivers the final text back into the desktop context where you were working. The app is built with Electron, React, TypeScript, tRPC over IPC, and a provider-first monorepo architecture.
+
+Product screenshots and demo media will be added as the first public release stabilizes.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### Why OpenBroca
+
+Keyboards were built for typewriters. They were never designed for how humans actually think.
+
+We think in language.
+
+We speak in flow.
+
+We edit by intention.
+
+OpenBroca exists to make voice a first-class interface for computers:
 
 - Speak naturally, then let OpenBroca transcribe, clean up, and deliver text where you need it.
 - Use local or cloud ASR providers through one shared provider contract.
@@ -65,7 +86,30 @@ Why this project exists:
 - Keep provider credentials in OS-backed secure storage.
 - Build desktop-first automation without coupling the app to one vendor or hosted backend.
 
-Product screenshots and demo media will be added as the first public release stabilizes.
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### What OpenBroca Does
+
+- Dictate into any focused app.
+- Use cloud or local ASR providers.
+- Rewrite, polish, and transform text with LLM providers.
+- Switch between providers and models.
+- Build custom voice workflows.
+- Extend the system with open provider interfaces.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### The Idea
+
+The future interface will not be the keyboard.
+
+Maybe it is voice.
+
+Maybe it is brain-computer interfaces.
+
+Maybe voice is only the bridge.
+
+OpenBroca is building that bridge.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -89,7 +133,9 @@ Product screenshots and demo media will be added as the first public release sta
 
 ### Status
 
-OpenBroca is pre-1.0 software. The repository is active, usable for development, and still evolving. Expect provider contracts, desktop UX details, and release packaging to keep moving while the project matures.
+OpenBroca is pre-1.0 software. The repository is active, usable for development, and currently focused on desktop dictation, provider architecture, ASR provider support, LLM provider support, system-wide text insertion, and local-first voice workflows.
+
+Expect provider contracts, desktop UX details, and release packaging to keep moving while the project matures.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -175,7 +221,7 @@ macOS and Windows builds may be unsigned while the project is early. Your operat
 3. Select a microphone from the sidebar or tray menu.
 4. Configure ASR and LLM providers in the app.
 5. Use the configured shortcut to start dictation, then speak naturally.
-6. Let OpenBroca transcribe, clean up, and deliver the result to your active app or clipboard fallback.
+6. Let OpenBroca transcribe, rewrite, polish, transform, and deliver the result to your active app or clipboard fallback.
 
 Default shortcuts and provider setup may change before the 1.0 release. See [docs/PRIVACY.md](docs/PRIVACY.md) for data-handling notes and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the desktop processes fit together.
 
@@ -249,9 +295,11 @@ Read the full system overview in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Roadmap
 
-- [ ] Stabilize the core desktop dictation loop.
-- [ ] Harden macOS and Windows text delivery.
-- [ ] Expand provider setup flows.
+- [ ] Stabilize desktop dictation.
+- [ ] Harden system-wide text insertion.
+- [ ] Expand ASR provider support.
+- [ ] Expand LLM provider support.
+- [ ] Improve local-first voice workflows.
 - [ ] Improve local ASR model management.
 - [ ] Add richer update and release verification.
 - [ ] Publish polished screenshots and demo media.
