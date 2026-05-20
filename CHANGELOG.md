@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/0xlau/openbroca/compare/v0.2.0...v0.2.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* **release:** produce signed and notarized macOS builds ([db73e62](https://github.com/0xlau/openbroca/commit/db73e62fb161a61bdedbb944c0f8e49bc4fc33cb))
+
 ## [0.2.0](https://github.com/0xlau/openbroca/compare/v0.1.0...v0.2.0) (2026-05-20)
 
 
