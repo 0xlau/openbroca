@@ -98,7 +98,7 @@ jobs:
           mkdir -p release-assets
 
           find apps/desktop/dist -maxdepth 1 -type f \
-            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name '*.yml' -o -name '*.yaml' \) \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) \
             -print -exec cp {} release-assets/ \;
 
           if [[ -z "$(find release-assets -type f -print -quit)" ]]; then
