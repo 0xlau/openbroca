@@ -89,7 +89,14 @@ jobs:
 
       - name: Package installer
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Only feed mac signing creds to macOS runners; Windows uses no
+          # codesign cert here, so leaving CSC_LINK empty prevents
+          # electron-builder from trying to sign the exe with the mac p12.
+          CSC_LINK: ${{ startsWith(matrix.runner, 'macos') && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ startsWith(matrix.runner, 'macos') && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm --filter openbroca-desktop exec electron-builder ${{ matrix.builder_target }} --publish never
 
       - name: Collect release assets

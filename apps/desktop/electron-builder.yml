@@ -15,11 +15,11 @@ asarUnpack:
 mac:
   category: public.app-category.productivity
   icon: build/icon.icon
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  identity: null
-  hardenedRuntime: false
+  hardenedRuntime: true
   gatekeeperAssess: false
-  notarize: false
+  notarize: true
   extendInfo:
     NSMicrophoneUsageDescription: Openbroca uses your microphone to transcribe what you say.
     NSCameraUsageDescription: Openbroca uses the camera only when you opt in to a feature that requires it.
