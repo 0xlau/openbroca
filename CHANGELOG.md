@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/0xlau/openbroca/compare/v0.2.1...v0.2.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* **release:** build single arch per runner and merge mac update manifest ([7894af9](https://github.com/0xlau/openbroca/commit/7894af971eb193748397bf34f47fcb11a28f77ed))
+
 ## [0.2.1](https://github.com/0xlau/openbroca/compare/v0.2.0...v0.2.1) (2026-05-20)
 
 
