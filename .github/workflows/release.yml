@@ -138,8 +138,52 @@ jobs:
       - name: Download installer artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release-assets
-          merge-multiple: true
+          path: artifacts-raw
+
+      - name: Assemble release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          # Flatten binaries and blockmaps from every per-runner artifact.
+          find artifacts-raw -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' \) \
+            -exec cp {} release-assets/ \;
+
+          # Windows/Linux manifests are single-arch, copy as-is.
+          find artifacts-raw -type f \
+            \( -name 'latest.yml' -o -name 'latest-linux.yml' \) \
+            -exec cp {} release-assets/ \;
+
+          # macOS ships arm64 + x64 from two runners; their latest-mac.yml
+          # files each list only their own arch. Merge the `files:` arrays
+          # so electron-updater can find a match for either architecture.
+          mac_yml_count=$(find artifacts-raw -type f -name 'latest-mac.yml' | wc -l | tr -d ' ')
+          if [[ "$mac_yml_count" -gt 1 ]]; then
+            python3 -m pip install --quiet pyyaml
+            python3 <<'PY'
+          import pathlib, yaml
+          paths = sorted(pathlib.Path('artifacts-raw').rglob('latest-mac.yml'))
+          docs = [yaml.safe_load(p.read_text()) for p in paths]
+          merged = dict(docs[0])
+          seen, files = set(), []
+          for d in docs:
+              for f in d.get('files', []) or []:
+                  url = f.get('url')
+                  if url and url not in seen:
+                      seen.add(url)
+                      files.append(f)
+          merged['files'] = files
+          pathlib.Path('release-assets/latest-mac.yml').write_text(
+              yaml.safe_dump(merged, sort_keys=False, default_flow_style=False)
+          )
+          PY
+          else
+            find artifacts-raw -type f -name 'latest-mac.yml' -exec cp {} release-assets/ \;
+          fi
+
+          find release-assets -maxdepth 1 -type f -print | sort
 
       - name: Upload release assets
         shell: bash
@@ -148,5 +192,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag != '' && inputs.tag || needs.release-please.outputs.tag_name }}
         run: |
-          find release-assets -maxdepth 1 -type f -print | sort
           gh release upload "${RELEASE_TAG}" release-assets/* --clobber

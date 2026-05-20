@@ -26,10 +26,8 @@ mac:
     NSDocumentsFolderUsageDescription: Openbroca reads from your Documents folder when you save or open a transcript there.
     NSDownloadsFolderUsageDescription: Openbroca writes exported transcripts to your Downloads folder.
   target:
-    - target: dmg
-      arch: [arm64, x64]
-    - target: zip
-      arch: [arm64, x64]
+    - dmg
+    - zip
 
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
@@ -37,8 +35,7 @@ dmg:
 win:
   executableName: Openbroca
   target:
-    - target: nsis
-      arch: [x64]
+    - nsis
 
 nsis:
   artifactName: ${productName}-${version}-setup.${ext}
