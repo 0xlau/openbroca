@@ -130,6 +130,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+          GH_REPO: ${{ github.repository }}
         run: |
           find release-assets -maxdepth 1 -type f -print | sort
           gh release upload "${RELEASE_TAG}" release-assets/* --clobber
