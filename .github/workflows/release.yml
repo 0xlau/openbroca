@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to (re)build and upload assets for (e.g. v0.2.0). Leave empty to run release-please.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -21,6 +26,7 @@ env:
 jobs:
   release-please:
     name: Release Please
+    if: ${{ inputs.tag == '' || inputs.tag == null }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -38,7 +44,9 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: |
+      always() && !cancelled() &&
+      (needs.release-please.outputs.release_created == 'true' || inputs.tag != '')
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -62,7 +70,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ inputs.tag != '' && inputs.tag || needs.release-please.outputs.tag_name }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -114,7 +122,8 @@ jobs:
     needs:
       - release-please
       - build
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: |
+      always() && !cancelled() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -129,8 +138,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag != '' && inputs.tag || needs.release-please.outputs.tag_name }}
         run: |
           find release-assets -maxdepth 1 -type f -print | sort
           gh release upload "${RELEASE_TAG}" release-assets/* --clobber
