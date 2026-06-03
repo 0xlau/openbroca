@@ -1,8 +1,12 @@
-import { comparePages, guidePages, site } from "@/lib/site";
+import { comparePages, guidePages, site, toolPages } from "@/lib/site";
 import { Logo } from "./logo";
 import { Reveal } from "./reveal";
 
-const columns: { title: string; links: { label: string; href: string }[] }[] = [
+const columns: {
+  title: string;
+  href?: string;
+  links: { label: string; href: string }[];
+}[] = [
   {
     title: "Product",
     links: [
@@ -11,6 +15,11 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Download", href: "/#download" },
       ...guidePages,
     ],
+  },
+  {
+    title: "Free tools",
+    href: "/tools",
+    links: toolPages,
   },
   {
     title: "Compare",
@@ -31,7 +40,7 @@ export function SiteFooter() {
   return (
     <footer className="relative isolate overflow-hidden border-t border-line">
       <Reveal className="relative z-10">
-        <div className="container-px grid grid-cols-2 gap-10 py-14 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+        <div className="container-px grid grid-cols-2 gap-10 py-14 md:grid-cols-[1.6fr_1fr_1fr_1fr_1fr]">
           <div className="max-w-xs">
             <Logo />
             <p className="mt-4 text-sm leading-relaxed text-white/55">
@@ -42,7 +51,15 @@ export function SiteFooter() {
 
           {columns.map((col) => (
             <div key={col.title}>
-              <h3 className="text-sm font-semibold text-white">{col.title}</h3>
+              <h3 className="text-sm font-semibold text-white">
+                {col.href ? (
+                  <a href={col.href} className="transition hover:text-brand">
+                    {col.title}
+                  </a>
+                ) : (
+                  col.title
+                )}
+              </h3>
               <ul className="mt-4 space-y-3">
                 {col.links.map((link) => (
                   <li key={link.href}>

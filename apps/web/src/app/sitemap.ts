@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { comparePages, guidePages, site } from "@/lib/site";
+import { comparePages, guidePages, site, toolPages } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
@@ -11,8 +11,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
     },
-    // Keyword landing pages + competitor comparisons.
-    ...[...guidePages, ...comparePages].map((page) => ({
+    // Tools hub — the pillar for the free utility tools.
+    {
+      url: `${site.url}/tools`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    // Keyword landing pages + competitor comparisons + individual tools.
+    ...[...guidePages, ...comparePages, ...toolPages].map((page) => ({
       url: `${site.url}${page.href}`,
       lastModified: now,
       changeFrequency: "monthly" as const,

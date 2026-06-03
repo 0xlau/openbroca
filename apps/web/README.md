@@ -47,3 +47,38 @@ subdirectory:
 
 That's it — pushes to `main` deploy to production; pull requests get preview
 URLs. No `vercel.json` is required.
+
+## Analytics & Search Console
+
+Analytics and Search Console verification are **env-driven** — no IDs live in the
+repo (it is public, and a hardcoded GA id would make forks report into our
+property). Set these in **Vercel → Settings → Environment Variables**
+(Production + Preview). When unset, nothing is rendered, so local dev and previews
+stay clean.
+
+| Variable | What it is | Where to get it |
+| --- | --- | --- |
+| `NEXT_PUBLIC_GA_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`). Loaded via `@next/third-parties/google`. | [analytics.google.com](https://analytics.google.com) → Admin → Data streams → Web (`https://openbroca.com`) → Measurement ID. |
+| `SITE_GOOGLE_SITE_VERIFICATION` | Google Search Console "HTML tag" token (the `content` value). Rendered as `<meta name="google-site-verification">`. | [search.google.com/search-console](https://search.google.com/search-console) → add a `https://openbroca.com` URL-prefix property → **HTML tag** method. |
+
+For local testing, put them in an untracked `apps/web/.env.local` (the `.env*`
+files are gitignored):
+
+```bash
+NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
+SITE_GOOGLE_SITE_VERIFICATION=your-token
+```
+
+### Verifying Search Console
+
+The `SITE_GOOGLE_SITE_VERIFICATION` meta tag is one option. More robust
+alternatives that need **no code**:
+
+- **Domain property (recommended):** verify by DNS TXT record in Vercel DNS / the
+  registrar. Covers the apex, `www`, and all subdomains, and survives redeploys.
+- **Via Google Analytics:** once `NEXT_PUBLIC_GA_ID` is live under the same Google
+  account, GSC can verify through the "Google Analytics" method.
+
+After verifying, submit `https://openbroca.com/sitemap.xml` under **GSC →
+Sitemaps**, and link GA4 ↔ GSC (**GA4 Admin → Product links → Search Console
+links**) to surface query data in GA4.
