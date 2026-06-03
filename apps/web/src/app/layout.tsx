@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif } from "next/font/google";
-import { site } from "@/lib/site";
+import { GoogleAnalytics } from "@next/third-parties/google";
+import { analytics, site } from "@/lib/site";
 import { BottomBlur } from "@/components/bottom-blur";
 import "./globals.css";
 
@@ -66,6 +67,7 @@ export const metadata: Metadata = {
   alternates: {
     canonical: site.url,
   },
+  verification: { google: analytics.googleSiteVerification },
 };
 
 export const viewport: Viewport = {
@@ -87,6 +89,7 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         {children}
         <BottomBlur />
+        {analytics.gaId ? <GoogleAnalytics gaId={analytics.gaId} /> : null}
       </body>
     </html>
   );

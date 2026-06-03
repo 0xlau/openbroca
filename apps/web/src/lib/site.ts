@@ -43,6 +43,7 @@ export const navLinks: NavLink[] = [
   { label: "Features", href: "/#features" },
   { label: "Providers", href: "/#providers" },
   { label: "Download", href: "/#download" },
+  { label: "Tools", href: "/tools" },
   { label: "GitHub", href: site.repo },
 ];
 
@@ -58,3 +59,34 @@ export const comparePages: NavLink[] = [
   { label: "vs Typeless", href: "/vs/typeless" },
   { label: "vs Monologue", href: "/vs/monologue" },
 ];
+
+/**
+ * Free, browser-based utility tools. These are SEO "linkable assets" — pages
+ * people search for and link to (mic test, voice recorder, …) that also serve
+ * as live, no-install demos of what OpenBroca does. Used for the /tools hub,
+ * footer links, related-tool cross-links, and the sitemap.
+ */
+export const toolPages: NavLink[] = [
+  { label: "Microphone test", href: "/tools/microphone-test" },
+  { label: "Mic test — record & playback", href: "/tools/mic-test-recording" },
+  { label: "Online voice recorder", href: "/tools/voice-recorder" },
+  { label: "Speech to text", href: "/tools/speech-to-text" },
+  { label: "Text to speech", href: "/tools/text-to-speech" },
+  { label: "Speaking speed (WPM) test", href: "/tools/speaking-speed-test" },
+  { label: "Speech time calculator", href: "/tools/speech-time-calculator" },
+  { label: "Background noise test", href: "/tools/background-noise-test" },
+  { label: "Speaker & headphone test", href: "/tools/speaker-test" },
+];
+
+/**
+ * Analytics / Search Console config, sourced from environment variables so no
+ * IDs are committed (this repo is public — a hardcoded GA id would make forks
+ * report into our property). Set these in Vercel → Settings → Environment
+ * Variables (Production + Preview). Leaving them unset is safe: nothing renders.
+ */
+export const analytics = {
+  /** GA4 Measurement ID, e.g. "G-XXXXXXXXXX". Public by nature. */
+  gaId: process.env.NEXT_PUBLIC_GA_ID,
+  /** GSC "HTML tag" verification token (the `content` value). Server-only. */
+  googleSiteVerification: process.env.SITE_GOOGLE_SITE_VERIFICATION,
+} as const;
