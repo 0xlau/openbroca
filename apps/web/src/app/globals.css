@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand */
+  --color-brand: #ff4405;
+  --color-brand-soft: #ff6a3d;
+  --color-brand-foreground: #ffffff;
+
+  /* Surface (dark, premium) */
+  --color-bg: #08080a;
+  --color-bg-elevated: #111114;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
+
+  /* Fonts wired up via next/font in layout.tsx */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, "Times New Roman",
+    serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: #ededf0;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-brand);
+    color: var(--color-brand-foreground);
+  }
+
+  /* Respect users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility container-px {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 72rem;
+  padding-inline: 1.5rem;
+}
+
+/* Subtle dotted backdrop used behind the hero */
+@utility bg-dots {
+  background-image: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+/* Horizontal fade mask for marquees / overflow rows */
+@utility mask-fade-x {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 8%,
+    black 92%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 8%,
+    black 92%,
+    transparent
+  );
+}
+
+/* ---- Keyframes (used by the marquee, shiny text, etc.) ---- */
+@keyframes marquee-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes shine {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scroll reveal — visible by default (no-JS / SEO safe). JS arms the hidden
+   state, then plays a one-shot animation. An animation (not a transition) is
+   used so it can't be restarted by unrelated property changes. */
+@layer base {
+  .reveal {
+    opacity: 1;
+  }
+  .reveal[data-armed]:not([data-play]) {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  .reveal[data-play] {
+    animation: reveal-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal,
+    .reveal[data-armed]:not([data-play]),
+    .reveal[data-play] {
+      opacity: 1 !important;
+      transform: none !important;
+      animation: none !important;
+    }
+  }
+}

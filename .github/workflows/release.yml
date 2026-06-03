@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    # Website-only changes never need a desktop release/packaging run.
+    # (release-please also has exclude-paths: ["apps/web"] as a safety net.)
+    paths-ignore:
+      - 'apps/web/**'
   workflow_dispatch:
     inputs:
       tag:

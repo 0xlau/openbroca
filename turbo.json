@@ -6,7 +6,7 @@
       "persistent": true
     },
     "build": {
-      "outputs": ["out/**", "dist/**"]
+      "outputs": ["out/**", "dist/**", ".next/**", "!.next/cache/**"]
     },
     "bundle:mac": {
       "outputs": ["out/**", "dist/**"]
