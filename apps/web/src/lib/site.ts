@@ -72,6 +72,10 @@ export const toolPages: NavLink[] = [
   { label: "Online voice recorder", href: "/tools/voice-recorder" },
   { label: "Speech to text", href: "/tools/speech-to-text" },
   { label: "Text to speech", href: "/tools/text-to-speech" },
+  { label: "Speaking speed (WPM) test", href: "/tools/speaking-speed-test" },
+  { label: "Speech time calculator", href: "/tools/speech-time-calculator" },
+  { label: "Background noise test", href: "/tools/background-noise-test" },
+  { label: "Speaker & headphone test", href: "/tools/speaker-test" },
 ];
 
 /**

@@ -1,5 +1,16 @@
 import type { Metadata } from "next";
-import { Mic, AudioLines, Disc3, Captions, Volume2, ArrowRight } from "lucide-react";
+import {
+  Mic,
+  AudioLines,
+  Disc3,
+  Captions,
+  Volume2,
+  Gauge,
+  Timer,
+  Waves,
+  Speaker,
+  ArrowRight,
+} from "lucide-react";
 import { ogImage, site } from "@/lib/site";
 import { PageShell } from "@/components/page-shell";
 import { Breadcrumbs } from "@/components/breadcrumbs";
@@ -60,6 +71,30 @@ const tools = [
     title: "Text to speech",
     href: "/tools/text-to-speech",
     desc: "Type anything and hear it read aloud with on-device voices. Adjust the speed and pitch.",
+  },
+  {
+    icon: Gauge,
+    title: "Speaking speed (WPM) test",
+    href: "/tools/speaking-speed-test",
+    desc: "Speak naturally and find out your words-per-minute, with a rating from slow to fast.",
+  },
+  {
+    icon: Timer,
+    title: "Speech time calculator",
+    href: "/tools/speech-time-calculator",
+    desc: "Paste a script to estimate how long it takes to say aloud — no microphone needed.",
+  },
+  {
+    icon: Waves,
+    title: "Background noise test",
+    href: "/tools/background-noise-test",
+    desc: "Measure the ambient noise your mic picks up and see whether your room is quiet enough.",
+  },
+  {
+    icon: Speaker,
+    title: "Speaker & headphone test",
+    href: "/tools/speaker-test",
+    desc: "Play test tones and check your left and right channels — no microphone permission needed.",
   },
 ];
 
