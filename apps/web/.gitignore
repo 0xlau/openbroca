@@ -1,0 +1,15 @@
+# Next.js
+/.next/
+/out/
+
+# Production build
+/build/
+
+# Generated types
+next-env.d.ts
+
+# Vercel
+.vercel/
+
+# Misc
+*.tsbuildinfo
