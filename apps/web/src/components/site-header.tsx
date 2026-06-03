@@ -36,7 +36,7 @@ export function SiteHeader() {
             <Github className="size-4.5" />
           </a>
           <a
-            href="#download"
+            href="/#download"
             className="inline-flex h-9 items-center rounded-full bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90"
           >
             Download

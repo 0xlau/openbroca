@@ -42,25 +42,24 @@ export function Hero({ downloads }: { downloads: Downloads }) {
           </a>
         </Reveal>
 
+        <Reveal delay={60}>
+          <p className="mt-6 text-sm font-semibold uppercase tracking-widest text-brand">
+            Open-source voice dictation
+          </p>
+        </Reveal>
+
         <Reveal delay={80}>
-          <h1 className="mt-7 max-w-4xl text-balance font-display text-5xl leading-[1.1] tracking-tight text-white sm:text-6xl md:text-7xl">
-            After keyboards.{" "}
-            <img
-              src="/app-icon.png"
-              alt="OpenBroca"
-              width={256}
-              height={256}
-              className="mx-1 inline-block size-12 -translate-y-1 align-middle drop-shadow-[0_12px_34px_rgba(255,68,5,0.5)] sm:size-14 md:size-[4.25rem]"
-            />{" "}
-            Before brain interfaces.
+          <h1 className="mt-3 max-w-4xl text-balance font-display text-5xl leading-[1.1] tracking-tight text-white sm:text-6xl md:text-7xl">
+            Speak — and it&apos;s typed into{" "}
+            <span className="text-brand">any app.</span>
           </h1>
         </Reveal>
 
         <Reveal delay={160}>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-white/65">
-            OpenBroca turns speech into text, intent into action, and your voice
-            into a system-wide input layer. Dictate into any app — with the
-            cloud or local models you choose.
+            OpenBroca is free, open-source voice dictation. Your speech turns
+            into text in whatever app is focused — powered by the cloud or fully
+            local AI models you choose, with no vendor lock-in.
           </p>
         </Reveal>
 

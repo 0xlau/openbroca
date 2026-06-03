@@ -1,4 +1,5 @@
 import { getDownloads } from "@/lib/releases";
+import { StructuredData } from "@/components/structured-data";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { Hero } from "@/components/sections/hero";
@@ -14,6 +15,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <StructuredData />
       <SiteHeader />
       <main>
         <Hero downloads={downloads} />

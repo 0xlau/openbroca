@@ -1,4 +1,4 @@
-import { site } from "@/lib/site";
+import { comparePages, guidePages, site } from "@/lib/site";
 import { Logo } from "./logo";
 import { Reveal } from "./reveal";
 
@@ -6,10 +6,15 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Product",
     links: [
-      { label: "Features", href: "#features" },
-      { label: "Providers", href: "#providers" },
-      { label: "Download", href: "#download" },
+      { label: "Features", href: "/#features" },
+      { label: "Providers", href: "/#providers" },
+      { label: "Download", href: "/#download" },
+      ...guidePages,
     ],
+  },
+  {
+    title: "Compare",
+    links: comparePages,
   },
   {
     title: "Open source",
@@ -26,7 +31,7 @@ export function SiteFooter() {
   return (
     <footer className="relative isolate overflow-hidden border-t border-line">
       <Reveal className="relative z-10">
-        <div className="container-px grid gap-10 py-14 md:grid-cols-[1.5fr_1fr_1fr]">
+        <div className="container-px grid grid-cols-2 gap-10 py-14 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
           <div className="max-w-xs">
             <Logo />
             <p className="mt-4 text-sm leading-relaxed text-white/55">
