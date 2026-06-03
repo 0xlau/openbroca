@@ -32,3 +32,6 @@ Thumbs.db
 .superpowers/
 skills-lock.json
 .worktrees/
+
+# Vercel
+.vercel
