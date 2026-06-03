@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/0xlau/openbroca/compare/v0.2.2...v0.3.0) (2026-06-03)
+
+
+### Features
+
+* **web:** GA4 + Search Console and a free browser tools hub ([#5](https://github.com/0xlau/openbroca/issues/5)) ([838f9d2](https://github.com/0xlau/openbroca/commit/838f9d281e0eb349d85ae4b6648ac295da5787c8))
+
 ## [0.2.2](https://github.com/0xlau/openbroca/compare/v0.2.1...v0.2.2) (2026-05-20)
 
 
