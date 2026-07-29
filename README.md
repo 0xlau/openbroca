@@ -4,6 +4,16 @@
 <div align="center">
   <img src="docs/assets/logo.svg" alt="OpenBroca logo" width="260" />
 
+  <h1>Openbroca Origin</h1>
+
+  <p>
+    <strong>This repository contains Openbroca Origin, the original MIT-licensed Electron experiment.</strong>
+    <br />
+    It is separate from the current Openbroca for Mac product at <a href="https://openbroca.com">openbroca.com</a>.
+    <br />
+    Learn how the two projects relate on the <a href="https://openbroca.com/open-source">Open Source page</a>.
+  </p>
+
   <p align="center">
     An open-source voice interface for the AI era.
     <br />
@@ -56,7 +66,7 @@
 
 ## About The Project
 
-OpenBroca is an open-source voice interface for the AI era.
+Openbroca Origin is the original open-source voice interface experiment for the AI era.
 
 Computers should hear you before they read your mind. OpenBroca is built around that simple belief: voice should be a first-class input layer for computers, not a narrow dictation box locked to one vendor, one model, or one workflow.
 
@@ -133,7 +143,7 @@ OpenBroca is building that bridge.
 
 ### Status
 
-OpenBroca is pre-1.0 software. The repository is active, usable for development, and currently focused on desktop dictation, provider architecture, ASR provider support, LLM provider support, system-wide text insertion, and local-first voice workflows.
+Openbroca Origin is pre-1.0 software. The repository is active, usable for development, and currently focused on desktop dictation, provider architecture, ASR provider support, LLM provider support, system-wide text insertion, and local-first voice workflows.
 
 Expect provider contracts, desktop UX details, and release packaging to keep moving while the project matures.
 
